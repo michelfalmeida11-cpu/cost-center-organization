@@ -8,6 +8,8 @@
     "start": "next start",
     "lint": "next lint"
   },
+  "recharts": "^2.12.7",
+  "@radix-ui/react-dropdown-menu": "^2.0.6",
   "dependencies": {
     "react": "latest",
     "react-dom": "^19.0.0",
