@@ -1,33 +1,14 @@
-import type { Metadata } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
+import React from 'react'
+import { Inter } from 'next/font/google'
 import { Analytics } from '@vercel/analytics/next'
 
 import './globals.css'
 
-const geist = Geist({ subsets: ['latin'] })
-const geistMono = Geist_Mono({ subsets: ['latin'] })
+const inter = Inter({ subsets: ['latin'] })
 
-export const metadata: Metadata = {
+export const metadata = {
   title: 'AVG — Gestão de Centro de Custo | Mina do Brumado',
-  description: 'Sistema de Gestão de Centro de Custo — Grupo AVG, Mina do Brumado. Desenvolvido por Michel Almeida.',
-  generator: 'Blackbox AI',
-  icons: {
-    icon: [
-      {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
-      },
-    ],
-    apple: '/apple-icon.png',
-  },
+  description: 'Sistema de Gestão de Centro de Custo — Grupo AVG, Mina do Brumado.',
 }
 
 export default function RootLayout({
@@ -37,9 +18,9 @@ export default function RootLayout({
 }) {
   return (
     <html lang="pt-BR">
-      <body className={`${geist.className} ${geistMono.className}`}>
+      <body className={inter.className}>
         {children}
-        {process.env.NODE_ENV === 'production' && <Analytics />}
+        <Analytics />
       </body>
     </html>
   )
