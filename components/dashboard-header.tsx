@@ -10,8 +10,6 @@ import {
   Settings,
   ChevronDown,
   Calendar,
-  Activity,
-  Wifi,
   Sun,
   Moon,
 } from "lucide-react";
@@ -43,15 +41,15 @@ export function DashboardHeader() {
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-[oklch(0.75_0.20_185/0.25)] bg-[oklch(0.07_0.015_240/0.95)] backdrop-blur-md">
-      {/* top accent bar */}
-      <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-[oklch(0.75_0.20_185)] to-transparent opacity-80" />
+    <header className="sticky top-0 z-40 border-b border-[oklch(0.75_0.20_185/0.25)] bg-[oklch(0.07_0.015_240/0.98)] backdrop-blur-md shadow-md">
+      {/* Top accent bar */}
+      <div className="h-1 w-full bg-gradient-to-r from-transparent via-[oklch(0.75_0.20_185)] to-transparent opacity-90" />
 
-      <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 h-14 flex items-center gap-3">
+      <div className="max-w-screen-2xl mx-auto px-6 sm:px-8 h-16 flex items-center gap-4">
 
-        {/* ── Brand ── */}
-        <div className="flex items-center gap-3 shrink-0">
-          <div className="relative h-9 w-20 shrink-0">
+        {/* Brand */}
+        <div className="flex items-center gap-4 shrink-0">
+          <div className="relative h-10 w-24 shrink-0">
             <Image
               src="/avg-logo.png"
               alt="Grupo AVG"
@@ -60,136 +58,155 @@ export function DashboardHeader() {
               priority
             />
           </div>
-          <div className="hidden sm:flex flex-col leading-none">
+          <div className="hidden sm:flex flex-col leading-tight">
             <span
-              className="text-[11px] font-mono font-semibold tracking-[0.2em] uppercase"
-              style={{ color: "oklch(0.75 0.20 185)", textShadow: "0 0 10px oklch(0.75 0.20 185 / 0.6)" }}
+              className="text-[11px] font-mono font-semibold tracking-widest uppercase"
+              style={{
+                color: "oklch(0.75 0.20 185)",
+                textShadow: "0 0 12px oklch(0.75 0.20 185 / 0.7)",
+              }}
             >
               AVG
             </span>
-            <span className="text-[10px] text-muted-foreground tracking-widest hidden md:block">
+            <span className="text-[11px] text-muted-foreground tracking-widest hidden md:block">
               Mina do Brumado
             </span>
           </div>
         </div>
 
-        <div className="h-5 w-px bg-[oklch(0.75_0.20_185/0.25)]" />
+        {/* Separator */}
+        <div className="h-6 w-px bg-[oklch(0.75_0.20_185/0.3)]" />
 
-        {/* ── Nav label ── */}
-        <div className="flex items-center gap-1.5 text-muted-foreground">
-          <LayoutDashboard className="h-3.5 w-3.5 text-[oklch(0.75_0.20_185)]" />
-          <span className="text-xs font-mono font-medium tracking-wide">
+        {/* Nav label */}
+        <div className="flex items-center gap-2 text-muted-foreground select-none">
+          <LayoutDashboard className="h-4 w-4 text-[oklch(0.75_0.20_185)]" />
+          <span className="text-xs font-mono font-semibold tracking-wide text-[oklch(0.75 0.15 180)]">
             GESTÃO DE CENTRO DE CUSTO
           </span>
         </div>
 
         <div className="flex-1" />
 
-        {/* ── Live indicator ── */}
-        <div className="hidden md:flex items-center gap-1.5 mr-1">
-          <span className="relative flex h-2 w-2">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[oklch(0.65_0.20_145)] opacity-75" />
-            <span className="relative inline-flex rounded-full h-2 w-2 bg-[oklch(0.65_0.20_145)]" />
+        {/* Live indicator */}
+        <div className="hidden md:flex items-center gap-2 mr-2 select-none">
+          <span className="relative flex h-3 w-3">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[oklch(0.65_0.20_145)] opacity-70" />
+            <span className="relative inline-flex rounded-full h-3 w-3 bg-[oklch(0.65_0.20_145)]" />
           </span>
-          <span className="text-[10px] font-mono text-[oklch(0.65_0.20_145)] tracking-widest">LIVE</span>
+          <span
+            className="text-[11px] font-mono text-[oklch(0.65_0.20_145)] tracking-widest font-semibold"
+            aria-label="Indicador de sistema online"
+          >
+            LIVE
+          </span>
         </div>
 
-        {/* ── Period selector ── */}
+        {/* Period selector */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               variant="outline"
               size="sm"
-              className="gap-1.5 text-xs h-8 border-[oklch(0.75_0.20_185/0.35)] bg-[oklch(0.75_0.20_185/0.07)] text-[oklch(0.75_0.20_185)] hover:bg-[oklch(0.75_0.20_185/0.15)] font-mono"
+              aria-label="Selecionar período do dashboard"
+              className="gap-2 text-sm h-9 border-[oklch(0.75_0.20_185/0.4)] bg-[oklch(0.75_0.20_185/0.1)] text-[oklch(0.75_0.20_185)] hover:bg-[oklch(0.75_0.20_185/0.2)] font-mono transition-colors duration-200"
             >
-              <Calendar className="h-3.5 w-3.5" />
+              <Calendar className="h-4 w-4" />
               {period}
-              <ChevronDown className="h-3 w-3 opacity-60" />
+              <ChevronDown className="h-4 w-4 opacity-70" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent
             align="end"
-            className="w-48 bg-[oklch(0.10_0.018_240)] border-[oklch(0.75_0.20_185/0.25)]"
+            className="w-52 bg-[oklch(0.10_0.02_240)] border-[oklch(0.75_0.20_185/0.3)] shadow-lg"
           >
             {PERIODS.map((p) => (
               <DropdownMenuItem
                 key={p}
                 onClick={() => setPeriod(p)}
-                className={`text-xs font-mono cursor-pointer ${p === period ? "text-[oklch(0.75_0.20_185)]" : "text-muted-foreground"}`}
+                className={`text-sm font-mono cursor-pointer px-4 py-2 ${
+                  p === period
+                    ? "text-[oklch(0.75_0.20_185)] font-semibold"
+                    : "text-muted-foreground"
+                }`}
               >
-                {p === period && <span className="mr-2 text-[oklch(0.75_0.20_185)]">›</span>}
+                {p === period && (
+                  <span className="mr-3 text-[oklch(0.75_0.20_185)] font-semibold">›</span>
+                )}
                 {p}
               </DropdownMenuItem>
             ))}
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* ── Refresh ── */}
+        {/* Refresh */}
         <Button
           variant="ghost"
           size="sm"
-          className="h-8 w-8 p-0 text-muted-foreground hover:text-[oklch(0.75_0.20_185)] hover:bg-[oklch(0.75_0.20_185/0.10)]"
+          aria-label="Atualizar dados"
           onClick={handleRefresh}
-          title="Atualizar dados"
+          className="h-9 w-9 p-0 text-muted-foreground hover:text-[oklch(0.75_0.20_185)] hover:bg-[oklch(0.75_0.20_185/0.15)] rounded-md focus:outline-none focus:ring-2 focus:ring-[oklch(0.75_0.20_185)] transition"
         >
-          <RefreshCw className={`h-3.5 w-3.5 ${refreshing ? "animate-spin text-[oklch(0.75_0.20_185)]" : ""}`} />
-          <span className="sr-only">Atualizar dados</span>
+          <RefreshCw
+            className={`h-4 w-4 ${refreshing ? "animate-spin text-[oklch(0.75_0.20_185)]" : ""}`}
+          />
         </Button>
 
-        {/* ── Export ── */}
+        {/* Export */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
               size="sm"
-              className="h-8 w-8 p-0 text-muted-foreground hover:text-[oklch(0.75_0.20_185)] hover:bg-[oklch(0.75_0.20_185/0.10)]"
-              title="Exportar"
+              aria-label="Exportar relatório"
+              className="h-9 w-9 p-0 text-muted-foreground hover:text-[oklch(0.75_0.20_185)] hover:bg-[oklch(0.75_0.20_185/0.15)] rounded-md focus:outline-none focus:ring-2 focus:ring-[oklch(0.75_0.20_185)] transition"
             >
-              <Download className="h-3.5 w-3.5" />
-              <span className="sr-only">Exportar relatório</span>
+              <Download className="h-4 w-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent
             align="end"
-            className="bg-[oklch(0.10_0.018_240)] border-[oklch(0.75_0.20_185/0.25)]"
+            className="bg-[oklch(0.10_0.02_240)] border-[oklch(0.75_0.20_185/0.3)] shadow-lg"
           >
-            <DropdownMenuItem className="text-xs font-mono text-muted-foreground cursor-pointer hover:text-[oklch(0.75_0.20_185)]">
+            <DropdownMenuItem className="text-sm font-mono text-muted-foreground cursor-pointer px-4 py-2 hover:text-[oklch(0.75_0.20_185)]">
               Exportar CSV
             </DropdownMenuItem>
-            <DropdownMenuItem className="text-xs font-mono text-muted-foreground cursor-pointer hover:text-[oklch(0.75_0.20_185)]">
+            <DropdownMenuItem className="text-sm font-mono text-muted-foreground cursor-pointer px-4 py-2 hover:text-[oklch(0.75_0.20_185)]">
               Exportar XLSX
             </DropdownMenuItem>
             <DropdownMenuSeparator className="bg-[oklch(0.20_0.03_220)]" />
-            <DropdownMenuItem className="text-xs font-mono text-muted-foreground cursor-pointer hover:text-[oklch(0.75_0.20_185)]">
+            <DropdownMenuItem className="text-sm font-mono text-muted-foreground cursor-pointer px-4 py-2 hover:text-[oklch(0.75_0.20_185)]">
               Relatório PDF
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
 
-        {/* ── Theme toggle ── */}
+        {/* Theme toggle */}
         <Button
           variant="ghost"
           size="sm"
-          className="h-8 w-8 p-0 text-muted-foreground hover:text-[oklch(0.75_0.20_185)] hover:bg-[oklch(0.75_0.20_185/0.10)]"
-          title={resolvedTheme === "dark" ? "Mudar para modo claro" : "Mudar para modo escuro"}
-          onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
-        >
-          {resolvedTheme === "dark"
-            ? <Sun className="h-3.5 w-3.5" />
-            : <Moon className="h-3.5 w-3.5" />
+          aria-label={
+            resolvedTheme === "dark"
+              ? "Mudar para modo claro"
+              : "Mudar para modo escuro"
           }
-          <span className="sr-only">Alternar tema</span>
+          onClick={() => setTheme(resolvedTheme === "dark" ? "light" : "dark")}
+          className="h-9 w-9 p-0 text-muted-foreground hover:text-[oklch(0.75_0.20_185)] hover:bg-[oklch(0.75_0.20_185/0.15)] rounded-md focus:outline-none focus:ring-2 focus:ring-[oklch(0.75_0.20_185)] transition"
+        >
+          {resolvedTheme === "dark" ? (
+            <Sun className="h-4 w-4" />
+          ) : (
+            <Moon className="h-4 w-4" />
+          )}
         </Button>
 
-        {/* ── Settings ── */}
+        {/* Settings */}
         <Button
           variant="ghost"
           size="sm"
-          className="h-8 w-8 p-0 text-muted-foreground hover:text-[oklch(0.75_0.20_185)] hover:bg-[oklch(0.75_0.20_185/0.10)]"
-          title="Configurações"
+          aria-label="Configurações"
+          className="h-9 w-9 p-0 text-muted-foreground hover:text-[oklch(0.75_0.20_185)] hover:bg-[oklch(0.75_0.20_185/0.15)] rounded-md focus:outline-none focus:ring-2 focus:ring-[oklch(0.75_0.20_185)] transition"
         >
-          <Settings className="h-3.5 w-3.5" />
-          <span className="sr-only">Configurações</span>
+          <Settings className="h-4 w-4" />
         </Button>
       </div>
     </header>
