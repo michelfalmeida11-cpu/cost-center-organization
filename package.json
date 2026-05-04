@@ -14,12 +14,14 @@
     "@vercel/analytics": "^1.3.1",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
+    "glob": "^13.0.6",
     "lucide-react": "^0.400.0",
     "next": "^14.2.3",
     "next-themes": "^0.3.0",
     "react": "18.2.0",
     "react-dom": "18.2.0",
     "recharts": "^2.12.7",
+    "rimraf": "^6.1.3",
     "tailwind-merge": "^2.3.0"
   },
   "devDependencies": {
@@ -27,7 +29,7 @@
     "@types/react": "^18.2.66",
     "@types/react-dom": "^18.2.22",
     "autoprefixer": "^10.4.19",
-    "eslint": "^8.57.0",
+    "eslint": "^10.3.0",
     "eslint-config-next": "14.2.3",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.3",
