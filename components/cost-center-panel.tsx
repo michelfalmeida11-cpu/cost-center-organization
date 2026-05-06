@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
+import { supabase } from "@/lib/supabase";
 import {
   ChevronDown,
   ChevronRight,
@@ -26,6 +27,7 @@ import {
   Leaf,
   Building2,
   BarChart2,
+  Lock,
 } from "lucide-react";
 import {
   Process, Group, SubGroup,
@@ -171,12 +173,16 @@ function EditableText({
   if (!editing) {
     return (
       <span
-        className={`group/et inline-flex items-center gap-0.5 rounded px-0.5 -mx-0.5 cursor-pointer transition-colors hover:bg-white/[0.06] ${className}`}
-        onClick={e => { e.stopPropagation(); setEditing(true); }}
-        title="Clique para editar"
+        className={`group/et inline-flex items-center gap-0.5 rounded px-0.5 -mx-0.5 transition-colors ${className} ${canEdit ? 'cursor-pointer hover:bg-primary/5' : 'cursor-not-allowed opacity-50'}`}
+        onClick={canEdit ? (e => { e.stopPropagation(); setEditing(true); }) : undefined}
+        title={canEdit ? "Clique para editar" : "Modo leitura. Faça login como admin para editar."}
       >
         <span>{value || placeholder}</span>
-        <Pencil className="h-2.5 w-2.5 shrink-0 opacity-0 group-hover/et:opacity-50 transition-opacity" style={{ color: accent }} />
+        {canEdit ? (
+          <Pencil className="h-2.5 w-2.5 shrink-0 opacity-0 group-hover/et:opacity-50 transition-opacity" style={{ color: accent }} />
+        ) : (
+          <Lock className="h-2.5 w-2.5 shrink-0 opacity-50" style={{ color: "hsl(var(--muted-foreground))" }} />
+        )}
       </span>
     );
   }
@@ -266,13 +272,17 @@ function EditableMoney({
   if (!editing) {
     return (
       <span
-        className="group/em inline-flex items-center gap-0.5 rounded px-0.5 -mx-0.5 cursor-pointer transition-colors hover:bg-white/[0.06] font-mono tabular-nums"
-        onClick={startEdit}
-        title="Clique para editar"
-        style={{ color: color ?? "inherit" }}
+        className="group/em inline-flex items-center gap-0.5 rounded px-0.5 -mx-0.5 transition-colors font-mono tabular-nums"
+        onClick={canEdit ? startEdit : undefined}
+        title={canEdit ? "Clique para editar" : "Modo leitura. Faça login como admin para editar."}
+        style={{ color: color ?? "inherit", opacity: canEdit ? 1 : 0.5, cursor: canEdit ? "pointer" : "not-allowed" }}
       >
         <span>{formatBRL(value)}</span>
-        <Pencil className="h-2.5 w-2.5 shrink-0 opacity-0 group-hover/em:opacity-50 transition-opacity" style={{ color: accent }} />
+        {canEdit ? (
+          <Pencil className="h-2.5 w-2.5 shrink-0 opacity-0 group-hover/em:opacity-50 transition-opacity" style={{ color: accent }} />
+        ) : (
+          <Lock className="h-2.5 w-2.5 shrink-0 opacity-50" style={{ color: "hsl(var(--muted-foreground))" }} />
+        )}
       </span>
     );
   }
@@ -829,7 +839,7 @@ function GroupSection({
           )}
 
           {/* Add subgroup */}
-          {addingSub ? (
+{addingSub ? (
             <AddSubGroupForm
               accent={accent}
               nextCode={nextSubCode}
@@ -842,11 +852,12 @@ function GroupSection({
               style={{ borderTop: `1px solid ${borderColor}`, background: "var(--secondary)" }}
             >
               <button
-                onClick={e => { e.stopPropagation(); setAddingSub(true); }}
-                className="flex items-center gap-1.5 text-[10px] font-mono transition-opacity hover:opacity-100 opacity-60"
-                style={{ color: accent.c }}
+                onClick={canEdit ? (e => { e.stopPropagation(); setAddingSub(true); }) : undefined}
+                className="flex items-center gap-1.5 text-[10px] font-mono transition-opacity opacity-60"
+                style={{ color: accent.c, cursor: canEdit ? "pointer" : "not-allowed", opacity: canEdit ? 1 : 0.5 }}
               >
-                <Plus className="h-3 w-3" /> Adicionar subgrupo
+                {canEdit ? <Plus className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
+                Adicionar subgrupo
               </button>
             </div>
           )}
@@ -1016,27 +1027,28 @@ function ProcessCard({
           )}
 
           {/* Add group */}
-          {addingGroup ? (
-            <AddGroupForm
-              accent={accent}
-              nextCode={nextGroupCode}
-              onAdd={g => { onAddGroup(process.id, g); setAddingGroup(false); }}
-              onCancel={() => setAddingGroup(false)}
-            />
-          ) : (
-            <div
-              className="flex items-center justify-end px-4 py-2.5"
-              style={{ background: "var(--secondary)", borderTop: `1px solid var(--border)` }}
-            >
-              <button
-                onClick={e => { e.stopPropagation(); setAddingGroup(true); }}
-                className="flex items-center gap-1.5 text-[10px] font-mono transition-opacity hover:opacity-100 opacity-60"
-                style={{ color: accent.c }}
-              >
-                <Plus className="h-3 w-3" /> Adicionar grupo
-              </button>
-            </div>
-          )}
+      {addingGroup ? (
+        <AddGroupForm
+          accent={accent}
+          nextCode={nextGroupCode}
+          onAdd={g => { onAddGroup(process.id, g); setAddingGroup(false); }}
+          onCancel={() => setAddingGroup(false)}
+        />
+      ) : (
+        <div
+          className="flex items-center justify-end px-4 py-2.5"
+          style={{ background: "var(--secondary)", borderTop: `1px solid var(--border)` }}
+        >
+          <button
+            onClick={canEdit ? (e => { e.stopPropagation(); setAddingGroup(true); }) : undefined}
+            className="flex items-center gap-1.5 text-[10px] font-mono transition-opacity opacity-60"
+            style={{ color: accent.c, cursor: canEdit ? "pointer" : "not-allowed", opacity: canEdit ? 1 : 0.5 }}
+          >
+            {canEdit ? <Plus className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
+            Adicionar grupo
+          </button>
+        </div>
+      )}
         </div>
       )}
     </div>
@@ -1046,28 +1058,39 @@ function ProcessCard({
 // ─────────────────────────────────────────────────────────────
 //  localStorage helpers — client-only
 // ─────────────────────────────────────────────────────────────
-const LS_KEY = "avg-cost-centers-v1";
+// Fallback to localStorage; prefer Supabase
+const LS_KEY = "avg-cost-centers-v1-fallback";
 
-function loadFromStorage(): Process[] {
+async function loadData(): Promise<Process[]> {
+  try {
+    const supabaseData = await loadCostCenters();
+    if (supabaseData) return supabaseData;
+  } catch (e) {
+    console.warn('Supabase load failed, using localStorage:', e);
+  }
+  // Fallback
   try {
     const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return PROCESSES;
-    const parsed = JSON.parse(raw) as Process[];
-    if (!Array.isArray(parsed) || parsed.length === 0) return PROCESSES;
-    // Merge: keep saved data but add any new processes from PROCESSES that are missing
-    const savedIds = new Set(parsed.map((p: Process) => p.id));
-    const missing = PROCESSES.filter(p => !savedIds.has(p.id));
-    return missing.length > 0 ? [...parsed, ...missing] : parsed;
-  } catch {
-    return PROCESSES;
-  }
+    if (raw) {
+      const parsed = JSON.parse(raw) as Process[];
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        const savedIds = new Set(parsed.map((p: Process) => p.id));
+        const missing = PROCESSES.filter(p => !savedIds.has(p.id));
+        return missing.length > 0 ? [...parsed, ...missing] : parsed;
+      }
+    }
+  } catch {}
+  return PROCESSES;
 }
 
-function saveToStorage(data: Process[]) {
+async function saveData(data: Process[]) {
   try {
-    localStorage.setItem(LS_KEY, JSON.stringify(data));
-  } catch {
-    // quota exceeded — ignore
+    await saveCostCenters(data);
+  } catch (e) {
+    console.warn('Supabase save failed, using localStorage:', e);
+    try {
+      localStorage.setItem(LS_KEY, JSON.stringify(data));
+    } catch {}
   }
 }
 
@@ -1075,16 +1098,39 @@ function saveToStorage(data: Process[]) {
 //  Root panel — owns all state + localStorage persistence
 // ─────────────────────────────────────────────────────────────
 export function CostCenterPanel() {
-  // Start with the static data — will be replaced after hydration
   const [processes, setProcesses] = useState<Process[]>(PROCESSES);
-  // Track whether we have loaded from localStorage yet
   const [hydrated, setHydrated] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
 
-  // On client mount: load saved data from localStorage (runs once)
+  // Check admin on mount
   useEffect(() => {
-    const saved = loadFromStorage();
-    setProcesses(saved);
-    setHydrated(true);
+    const adminFlag = localStorage.getItem('cost-center-admin');
+    if (adminFlag === 'true') {
+      setIsAdmin(true);
+    } else {
+      setShowPasswordModal(true);
+    }
+  }, []);
+
+  const handlePasswordSubmit = (password: string) => {
+    if (password === 'admin123') { // Change this password!
+      localStorage.setItem('cost-center-admin', 'true');
+      setIsAdmin(true);
+      setShowPasswordModal(false);
+    } else {
+      alert('Senha incorreta. Apenas administradores podem editar.');
+    }
+  };
+
+  const canEdit = isAdmin && hydrated;
+
+  // Load from Supabase/localStorage
+  useEffect(() => {
+    loadData().then(saved => {
+      setProcesses(saved);
+      setHydrated(true);
+    });
   }, []);
 
   // Persist to localStorage after every change — but ONLY after hydration
@@ -1234,6 +1280,40 @@ export function CostCenterPanel() {
     setTimeout(() => setSaved(false), 2000);
   }, [processes]);
 
+  // Password modal
+  if (showPasswordModal) {
+    return (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-2xl p-8 max-w-sm w-full max-h-[90vh] overflow-auto shadow-2xl border border-gray-200" style={{ boxShadow: "0 25px 50px -12px hsl(0 0% 0% / 0.25)" }}>
+          <h2 className="text-2xl font-bold mb-4 text-gray-900 text-center">Acesso de Edição</h2>
+          <p className="text-sm text-gray-600 mb-6 text-center">Digite a senha de administrador para habilitar edições.</p>
+          <input
+            type="password"
+            placeholder="Senha"
+            onKeyDown={e => e.key === 'Enter' && handlePasswordSubmit(e.currentTarget.value)}
+            className="w-full p-3 rounded-xl border border-gray-300 focus:ring-4 focus:ring-blue-500 focus:border-blue-500 text-lg font-mono"
+            autoFocus
+          />
+          <div className="flex gap-3 mt-6">
+            <button
+              onClick={() => handlePasswordSubmit('')} // Empty to trigger alert
+              className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-900 font-semibold py-3 px-4 rounded-xl transition-all duration-200"
+            >
+              Entrar
+            </button>
+            <button
+              onClick={() => setShowPasswordModal(false)}
+              className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold py-3 px-4 rounded-xl transition-all duration-200"
+            >
+              Cancelar
+            </button>
+          </div>
+          <p className="text-xs text-gray-500 mt-4 text-center">Contate o administrador para obter a senha.</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-3">
 
@@ -1241,8 +1321,8 @@ export function CostCenterPanel() {
       <div
         className="rounded-xl px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3"
         style={{
-          background: "var(--card)",
-          border: "1px solid var(--border)",
+          background: "hsl(var(--card))",
+          border: "1px solid hsl(var(--border))",
         }}
       >
         {/* Warning info */}

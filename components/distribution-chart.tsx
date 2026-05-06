@@ -6,7 +6,6 @@ import {
   Pie,
   Cell,
   Sector,
-  Tooltip,
   ResponsiveContainer,
 } from "recharts";
 import {
@@ -23,26 +22,25 @@ import {
 
 // ── Distinct color per process ────────────────────────────────
 const AREA_COLORS: Record<string, string> = {
-  LM: "oklch(0.72 0.20 185)",
-  BEN: "oklch(0.68 0.22 145)",
-  INS: "oklch(0.72 0.20 55)",
-  MA: "oklch(0.65 0.18 160)",
-  ADM: "oklch(0.70 0.20 295)",
-  LOG: "oklch(0.68 0.20 220)",
-  DEP: "oklch(0.62 0.10 240)",
+  LM: "hsl(var(--chart-1))",
+  BEN: "hsl(var(--chart-2))",
+  INS: "hsl(var(--chart-3))",
+  MA: "hsl(var(--chart-4))",
+  ADM: "hsl(var(--chart-5))",
+  LOG: "hsl(var(--primary))",
+  DEP: "hsl(var(--secondary))",
 };
 
-function toHex(oklch: string): string {
-  const MAP: Record<string, string> = {
-    "oklch(0.72 0.20 185)": "#00c4b0",
-    "oklch(0.68 0.22 145)": "#22c55e",
-    "oklch(0.72 0.20 55)": "#f59e0b",
-    "oklch(0.65 0.18 160)": "#10b981",
-    "oklch(0.70 0.20 295)": "#a855f7",
-    "oklch(0.68 0.20 220)": "#3b82f6",
-    "oklch(0.62 0.10 240)": "#64748b",
+function toHex(color: string): string {
+  // Tailwind hsl to hex fallback
+  if (color.startsWith('hsl(var(')) return color;
+  // old oklch map if needed
+  const MAP = {
+    "#00c4b0": "#00c4b0",
+    "#22c55e": "#22c55e",
+    // ... 
   };
-  return MAP[oklch] ?? "#64748b";
+  return color;
 }
 
 type SortKey = "value" | "name" | "pct" | "variance";
@@ -75,7 +73,6 @@ const renderActiveShape = (props: any) => {
         endAngle={endAngle}
         fill={fill}
       />
-
       <Sector
         cx={cx}
         cy={cy}
@@ -86,7 +83,6 @@ const renderActiveShape = (props: any) => {
         fill={fill}
         opacity={0.35}
       />
-
       <text
         x={cx}
         y={cy - 14}
@@ -97,17 +93,15 @@ const renderActiveShape = (props: any) => {
       >
         {payload.name}
       </text>
-
       <text
         x={cx}
         y={cy + 4}
         textAnchor="middle"
         fontSize={10}
-        fill="#94a3b8"
+        fill="hsl(var(--muted-foreground))"
       >
         {formatBRL(payload.value)}
       </text>
-
       <text
         x={cx}
         y={cy + 19}
@@ -129,7 +123,7 @@ export function DistributionChart({
   year?: number;
   month?: number | null;
 }) {
-  const [activeIndex, setActiveIndex] = useState<number | null>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
   const [sortKey, setSortKey] = useState<SortKey>("value");
 
   const factor = getPeriodFactor(year, month);
@@ -155,7 +149,7 @@ export function DistributionChart({
         budgeted,
         pct: totalRealized > 0 ? (realized / totalRealized) * 100 : 0,
         varPct: budgeted > 0 ? ((realized - budgeted) / budgeted) * 100 : 0,
-        fill: toHex(AREA_COLORS[c.id] ?? "oklch(0.60 0.08 240)"),
+        fill: toHex(AREA_COLORS[c.id] ?? "hsl(var(--muted))"),
         isOver: realized > budgeted,
       };
     }),
@@ -177,28 +171,61 @@ export function DistributionChart({
       : 0;
 
   return (
-    <div className="rounded-lg p-5">
-      <div style={{ height: 220 }}>
+    <div className="rounded-xl p-6 shadow-lg border" style={{ background: "hsl(var(--card))", borderColor: "hsl(var(--border))", boxShadow: "0 8px 32px hsl(0 0% 0% / 0.12)" }}>
+      <div style={{ height: 300 }}>
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
+            <defs>
+              {sortedData.map((entry, i) => (
+                <linearGradient key={`glow-${i}`} id={`glow-${i}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                  <stop offset="0%" stopColor={entry.fill} stopOpacity="1"/>
+                  <stop offset="50%" stopColor={entry.fill} stopOpacity="0.8"/>
+                  <stop offset="100%" stopColor={entry.fill} stopOpacity="0.6"/>
+                </linearGradient>
+              ))}
+              <radialGradient id="inner-glow" cx="50%" cy="50%" r="70%">
+                <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.4"/>
+                <stop offset="50%" stopColor="hsl(var(--primary))" stopOpacity="0.2"/>
+                <stop offset="100%" stopColor="transparent"/>
+              </radialGradient>
+            </defs>
             <Pie
               data={sortedData}
               cx="50%"
               cy="50%"
-              innerRadius={58}
-              outerRadius={88}
+              innerRadius={70}
+              outerRadius={95}
               dataKey="value"
-              activeIndex={activeIndex ?? undefined}
+              activeIndex={activeIndex}
               activeShape={renderActiveShape}
-              onMouseEnter={(_, i) => setActiveIndex(i)}
-              onMouseLeave={() => setActiveIndex(null)}
+              onMouseEnter={(_, index) => setActiveIndex(index as number)}
+              onMouseLeave={() => setActiveIndex(-1)}
             >
-              {sortedData.map((entry) => (
-                <Cell key={entry.id} fill={entry.fill} />
+              {sortedData.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={`url(#glow-${index})`} stroke="hsl(var(--foreground))" strokeWidth={2}/>
               ))}
             </Pie>
+            <Sector cx="50%" cy="50%" innerRadius={0} outerRadius={70} startAngle={0} endAngle={360} fill="url(#inner-glow)"/>
           </PieChart>
         </ResponsiveContainer>
+      </div>
+      <div className="flex items-center justify-between mt-6 p-3 bg-muted/50 rounded-lg">
+        <span className="text-xs font-semibold text-muted-foreground">Ordenar:</span>
+        <div className="flex gap-1">
+          {(['value', 'pct', 'name', 'variance'] as const).map((key) => (
+            <button
+              key={key}
+              onClick={() => setSortKey(key)}
+              className="px-3 py-1.5 text-xs font-mono rounded-md transition-all capitalize"
+              style={{
+                backgroundColor: sortKey === key ? 'hsl(var(--primary))' : 'hsl(var(--muted))',
+                color: sortKey === key ? 'hsl(var(--primary-foreground))' : 'hsl(var(--foreground))',
+              }}
+            >
+              {key === 'pct' ? '%' : key === 'variance' ? 'Var' : key === 'value' ? 'Valor' : 'Nome'}
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );

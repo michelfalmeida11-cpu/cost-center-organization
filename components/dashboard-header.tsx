@@ -41,7 +41,7 @@ export function DashboardHeader() {
   }
 
   return (
-    <header className="sticky top-0 z-40 border-b border-[oklch(0.75_0.20_185/0.25)] bg-[oklch(0.07_0.015_240/0.98)] backdrop-blur-md shadow-md">
+    <header className="sticky top-0 z-40 border-b border-border bg-card backdrop-blur-md shadow-md">
       {/* Top accent bar */}
       <div className="h-1 w-full bg-gradient-to-r from-transparent via-[oklch(0.75_0.20_185)] to-transparent opacity-90" />
 

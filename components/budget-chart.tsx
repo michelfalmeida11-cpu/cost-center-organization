@@ -33,15 +33,15 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   const over    = diff > 0;
 
   return (
-    <div
-      className="rounded-xl p-4 text-xs font-mono"
-      style={{
-        background: "oklch(0.07 0.014 240)",
-        border: "1px solid oklch(0.75 0.20 185 / 0.35)",
-        boxShadow: "0 0 30px oklch(0.75 0.20 185 / 0.15)",
-        minWidth: 240,
-      }}
-    >
+      <div
+        className="rounded-xl p-4 text-xs font-mono"
+        style={{
+          background: "hsl(var(--card))",
+          border: "1px solid hsl(var(--border))",
+          boxShadow: "0 8px 32px hsl(0 0% 0% / 0.12)",
+          minWidth: 240,
+        }}
+      >
       <p
         className="font-bold text-[12px] uppercase tracking-widest pb-2.5 mb-2.5"
         style={{ color: "oklch(0.92 0.02 200)", borderBottom: "1px solid oklch(0.18 0.020 240)" }}
@@ -85,16 +85,16 @@ const CustomYTick = ({ x, y, payload }: any) => {
   const item = payload?.value ? null : null;
   return (
     <g transform={`translate(${x},${y})`}>
-      <text
-        x={-8}
-        y={0}
-        dy={4}
-        textAnchor="end"
-        fill="oklch(0.68 0.03 220)"
-        fontFamily="ui-monospace, monospace"
-        fontSize={11}
-        fontWeight={500}
-      >
+          <text
+            x={-8}
+            y={0}
+            dy={4}
+            textAnchor="end"
+            fill="hsl(var(--foreground))"
+            fontFamily="ui-monospace, monospace"
+            fontSize={11}
+            fontWeight={500}
+          >
         {payload.value}
       </text>
     </g>
@@ -128,9 +128,9 @@ export function BudgetChart({ year = 2026, month = null }: { year?: number; mont
     <div
       className="rounded-xl p-5"
       style={{
-        background: "oklch(0.105 0.017 240)",
-        border: "1px solid oklch(0.75 0.20 185 / 0.18)",
-        boxShadow: "0 0 24px oklch(0.75 0.20 185 / 0.06)",
+        background: "hsl(var(--card))",
+        border: "1px solid hsl(var(--border))",
+        boxShadow: "0 4px 20px hsl(0 0% 0% / 0.08)",
       }}
     >
       {/* Legend */}
@@ -188,12 +188,12 @@ export function BudgetChart({ year = 2026, month = null }: { year?: number; mont
           {/* Orçado — translucent outline bar */}
           <Bar dataKey="Orçado" radius={[0, 3, 3, 0]}>
             {data.map((d, i) => (
-              <Cell
+            <Cell
                 key={`o-${i}`}
                 fill="transparent"
                 stroke={d.color}
                 strokeWidth={1.5}
-                strokeOpacity={0.55}
+                strokeOpacity={0.75}
               />
             ))}
           </Bar>

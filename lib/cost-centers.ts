@@ -323,6 +323,41 @@ export const PROCESSES: Process[] = [
       },
     ],
   },
+  // ── 8. MANUTENÇÃO ─────────────────────────────────────────────
+  {
+    id: "MAN",
+    code: "CC-800",
+    name: "Manutenção",
+    acronym: "MAN",
+    color: "yellow",
+    icon: "wrench",
+    groups: [
+      {
+        id: "MAN-G1",
+        code: "CC-810",
+        name: "Manutenção Preventiva",
+        subGroups: [
+          { id: "MAN-G1-S1", code: "CC-811", name: "Planejada - Equipamentos", description: "Manutenção preventiva programada em equipamentos de mina e planta", budgeted: 450000, realized: 412000, unit: "R$" },
+        ],
+      },
+      {
+        id: "MAN-G2",
+        code: "CC-820",
+        name: "Manutenção Corretiva",
+        subGroups: [
+          { id: "MAN-G2-S1", code: "CC-821", name: "Paradas Emergenciais", description: "Reparos não planejados e paradas imprevistas", budgeted: 320000, realized: 385000, unit: "R$" },
+        ],
+      },
+      {
+        id: "MAN-G3",
+        code: "CC-830",
+        name: "Materiais e Peças",
+        subGroups: [
+          { id: "MAN-G3-S1", code: "CC-831", name: "Estoque de Reposição", description: "Peças de reposição, lubrificantes e insumos de manutenção", budgeted: 280000, realized: 265000, unit: "R$" },
+        ],
+      },
+    ],
+  },
 ];
 
 // ---------------------------------------------------------------
