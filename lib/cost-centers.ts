@@ -11,7 +11,8 @@ export type ProcessCode =
   | "MA"   // Meio Ambiente
   | "ADM"  // Administrativos
   | "LOG"  // Logística
-  | "DEP"; // Depreciação
+  | "DEP"  // Depreciação
+  | "MAN"; // Manutenção
 
 // ── Subgrupo (nível mais granular, editável) ─────────────────
 export interface SubGroup {

@@ -191,8 +191,8 @@ export function DistributionChart({
             </defs>
             <Pie
               data={sortedData}
-              cx="50%"
-              cy="50%"
+              cx={150}
+              cy={150}
               innerRadius={70}
               outerRadius={95}
               dataKey="value"
@@ -205,7 +205,7 @@ export function DistributionChart({
                 <Cell key={`cell-${index}`} fill={`url(#glow-${index})`} stroke="hsl(var(--foreground))" strokeWidth={2}/>
               ))}
             </Pie>
-            <Sector cx="50%" cy="50%" innerRadius={0} outerRadius={70} startAngle={0} endAngle={360} fill="url(#inner-glow)"/>
+            <Sector cx={150} cy={150} innerRadius={0} outerRadius={70} startAngle={0} endAngle={360} fill="url(#inner-glow)"/>
           </PieChart>
         </ResponsiveContainer>
       </div>

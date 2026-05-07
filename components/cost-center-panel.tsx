@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { supabase } from "@/lib/supabase";
+import { supabase, loadCostCenters, saveCostCenters } from "@/lib/supabase";
 import {
   ChevronDown,
   ChevronRight,
@@ -680,6 +680,7 @@ function GroupSection({
   onUpdateSub: (gid: string, sid: string, field: keyof SubGroup, val: string | number) => void;
   onDeleteSub: (gid: string, sid: string) => void;
   onAddSub: (gid: string, sub: Omit<SubGroup, "id">) => void;
+canEdit: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [addingSub, setAddingSub] = useState(false);
@@ -892,6 +893,7 @@ function ProcessCard({
   onUpdateSub: (pid: string, gid: string, sid: string, field: keyof SubGroup, val: string | number) => void;
   onDeleteSub: (pid: string, gid: string, sid: string) => void;
   onAddSub: (pid: string, gid: string, sub: Omit<SubGroup, "id">) => void;
+  canEdit: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [addingGroup, setAddingGroup] = useState(false);
@@ -1026,6 +1028,7 @@ function ProcessCard({
                 onUpdateSub={(gid, sid, field, val) => onUpdateSub(process.id, gid, sid, field, val)}
                 onDeleteSub={(gid, sid) => onDeleteSub(process.id, gid, sid)}
                 onAddSub={(gid, sub) => onAddSub(process.id, gid, sub)}
+                canEdit={canEdit}
               />
             ))
           )}
@@ -1045,7 +1048,7 @@ function ProcessCard({
         >
             <button
               onClick={(e) => {
-                if (!canEdit) return;
+                if (canEdit) return;
                 e.stopPropagation();
                 setAddingGroup(true);
               }}
@@ -1145,11 +1148,11 @@ export function CostCenterPanel() {
     });
   }, []);
 
-  // Persist to localStorage after every change — but ONLY after hydration
+// Persist to localStorage after every change — but ONLY after hydration
   // to avoid overwriting saved data with the static default on first render
   useEffect(() => {
     if (!hydrated) return;
-    saveToStorage(processes);
+    saveData(processes);
   }, [processes, hydrated]);
 
   // ── Process update ────────────────────────────────────────
@@ -1274,7 +1277,7 @@ export function CostCenterPanel() {
           return;
         }
         setProcesses(parsed);
-        saveToStorage(parsed);
+        saveData(parsed);
         alert("Dados importados com sucesso!");
       } catch {
         alert("Erro ao ler o arquivo. Verifique se é um JSON válido.");
@@ -1287,7 +1290,7 @@ export function CostCenterPanel() {
 
   const [saved, setSaved] = useState(false);
   const handleManualSave = useCallback(() => {
-    saveToStorage(processes);
+    saveData(processes);
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
   }, [processes]);
@@ -1418,6 +1421,7 @@ export function CostCenterPanel() {
           onUpdateSub={updateSub}
           onDeleteSub={deleteSub}
           onAddSub={addSub}
+          canEdit={canEdit}
         />
       ))}
     </div>
