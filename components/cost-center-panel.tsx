@@ -137,12 +137,14 @@ function EditableText({
   accent,
   placeholder = "—",
   className = "",
+  disabled = false,
 }: {
   value: string;
   onSave: (v: string) => void;
   accent: string;
   placeholder?: string;
   className?: string;
+  disabled?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
@@ -173,16 +175,12 @@ function EditableText({
   if (!editing) {
     return (
       <span
-        className={`group/et inline-flex items-center gap-0.5 rounded px-0.5 -mx-0.5 transition-colors ${className} ${canEdit ? 'cursor-pointer hover:bg-primary/5' : 'cursor-not-allowed opacity-50'}`}
-        onClick={canEdit ? (e => { e.stopPropagation(); setEditing(true); }) : undefined}
-        title={canEdit ? "Clique para editar" : "Modo leitura. Faça login como admin para editar."}
+        className={`group/et inline-flex items-center gap-0.5 rounded px-0.5 -mx-0.5 transition-colors ${className} ${disabled ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:bg-primary/5"}`}
+        onClick={disabled ? undefined : (e) => { e.stopPropagation(); setEditing(true); }}
+        title={disabled ? "Modo leitura" : "Clique para editar"}
       >
         <span>{value || placeholder}</span>
-        {canEdit ? (
-          <Pencil className="h-2.5 w-2.5 shrink-0 opacity-0 group-hover/et:opacity-50 transition-opacity" style={{ color: accent }} />
-        ) : (
-          <Lock className="h-2.5 w-2.5 shrink-0 opacity-50" style={{ color: "hsl(var(--muted-foreground))" }} />
-        )}
+        <Pencil className="h-2.5 w-2.5 shrink-0 opacity-0 group-hover/et:opacity-50 transition-opacity" style={{ color: accent }} />
       </span>
     );
   }
@@ -272,17 +270,13 @@ function EditableMoney({
   if (!editing) {
     return (
       <span
-        className="group/em inline-flex items-center gap-0.5 rounded px-0.5 -mx-0.5 transition-colors font-mono tabular-nums"
-        onClick={canEdit ? startEdit : undefined}
-        title={canEdit ? "Clique para editar" : "Modo leitura. Faça login como admin para editar."}
-        style={{ color: color ?? "inherit", opacity: canEdit ? 1 : 0.5, cursor: canEdit ? "pointer" : "not-allowed" }}
+        className="group/em inline-flex items-center gap-0.5 rounded px-0.5 -mx-0.5 transition-colors cursor-pointer font-mono tabular-nums"
+        onClick={startEdit}
+        title="Clique para editar"
+        style={{ color: color ?? "inherit" }}
       >
         <span>{formatBRL(value)}</span>
-        {canEdit ? (
-          <Pencil className="h-2.5 w-2.5 shrink-0 opacity-0 group-hover/em:opacity-50 transition-opacity" style={{ color: accent }} />
-        ) : (
-          <Lock className="h-2.5 w-2.5 shrink-0 opacity-50" style={{ color: "hsl(var(--muted-foreground))" }} />
-        )}
+        <Pencil className="h-2.5 w-2.5 shrink-0 opacity-0 group-hover/em:opacity-50 transition-opacity" style={{ color: accent }} />
       </span>
     );
   }
@@ -677,6 +671,7 @@ function GroupSection({
   onUpdateSub,
   onDeleteSub,
   onAddSub,
+  canEdit,
 }: {
   group: Group;
   accent: { c: string; dim: string; bg: string };
@@ -852,9 +847,17 @@ function GroupSection({
               style={{ borderTop: `1px solid ${borderColor}`, background: "var(--secondary)" }}
             >
               <button
-                onClick={canEdit ? (e => { e.stopPropagation(); setAddingSub(true); }) : undefined}
+                onClick={(e) => {
+                  if (!canEdit) return;
+                  e.stopPropagation();
+                  setAddingSub(true);
+                }}
                 className="flex items-center gap-1.5 text-[10px] font-mono transition-opacity opacity-60"
-                style={{ color: accent.c, cursor: canEdit ? "pointer" : "not-allowed", opacity: canEdit ? 1 : 0.5 }}
+                style={{
+                  color: accent.c,
+                  cursor: canEdit ? "pointer" : "not-allowed",
+                  opacity: canEdit ? 1 : 0.5,
+                }}
               >
                 {canEdit ? <Plus className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
                 Adicionar subgrupo
@@ -879,6 +882,7 @@ function ProcessCard({
   onUpdateSub,
   onDeleteSub,
   onAddSub,
+  canEdit,
 }: {
   process: Process;
   onUpdateProcess: (pid: string, field: "code" | "name" | "acronym", val: string) => void;
@@ -1039,11 +1043,19 @@ function ProcessCard({
           className="flex items-center justify-end px-4 py-2.5"
           style={{ background: "var(--secondary)", borderTop: `1px solid var(--border)` }}
         >
-          <button
-            onClick={canEdit ? (e => { e.stopPropagation(); setAddingGroup(true); }) : undefined}
-            className="flex items-center gap-1.5 text-[10px] font-mono transition-opacity opacity-60"
-            style={{ color: accent.c, cursor: canEdit ? "pointer" : "not-allowed", opacity: canEdit ? 1 : 0.5 }}
-          >
+            <button
+              onClick={(e) => {
+                if (!canEdit) return;
+                e.stopPropagation();
+                setAddingGroup(true);
+              }}
+              className="flex items-center gap-1.5 text-[10px] font-mono transition-opacity opacity-60"
+              style={{
+                color: accent.c,
+                cursor: canEdit ? "pointer" : "not-allowed",
+                opacity: canEdit ? 1 : 0.5,
+              }}
+            >
             {canEdit ? <Plus className="h-3 w-3" /> : <Lock className="h-3 w-3" />}
             Adicionar grupo
           </button>
