@@ -680,7 +680,7 @@ function GroupSection({
   onUpdateSub: (gid: string, sid: string, field: keyof SubGroup, val: string | number) => void;
   onDeleteSub: (gid: string, sid: string) => void;
   onAddSub: (gid: string, sub: Omit<SubGroup, "id">) => void;
-canEdit: boolean;
+  canEdit: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [addingSub, setAddingSub] = useState(false);
