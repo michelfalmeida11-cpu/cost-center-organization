@@ -1,45 +1,38 @@
-# TODO — Rework premium (Next.js + Supabase)
+# TODO - Plataforma Corporativa AVG (Next.js 14)
 
-## Fase 1 — Base enterprise + Auth/Rotas (ADMIN/VIEWER)
-- [ ] Criar arquitetura de pastas enterprise (ui, auth, database, services, dashboard, charts)
-- [ ] Implementar Supabase Auth (login premium)
-- [ ] Criar `profiles` com role `ADMIN | VIEWER`
-- [ ] Aplicar RLS policies (SELECT liberado, mutações apenas ADMIN)
-- [ ] Criar middleware para proteger rotas do dashboard
-- [ ] Criar helpers server/client para sessão Supabase
+## Etapa 1 — Autenticação & bloqueio global
+- [ ] Criar `AuthProvider` + hook `useAuth()`
+- [ ] Modal elegante de senha (admin: **AVG12345**)
+- [ ] Guardas: bloquear criação/edição/exclusão/alteração de orçamento/realizado/centro de custo/subgrupo/detalhamento
+- [ ] Persistir sessão no `localStorage`
+- [ ] Botão global “Modo Edição” + badge “Administrador” (verde) / “Somente leitura” (cinza)
 
-## Fase 2 — Persistência real (remover localStorage como fonte de verdade)
-- [ ] Criar schema normalizado: processes, groups, subgroups (com relacionamentos)
-- [ ] Implementar queries (hierarquia) e agregaçōes (totais/KPIs) server-side
-- [ ] Remover `localStorage` do fluxo principal (manter apenas cache UI, se necessário)
-- [ ] Garantir autosave via mutações no banco
-- [ ] (Se viável) integrar realtime para atualizar dashboard em tempo real
+## Etapa 2 — Estado global de dados editáveis + persistência real
+- [ ] Criar `CostCentersProvider` (estado `processes`)
+- [ ] Hidratação segura (não sobrescrever seed)
+- [ ] Autosave inteligente (debounce) em localStorage e Supabase
+- [ ] Sincronizar updates para todos os usuários (via persistência)
 
-## Fase 3 — CRUD dinâmico seguro
-- [ ] Rebuild do painel CRUD (`CostCenterPanel`) baseado em dados do DB
-- [ ] Bloquear visual e tecnicamente ações de ADMIN vs VIEWER
-- [ ] CRUD: processos, grupos, subgrupos, budgeted/realized, delete
-- [ ] Importar/exportar (ADMIN) usando endpoints protegidos
+## Etapa 3 — Cálculos e atualização global automática
+- [ ] Criar `lib/cost-calculations.ts` com cálculos puros (KPIs/totais/percentuais/rankings/distribuição)
+- [ ] Atualizar `KpiSummary`, `BudgetChart`, `DistributionChart` para usar o estado do provider
+- [ ] Remover dependência de `PROCESSES/COST_CENTERS` estáticos para cálculos reativos
 
-## Fase 4 — Dashboard premium + gráficos futuristas
-- [ ] Rework da paleta e layout premium global (contraste perfeito)
-- [ ] KPI cards premium (com tooltips e animações leves)
-- [ ] Implementar gráficos pedidos:
-  - [ ] Pizza 3D futurista
-  - [ ] Barras animadas
-  - [ ] Área comparativa
-  - [ ] Evolução de custos (série temporal)
-  - [ ] Orçado vs realizado
-  - [ ] Distribuição por processo
-- [ ] Ajustar responsividade total (mobile/tablet/desktop)
+## Etapa 4 — Gráficos premium (Recharts)
+- [ ] Ajustar layout/altura e ocupação do card
+- [ ] Melhorar tooltip, labels, gradientes e animações
+- [ ] Aplicar innerRadius/outerRadius maiores e visual enterprise
 
-## Fase 5 — Novo processo MANUTENÇÃO
-- [ ] Garantir que MANUTENÇÃO (MAN) aparece automaticamente via seed/DB
-- [ ] Cor/ícone/kpis/gráficos/refletem no dashboard
+## Etapa 5 — UX/UI corporativo e acessibilidade
+- [ ] Trocar “Inline” por “Online” no projeto
+- [ ] Padronizar contraste global: títulos 900, subtítulos 700, secundário 600
+- [ ] Revisar cards/tabelas/inputs/menus/labels/gráficos
 
-## Fase 6 — Performance + deploy Vercel
-- [ ] Remover riscos de hydration/SSR
-- [ ] Otimizar re-renders (memo, suspense, isolating charts)
-- [ ] Validar `next build` sem erros
-- [ ] Ajustar env + vercel config
+## Etapa 6 — Refatoração e performance
+- [ ] Quebrar componentes grandes em subcomponentes/hook/cálculos
+- [ ] `useMemo` para cálculos e props estáveis para reduzir rerenders
+
+## Etapa 7 — Build & validação
+- [ ] `npm run lint` e `npm run build`
+- [ ] Testar cenários: não autenticado / autenticado / refresh / deploy
 
