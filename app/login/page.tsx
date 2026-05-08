@@ -1,49 +1,32 @@
 "use client";
 
-import { useState, FormEvent, ChangeEvent } from "react";
+import React, {
+  useState,
+  useMemo,
+} from "react";
+
 import { useRouter } from "next/navigation";
-import { createClient } from "@supabase/supabase-js";
+
+import {
+  createClient,
+  SupabaseClient,
+} from "@supabase/supabase-js";
+
+import { Lock } from "lucide-react";
 
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-import { Lock } from "lucide-react";
-
 // ======================================================
-// SUPABASE CONFIG
+// SUPABASE
 // ======================================================
 
 const supabaseUrl =
-  process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  process.env.NEXT_PUBLIC_SUPABASE_URL;
 
 const supabaseAnonKey =
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ?? "";
-
-const supabase =
-  supabaseUrl && supabaseAnonKey
-    ? createClient(supabaseUrl, supabaseAnonKey)
-    : null;
-
-// ======================================================
-// REDIRECT HELPER
-// ======================================================
-
-function getRedirectTo(): string {
-  if (typeof window === "undefined") {
-    return "/";
-  }
-
-  try {
-    const params = new URLSearchParams(
-      window.location.search
-    );
-
-    return params.get("next") || "/";
-  } catch {
-    return "/";
-  }
-}
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 // ======================================================
 // COMPONENT
@@ -52,41 +35,80 @@ function getRedirectTo(): string {
 export default function LoginPage() {
   const router = useRouter();
 
+  // ======================================================
+  // STATES
+  // ======================================================
+
   const [email, setEmail] =
-    useState<string>("");
+    useState("");
 
   const [password, setPassword] =
-    useState<string>("");
+    useState("");
 
   const [loading, setLoading] =
-    useState<boolean>(false);
+    useState(false);
 
   const [error, setError] =
-    useState<string | null>(null);
+    useState("");
+
+  // ======================================================
+  // SUPABASE CLIENT SAFE
+  // ======================================================
+
+  const supabase: SupabaseClient | null =
+    useMemo(() => {
+      if (
+        !supabaseUrl ||
+        !supabaseAnonKey
+      ) {
+        return null;
+      }
+
+      return createClient(
+        supabaseUrl,
+        supabaseAnonKey
+      );
+    }, []);
+
+  // ======================================================
+  // REDIRECT
+  // ======================================================
+
+  const getRedirectTo = () => {
+    if (typeof window === "undefined") {
+      return "/";
+    }
+
+    const params =
+      new URLSearchParams(
+        window.location.search
+      );
+
+    return params.get("next") || "/";
+  };
 
   // ======================================================
   // LOGIN
   // ======================================================
 
   async function onSubmit(
-    e: FormEvent<HTMLFormElement>
-  ): Promise<void> {
+    e: React.FormEvent<HTMLFormElement>
+  ) {
     e.preventDefault();
 
     setLoading(true);
-    setError(null);
+    setError("");
 
     try {
       // ======================================================
-      // VALIDATE SUPABASE
+      // SUPABASE VALIDATION
       // ======================================================
 
       if (!supabase) {
         setError(
-          "Supabase não configurado. Configure as variáveis de ambiente."
+          "Supabase não configurado."
         );
 
-        setLoading(false);
         return;
       }
 
@@ -98,19 +120,19 @@ export default function LoginPage() {
         data,
         error: authError,
       } =
-        await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
+        await supabase.auth.signInWithPassword(
+          {
+            email,
+            password,
+          }
+        );
 
       // ======================================================
-      // LOGIN ERROR
+      // AUTH ERROR
       // ======================================================
 
       if (authError) {
         setError(authError.message);
-
-        setLoading(false);
         return;
       }
 
@@ -118,15 +140,16 @@ export default function LoginPage() {
       // USER VALIDATION
       // ======================================================
 
-      if (!data.user) {
-        setError("Falha ao autenticar");
+      if (!data?.user) {
+        setError(
+          "Falha ao autenticar."
+        );
 
-        setLoading(false);
         return;
       }
 
       // ======================================================
-      // SAVE SESSION
+      // SAVE AUTH
       // ======================================================
 
       localStorage.setItem(
@@ -160,36 +183,23 @@ export default function LoginPage() {
   // ======================================================
 
   return (
-    <div className="min-h-screen bg-[#F8FAFC] flex items-center justify-center p-4">
-      <Card className="w-full max-w-md rounded-3xl border border-gray-200 bg-white shadow-xl">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md rounded-3xl border border-slate-200 bg-white shadow-2xl">
         <div className="p-8">
 
           {/* HEADER */}
 
-          <div className="flex items-center gap-3 mb-6">
-            <div
-              className="h-12 w-12 rounded-2xl flex items-center justify-center"
-              style={{
-                background:
-                  "rgba(20,184,166,0.12)",
-                border:
-                  "1px solid rgba(20,184,166,0.25)",
-              }}
-            >
-              <Lock
-                className="h-6 w-6"
-                style={{
-                  color: "#14B8A6",
-                }}
-              />
+          <div className="mb-8 flex items-center gap-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-2xl border border-teal-200 bg-teal-50">
+              <Lock className="h-6 w-6 text-teal-600" />
             </div>
 
             <div>
-              <h1 className="text-xl font-bold text-gray-900">
+              <h1 className="text-2xl font-bold text-slate-900">
                 Acesso Premium
               </h1>
 
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-slate-500">
                 Gestão de Centros de Custo
               </p>
             </div>
@@ -204,48 +214,50 @@ export default function LoginPage() {
             {/* EMAIL */}
 
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-gray-700">
+              <label className="text-sm font-semibold text-slate-700">
                 Email
               </label>
 
               <Input
                 type="email"
                 value={email}
-                onChange={(
-                  e: ChangeEvent<HTMLInputElement>
-                ) =>
-                  setEmail(e.target.value)
+                onChange={(e) =>
+                  setEmail(
+                    e.target.value
+                  )
                 }
                 placeholder="seu@email.com"
                 required
-                className="h-11 rounded-xl border-gray-300 focus:border-teal-500 focus:ring-teal-500"
+                autoComplete="email"
+                className="h-12 rounded-xl border-slate-300 focus:border-teal-500 focus:ring-teal-500"
               />
             </div>
 
             {/* PASSWORD */}
 
             <div className="space-y-2">
-              <label className="text-sm font-semibold text-gray-700">
+              <label className="text-sm font-semibold text-slate-700">
                 Senha
               </label>
 
               <Input
                 type="password"
                 value={password}
-                onChange={(
-                  e: ChangeEvent<HTMLInputElement>
-                ) =>
-                  setPassword(e.target.value)
+                onChange={(e) =>
+                  setPassword(
+                    e.target.value
+                  )
                 }
                 placeholder="••••••••"
                 required
-                className="h-11 rounded-xl border-gray-300 focus:border-teal-500 focus:ring-teal-500"
+                autoComplete="current-password"
+                className="h-12 rounded-xl border-slate-300 focus:border-teal-500 focus:ring-teal-500"
               />
             </div>
 
             {/* ERROR */}
 
-            {error && (
+            {!!error && (
               <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
                 {error}
               </div>
@@ -256,7 +268,7 @@ export default function LoginPage() {
             <Button
               type="submit"
               disabled={loading}
-              className="w-full h-11 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white font-semibold shadow-lg transition-all"
+              className="h-12 w-full rounded-2xl bg-teal-600 text-white shadow-lg transition-all hover:bg-teal-500"
             >
               {loading
                 ? "Entrando..."
@@ -266,12 +278,12 @@ export default function LoginPage() {
 
           {/* FOOTER */}
 
-          <div className="mt-6 rounded-2xl border border-gray-200 bg-gray-50 p-4">
-            <p className="text-xs leading-relaxed text-gray-600">
-              Apenas usuários autorizados podem
-              realizar alterações no sistema.
-              Usuários VIEWER possuem acesso
-              somente leitura.
+          <div className="mt-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <p className="text-xs leading-relaxed text-slate-600">
+              Apenas usuários autorizados
+              podem alterar informações do
+              sistema. Usuários VIEWER possuem
+              acesso somente leitura.
             </p>
           </div>
         </div>
