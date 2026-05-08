@@ -11,17 +11,23 @@ export const metadata = {
   description: 'Sistema de Gestão de Centro de Custo — Grupo AVG, Mina do Brumado.',
 }
 
+import { AuthProvider } from "@/context/AuthContext";
+
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
+
   return (
     <html lang="pt-BR" className="light">
       <body className={`${inter.className} antialiased`}>
-        {children}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
         <Analytics />
       </body>
     </html>
   )
 }
+

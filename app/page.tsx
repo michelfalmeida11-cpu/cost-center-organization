@@ -8,6 +8,10 @@ import { DistributionChart } from "@/components/distribution-chart";
 import { CostCenterPanel } from "@/components/cost-center-panel";
 import { PROCESSES } from "@/lib/cost-centers"; // used in hero banner stats
 import { Activity, Cpu, Database, Shield, Calendar, ChevronDown } from "lucide-react";
+import { ModeEditionButton } from "@/components/auth/ModeEditionButton";
+import { AuthModal } from "@/components/auth/AuthModal";
+
+
 
 // ── Period selector data ────────────────────────────────────
 const YEARS = [2024, 2025, 2026];
@@ -249,15 +253,22 @@ export default function DashboardPage() {
 
         {/* ── Centro de Custo — Detalhamento ──────────────── */}
         <section aria-label="Centro de Custo — Detalhamento">
-          <SectionHeading
-            label="Centro de Custo — Detalhamento"
-            sub="Processo › Grupo › Subgrupo · Todos os campos editáveis inline"
-            color="oklch(0.72 0.18 270)"
-          />
+          <div className="flex items-center justify-between gap-4">
+            <SectionHeading
+              label="Centro de Custo — Detalhamento"
+              sub="Processo › Grupo › Subgrupo · Todos os campos editáveis online"
+              color="oklch(0.72 0.18 270)"
+            />
+            <div className="hidden md:flex">
+              <ModeEditionButton />
+            </div>
+          </div>
           <CostCenterPanel />
         </section>
 
+
         {/* ── Footer ──────────────────────────────────────── */}
+
         <footer
           className="rounded-xl px-6 py-5 mt-1"
           style={{ background: "var(--card)", border: `1px solid ${BORDER}` }}
