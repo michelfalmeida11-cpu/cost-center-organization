@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import React, { useMemo, useState, useCallback } from "react";
 import {
   PieChart,
   Pie,
@@ -8,11 +8,8 @@ import {
   Sector,
   ResponsiveContainer,
 } from "recharts";
-import {
-  TrendingUp,
-  TrendingDown,
-  Minus,
-} from "lucide-react";
+import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+
 import {
   COST_CENTERS,
   getTotalRealized,
@@ -20,30 +17,37 @@ import {
   formatBRL,
 } from "@/lib/cost-centers";
 
-// ── Distinct color per process ────────────────────────────────
-const AREA_COLORS: Record<string, string> = {
-  LM: "hsl(var(--chart-1))",
-  BEN: "hsl(var(--chart-2))",
-  INS: "hsl(var(--chart-3))",
-  MA: "hsl(var(--chart-4))",
-  ADM: "hsl(var(--chart-5))",
-  LOG: "hsl(var(--primary))",
-  DEP: "hsl(var(--secondary))",
-};
+type CenterId = (typeof COST_CENTERS)[number]["id"];
 
-function toHex(color: string): string {
-  // Tailwind hsl to hex fallback
-  if (color.startsWith('hsl(var(')) return color;
-  // old oklch map if needed
-  const MAP = {
-    "#00c4b0": "#00c4b0",
-    "#22c55e": "#22c55e",
-    // ... 
-  };
-  return color;
-}
+type SortKey = "value" | "pct" | "name";
 
-type SortKey = "value" | "name" | "pct" | "variance";
+// Índices oficiais (Depreciação sempre por último)
+const ORDER: CenterId[] = [
+  "LM" as CenterId,
+  "BEN" as CenterId,
+  "INS" as CenterId,
+  "MA" as CenterId,
+  "ADM" as CenterId,
+  "MAN" as CenterId,
+  "LOG" as CenterId,
+  "DEP" as CenterId,
+];
+
+// Cores executivas (coerentes com o dashboard atual)
+const COLOR = {
+  LM: "oklch(0.75 0.20 185)", // teal-ish
+  BEN: "oklch(0.68 0.20 145)", // green-cyan
+  INS: "oklch(0.75 0.22 55)",  // yellow-miner
+  MA: "oklch(0.70 0.20 155)",  // green
+  ADM: "oklch(0.72 0.20 295)", // purple
+  MAN: "oklch(0.74 0.20 190)", // ciano metálico
+  LOG: "oklch(0.76 0.20 45)",  // blue petróleo (aprox)
+  DEP: "oklch(0.55 0.05 240)", // grafite
+} satisfies Record<CenterId, string>;
+
+const BORDER = "oklch(0.18 0.018 240 / 0.35)";
+const CARD = "hsl(var(--card))";
+const MUTED = "oklch(0.42 0.03 220)";
 
 function getPeriodFactor(year: number, month: number | null): number {
   if (month !== null) return month / 12;
@@ -51,70 +55,50 @@ function getPeriodFactor(year: number, month: number | null): number {
   return 1;
 }
 
-// Active sector renderer
-const renderActiveShape = (props: any) => {
-  const {
-    cx, cy,
-    innerRadius, outerRadius,
-    startAngle, endAngle,
-    fill,
-    payload,
-    percent,
-  } = props;
+function pct(n: number, d: number) {
+  if (d <= 0) return 0;
+  return (n / d) * 100;
+}
+
+function getVariancePct(budgeted: number, realized: number) {
+  if (budgeted === 0) return 0;
+  return ((realized - budgeted) / budgeted) * 100;
+}
+
+function TrendBadge({ variancePct }: { variancePct: number }) {
+  const over = variancePct > 0.5;
+  const under = variancePct < -0.5;
+  const Icon = over ? TrendingUp : under ? TrendingDown : Minus;
+  const color = over
+    ? "oklch(0.65 0.22 25)"
+    : under
+      ? "oklch(0.68 0.22 145)"
+      : "oklch(0.48 0.03 220)";
 
   return (
-    <g>
-      <Sector
-        cx={cx}
-        cy={cy}
-        innerRadius={innerRadius}
-        outerRadius={outerRadius + 10}
-        startAngle={startAngle}
-        endAngle={endAngle}
-        fill={fill}
-      />
-      <Sector
-        cx={cx}
-        cy={cy}
-        innerRadius={outerRadius + 13}
-        outerRadius={outerRadius + 16}
-        startAngle={startAngle}
-        endAngle={endAngle}
-        fill={fill}
-        opacity={0.35}
-      />
-      <text
-        x={cx}
-        y={cy - 14}
-        textAnchor="middle"
-        fontSize={11}
-        fontWeight={700}
-        fill={fill}
-      >
-        {payload.name}
-      </text>
-      <text
-        x={cx}
-        y={cy + 4}
-        textAnchor="middle"
-        fontSize={10}
-        fill="hsl(var(--muted-foreground))"
-      >
-        {formatBRL(payload.value)}
-      </text>
-      <text
-        x={cx}
-        y={cy + 19}
-        textAnchor="middle"
-        fontSize={11}
-        fontWeight={700}
-        fill={fill}
-      >
-        {(percent * 100).toFixed(1)}%
-      </text>
-    </g>
+    <span
+      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-mono font-bold"
+      style={{
+        color,
+        background: `color-mix(in oklch, ${color} 12%, transparent)`,
+        border: `1px solid color-mix(in oklch, ${color} 28%, transparent)`,
+      }}
+    >
+      <Icon className="h-3 w-3" />
+      {variancePct > 0 ? "+" : ""}
+      {variancePct.toFixed(1)}%
+    </span>
   );
-};
+}
+
+function clamp(n: number, a: number, b: number) {
+  return Math.max(a, Math.min(b, n));
+}
+
+function fmtShortPercent(p: number) {
+  if (!isFinite(p)) return "0%";
+  return `${p.toFixed(0)}%`;
+}
 
 export function DistributionChart({
   year = 2026,
@@ -123,110 +107,503 @@ export function DistributionChart({
   year?: number;
   month?: number | null;
 }) {
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [activeId, setActiveId] = useState<CenterId | null>("LM" as CenterId);
   const [sortKey, setSortKey] = useState<SortKey>("value");
 
   const factor = getPeriodFactor(year, month);
   const budgetFactor = month !== null ? month / 12 : year === 2026 ? 4 / 12 : 1;
 
-  const totalRealized = Math.round(
-    COST_CENTERS.reduce((a, c) => a + getTotalRealized(c), 0) * factor
-  );
+  const data = useMemo(() => {
+    const totalR = Math.round(
+      COST_CENTERS.reduce((a, c) => a + getTotalRealized(c), 0) * factor
+    );
+    const totalB = Math.round(
+      COST_CENTERS.reduce((a, c) => a + getTotalBudgeted(c), 0) * budgetFactor
+    );
 
-  const totalBudgeted = Math.round(
-    COST_CENTERS.reduce((a, c) => a + getTotalBudgeted(c), 0) * budgetFactor
-  );
-
-  const rawData = useMemo(() =>
-    COST_CENTERS.map(c => {
+    const raw = COST_CENTERS.map((c) => {
       const realized = Math.round(getTotalRealized(c) * factor);
       const budgeted = Math.round(getTotalBudgeted(c) * budgetFactor);
+      const share = pct(realized, totalR);
+      const varPct = getVariancePct(budgeted, realized);
 
       return {
-        id: c.id,
+        id: c.id as CenterId,
         name: c.name,
-        value: realized,
+        realized,
         budgeted,
-        pct: totalRealized > 0 ? (realized / totalRealized) * 100 : 0,
-        varPct: budgeted > 0 ? ((realized - budgeted) / budgeted) * 100 : 0,
-        fill: toHex(AREA_COLORS[c.id] ?? "hsl(var(--muted))"),
-        isOver: realized > budgeted,
+        share,
+        varPct,
+        fill: COLOR[c.id as CenterId] ?? "oklch(0.55 0.05 240)",
       };
-    }),
-    [factor, budgetFactor, totalRealized]
+    });
+
+    // Ordenação: mantém ordem oficial por padrão; permite sort alternar.
+    const ordered = [...raw].sort((a, b) => {
+      const ia = ORDER.indexOf(a.id);
+      const ib = ORDER.indexOf(b.id);
+      if (ia !== -1 && ib !== -1) return ia - ib;
+      return a.id.localeCompare(b.id);
+    });
+
+    const sorted = (() => {
+      if (sortKey === "value") return [...ordered].sort((a, b) => b.realized - a.realized);
+      if (sortKey === "pct") return [...ordered].sort((a, b) => b.share - a.share);
+      return [...ordered].sort((a, b) => a.name.localeCompare(b.name));
+    })();
+
+    const active = activeId ? raw.find((r) => r.id === activeId) ?? raw[0] : raw[0];
+
+    return {
+      totalRealized: totalR,
+      totalBudgeted: totalB,
+      globalVarPct: totalB > 0 ? getVariancePct(totalB, totalR) : 0,
+      items: sorted,
+      active,
+      activeShare: active ? active.share : 0,
+    };
+  }, [factor, budgetFactor, sortKey, activeId]);
+
+  const donutCenterText = useMemo(() => {
+    const active = data.active;
+    const activeVar = active ? getVariancePct(active.budgeted, active.realized) : 0;
+    return {
+      total: data.totalRealized,
+      totalCenters: ORDER.length,
+      indicatorLabel: active ? active.name : "—",
+      indicatorVar: activeVar,
+    };
+  }, [data]);
+
+  const onSelect = useCallback(
+    (id: CenterId) => {
+      setActiveId(id);
+    },
+    [setActiveId]
   );
 
-  const sortedData = useMemo(() => {
-    const d = [...rawData];
-    if (sortKey === "value") d.sort((a, b) => b.value - a.value);
-    if (sortKey === "name") d.sort((a, b) => a.name.localeCompare(b.name));
-    if (sortKey === "pct") d.sort((a, b) => b.pct - a.pct);
-    if (sortKey === "variance") d.sort((a, b) => b.varPct - a.varPct);
-    return d;
-  }, [rawData, sortKey]);
+  // Tooltip custom (premium, consistente)
+  const TooltipLayer = useCallback(
+    ({ entry }: { entry: (typeof data.items)[number] }) => {
+      const comparison = entry.budgeted > 0
+        ? getVariancePct(entry.budgeted, entry.realized)
+        : 0;
+      const over = comparison > 0.5;
 
-  const globalVarPct =
-    totalBudgeted > 0
-      ? ((totalRealized - totalBudgeted) / totalBudgeted) * 100
-      : 0;
+      return (
+        <div
+          className="rounded-xl px-4 py-3"
+          style={{
+            background: "#ffffff",
+            border: `1px solid ${BORDER}`,
+            boxShadow:
+              "0 18px 55px rgba(2, 6, 23, 0.18), 0 0 0 1px rgba(255,255,255,0.6) inset",
+            minWidth: 260,
+          }}
+        >
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 min-w-0">
+              <span
+                className="inline-flex h-2.5 w-2.5 rounded-full shrink-0"
+                style={{ background: entry.fill, boxShadow: `0 0 18px ${entry.fill}55` }}
+              />
+              <p className="text-[12px] font-semibold text-gray-900 truncate">{entry.name}</p>
+            </div>
+            <span
+              className="text-[12px] font-mono font-bold"
+              style={{ color: over ? "oklch(0.65 0.22 25)" : "oklch(0.68 0.22 145)" }}
+            >
+              {over ? "+" : ""}{comparison.toFixed(1)}%
+            </span>
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <div>
+              <p className="text-[10px] font-mono uppercase tracking-wide" style={{ color: "#374151" }}>
+                Realizado
+              </p>
+              <p className="text-[13px] font-semibold font-mono text-gray-900">{formatBRL(entry.realized)}</p>
+            </div>
+            <div>
+              <p className="text-[10px] font-mono uppercase tracking-wide" style={{ color: "#374151" }}>
+                Participação
+              </p>
+              <p className="text-[13px] font-semibold font-mono text-gray-900">{entry.share.toFixed(1)}%</p>
+            </div>
+            <div className="col-span-2">
+              <p className="text-[10px] font-mono uppercase tracking-wide" style={{ color: "#374151" }}>
+                Orçamento vs Realizado
+              </p>
+              <div className="mt-1 flex items-center justify-between">
+                <span className="text-[12px] font-mono" style={{ color: "#111827" }}>
+                  {formatBRL(entry.budgeted)}
+                </span>
+                <span className="text-[12px] font-mono" style={{ color: over ? "oklch(0.65 0.22 25)" : "oklch(0.68 0.22 145)" }}>
+                  {formatBRL(entry.realized)}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      );
+    },
+    []
+  );
+
+  // Para não usar biblioteca extra e ficar 100% fiel ao Recharts, a tooltip premium será renderizada via legenda (hover)
+  // e o hover do donut controla activeId.
+
+  const active = data.active;
+
+  const centerLabelColor = active ? active.fill : COLOR.DEP;
+
+  const donutItems = data.items;
+
+  // Recharts <Pie> usa values numéricos. Garantimos que "realized" seja number.
+  const pieData = donutItems.map((d) => ({
+    ...d,
+    realized: Number(d.realized),
+    budgeted: Number(d.budgeted),
+    share: Number(d.share),
+    varPct: Number(d.varPct),
+  }));
 
   return (
-    <div className="rounded-xl p-6 shadow-lg border" style={{ background: "hsl(var(--card))", borderColor: "hsl(var(--border))", boxShadow: "0 8px 32px hsl(0 0% 0% / 0.12)" }}>
-      <div style={{ height: 300 }}>
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <defs>
-              {sortedData.map((entry, i) => (
-                <linearGradient key={`glow-${i}`} id={`glow-${i}`} x1="0%" y1="0%" x2="0%" y2="100%">
-                  <stop offset="0%" stopColor={entry.fill} stopOpacity="1"/>
-                  <stop offset="50%" stopColor={entry.fill} stopOpacity="0.8"/>
-                  <stop offset="100%" stopColor={entry.fill} stopOpacity="0.6"/>
-                </linearGradient>
-              ))}
-              <radialGradient id="inner-glow" cx="50%" cy="50%" r="70%">
-                <stop offset="0%" stopColor="hsl(var(--primary))" stopOpacity="0.4"/>
-                <stop offset="50%" stopColor="hsl(var(--primary))" stopOpacity="0.2"/>
-                <stop offset="100%" stopColor="transparent"/>
-              </radialGradient>
-            </defs>
-            <Pie
-              data={sortedData}
-              cx={150}
-              cy={150}
-              innerRadius={70}
-              outerRadius={95}
-              dataKey="value"
-              activeIndex={activeIndex}
-              activeShape={renderActiveShape}
-              onMouseEnter={(_, index) => setActiveIndex(index as number)}
-              onMouseLeave={() => setActiveIndex(-1)}
-            >
-              {sortedData.map((entry, index) => (
-                <Cell key={`cell-${index}`} fill={`url(#glow-${index})`} stroke="hsl(var(--foreground))" strokeWidth={2}/>
-              ))}
-            </Pie>
-            <Sector cx={150} cy={150} innerRadius={0} outerRadius={70} startAngle={0} endAngle={360} fill="url(#inner-glow)"/>
-          </PieChart>
-        </ResponsiveContainer>
-      </div>
-      <div className="flex items-center justify-between mt-6 p-3 bg-muted/50 rounded-lg">
-        <span className="text-xs font-semibold text-muted-foreground">Ordenar:</span>
-        <div className="flex gap-1">
-          {(['value', 'pct', 'name', 'variance'] as const).map((key) => (
-            <button
-              key={key}
-              onClick={() => setSortKey(key)}
-              className="px-3 py-1.5 text-xs font-mono rounded-md transition-all capitalize"
-              style={{
-                backgroundColor: sortKey === key ? 'hsl(var(--primary))' : 'hsl(var(--muted))',
-                color: sortKey === key ? 'hsl(var(--primary-foreground))' : 'hsl(var(--foreground))',
-              }}
-            >
-              {key === 'pct' ? '%' : key === 'variance' ? 'Var' : key === 'value' ? 'Valor' : 'Nome'}
-            </button>
-          ))}
+
+    <div
+      className="w-full rounded-xl p-5"
+      style={{
+        background: "#ffffff",
+        border: `1px solid ${BORDER}`,
+        boxShadow:
+          "0 14px 45px rgba(2, 6, 23, 0.08), 0 0 0 1px rgba(255,255,255,0.65) inset",
+      }}
+    >
+      <div className="flex flex-col lg:flex-row gap-4">
+        {/* LEFT: DONUT */}
+        <div className="flex-1 lg:flex-[0_0_55%]">
+          <div className="relative rounded-2xl p-3" style={{ background: "linear-gradient(180deg, rgba(255,255,255,1) 0%, rgba(236,253,245,0.35) 100%)" }}>
+            <div className="relative" style={{ height: 340 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <defs>
+                    {donutItems.map((d, i) => (
+                      <linearGradient
+                        key={`g-${d.id}-${i}`}
+                        id={`g-${d.id}-${i}`}
+                        x1="0%"
+                        y1="0%"
+                        x2="0%"
+                        y2="100%"
+                      >
+                        <stop offset="0%" stopColor={d.fill} stopOpacity={1} />
+                        <stop offset="45%" stopColor={d.fill} stopOpacity={0.85} />
+                        <stop offset="100%" stopColor={d.fill} stopOpacity={0.65} />
+                      </linearGradient>
+                    ))}
+                    <radialGradient id="hud-glow" cx="50%" cy="50%" r="70%">
+                      <stop offset="0%" stopColor={centerLabelColor} stopOpacity={0.28} />
+                      <stop offset="45%" stopColor={centerLabelColor} stopOpacity={0.14} />
+                      <stop offset="100%" stopColor="#ffffff" stopOpacity={0} />
+                    </radialGradient>
+                  </defs>
+
+                  {/* fundo */}
+                  <Sector
+                    cx={0}
+                    cy={0}
+                    innerRadius={0}
+                    outerRadius={160}
+                    startAngle={0}
+                    endAngle={360}
+                    fill="url(#hud-glow)"
+                  />
+
+                  <Pie
+                    data={pieData}
+                    dataKey="realized"
+
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={86}
+                    outerRadius={128}
+                    paddingAngle={4}
+                    cornerRadius={8}
+                    isAnimationActive
+                    animationDuration={650}
+                    activeIndex={active ? donutItems.findIndex((x) => x.id === active.id) : 0}
+                    activeShape={(props: any) => {
+                      const {
+                        cx,
+                        cy,
+                        innerRadius,
+                        outerRadius,
+                        startAngle,
+                        endAngle,
+                        fill,
+                        payload,
+                      } = props;
+
+                      const r2 = clamp(outerRadius + 8, 0, 9999);
+
+                      return (
+                        <g>
+                          <Sector
+                            cx={cx}
+                            cy={cy}
+                            innerRadius={innerRadius + 2}
+                            outerRadius={r2}
+                            startAngle={startAngle}
+                            endAngle={endAngle}
+                            fill={fill}
+                          />
+                          <Sector
+                            cx={cx}
+                            cy={cy}
+                            innerRadius={outerRadius - 2}
+                            outerRadius={outerRadius + 18}
+                            startAngle={startAngle}
+                            endAngle={endAngle}
+                            fill={fill}
+                            opacity={0.16}
+                          />
+                        </g>
+                      );
+                    }}
+                    onMouseEnter={(_, index) => {
+                      const item = donutItems[index as number];
+                      if (item) onSelect(item.id);
+                    }}
+                    onMouseLeave={() => {
+                      // mantém o último selecionado (enterprise behavior)
+                    }}
+                  >
+                    {donutItems.map((d) => {
+                      const isActive = active?.id === d.id;
+                      return (
+                        <Cell
+                          key={d.id}
+                          fill={`url(#g-${d.id}-${donutItems.findIndex((x) => x.id === d.id)})`}
+                          stroke="#ffffff"
+                          strokeWidth={2}
+                          style={{
+                            transition: "transform 220ms ease, filter 220ms ease",
+                            transformOrigin: "center",
+                            transform: isActive ? "scale(1.015)" : "scale(1)",
+                            filter: isActive ? `drop-shadow(0 0 14px ${d.fill}55)` : "none",
+                          }}
+                        />
+                      );
+                    })}
+                  </Pie>
+                </PieChart>
+              </ResponsiveContainer>
+
+              {/* Center panel */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div
+                  className="text-center rounded-2xl px-4 py-3"
+                  style={{
+                    background: "rgba(255,255,255,0.78)",
+                    border: `1px solid ${BORDER}`,
+                    boxShadow: `0 0 0 1px rgba(255,255,255,0.6) inset, 0 16px 45px rgba(2,6,23,0.08)`,
+                    backdropFilter: "blur(8px)",
+                    width: "78%",
+                  }}
+                >
+                  <p className="text-[10px] font-mono uppercase tracking-wide" style={{ color: "#374151" }}>
+                    Total realizado
+                  </p>
+                  <p className="text-[18px] font-semibold font-mono text-gray-900 mt-1">
+                    {formatBRL(donutCenterText.total)}
+                  </p>
+                  <div className="mt-2 flex items-center justify-center gap-3">
+                    <div>
+                      <p className="text-[10px] font-mono uppercase tracking-wide" style={{ color: "#374151" }}>
+                        Centros
+                      </p>
+                      <p className="text-[13px] font-semibold font-mono text-gray-900">{donutCenterText.totalCenters}</p>
+                    </div>
+                    <div className="h-6 w-px" style={{ background: BORDER }} />
+                    <div>
+                      <p className="text-[10px] font-mono uppercase tracking-wide" style={{ color: "#374151" }}>
+                        Tendência
+                      </p>
+                      <p className="text-[13px] font-semibold font-mono" style={{ color: "oklch(0.65 0.22 145)" }}>
+                        ↑ +{donutCenterText.indicatorVar > 0 ? donutCenterText.indicatorVar.toFixed(0) : Math.abs(donutCenterText.indicatorVar).toFixed(0)}%
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* ranking overlay (small hint) */}
+            <div className="mt-3 flex items-center justify-between px-3">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex h-2.5 w-2.5 rounded-full" style={{ background: active?.fill ?? COLOR.DEP, boxShadow: `0 0 18px ${(active?.fill ?? COLOR.DEP)}55` }} />
+                <p className="text-[12px] font-semibold text-gray-900">{active?.name ?? "—"}</p>
+              </div>
+              <p className="text-[12px] font-mono font-semibold" style={{ color: "#111827" }}>
+                {active ? active.share.toFixed(1) : 0}%
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* RIGHT: ANALYTICS */}
+        <div className="flex-1 lg:flex-[0_0_45%]">
+          <div className="rounded-2xl p-4" style={{ border: `1px solid ${BORDER}`, background: "linear-gradient(180deg, rgba(255,255,255,1) 0%, rgba(240,249,255,0.65) 100%)" }}>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] font-mono uppercase tracking-wide" style={{ color: "#111827" }}>
+                  Painel executivo
+                </p>
+                <p className="text-[12px] font-semibold text-gray-900">Ranking por participação</p>
+              </div>
+
+              <div className="flex gap-2">
+                {([
+                  { k: "value", label: "Valor" },
+                  { k: "pct", label: "%" },
+                  { k: "name", label: "Nome" },
+                ] as const).map((x) => {
+                  const isSel = sortKey === x.k;
+                  return (
+                    <button
+                      key={x.k}
+                      onClick={() => setSortKey(x.k)}
+                      className="px-3 py-1.5 rounded-xl text-[11px] font-mono font-semibold transition"
+                      style={{
+                        background: isSel ? "oklch(0.75 0.20 185 / 0.12)" : "rgba(2,6,23,0.04)",
+                        color: isSel ? "#0f172a" : "#334155",
+                        border: `1px solid ${isSel ? "oklch(0.75 0.20 185 / 0.28)" : BORDER}`,
+                        boxShadow: isSel ? "0 0 18px oklch(0.75 0.20 185 / 0.18)" : "none",
+                      }}
+                    >
+                      {x.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="mt-4">
+              {active && (
+                <div className="mb-3">
+                  <div className="rounded-2xl p-3" style={{ background: "rgba(2,6,23,0.02)", border: `1px solid ${BORDER}` }}>
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="inline-flex h-3 w-3 rounded-full" style={{ background: active.fill, boxShadow: `0 0 18px ${active.fill}55` }} />
+                        <div className="min-w-0">
+                          <p className="text-[12px] font-semibold text-gray-900 truncate">{active.name}</p>
+                          <p className="text-[11px] font-mono" style={{ color: MUTED }}>
+                            {formatBRL(active.realized)} • {active.share.toFixed(1)}%
+                          </p>
+                        </div>
+                      </div>
+                      <TrendBadge variancePct={active.varPct} />
+                    </div>
+                    <div className="mt-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-mono uppercase tracking-wide" style={{ color: "#374151" }}>
+                          Orçado
+                        </span>
+                        <span className="text-[11px] font-mono font-semibold" style={{ color: "#111827" }}>
+                          {formatBRL(active.budgeted)}
+                        </span>
+                      </div>
+                      <div className="mt-2 h-2 rounded-full overflow-hidden" style={{ background: "rgba(2,6,23,0.06)" }}>
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${clamp(active.share, 0, 100)}%`,
+                            background: active.fill,
+                            boxShadow: `0 0 18px ${active.fill}55`,
+                            transition: "width 420ms ease",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex flex-col gap-2">
+                {data.items.slice(0, 5).map((it, idx) => {
+                  const isActive = active?.id === it.id;
+                  return (
+                    <button
+                      key={it.id}
+                      onMouseEnter={() => onSelect(it.id)}
+                      className="w-full text-left rounded-2xl p-3 transition"
+                      style={{
+                        border: `1px solid ${isActive ? "oklch(0.75 0.20 185 / 0.32)" : BORDER}`,
+                        background: isActive ? "rgba(2,6,23,0.03)" : "#ffffff",
+                        boxShadow: isActive ? `0 0 26px ${it.fill}22` : "none",
+                      }}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="inline-flex h-2.5 w-2.5 rounded-full" style={{ background: it.fill, boxShadow: `0 0 16px ${it.fill}55` }} />
+                          <p className="text-[12px] font-semibold text-gray-900 truncate">
+                            {it.name}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-[12px] font-semibold font-mono text-gray-900">{it.share.toFixed(1)}%</p>
+                          <p className="text-[10px] font-mono" style={{ color: MUTED }}>
+                            {formatBRL(it.realized)}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="mt-2 h-2 rounded-full overflow-hidden" style={{ background: "rgba(2,6,23,0.06)" }}>
+                        <div
+                          className="h-full rounded-full"
+                          style={{
+                            width: `${clamp(it.share, 0, 100)}%`,
+                            background: it.fill,
+                            transition: "width 420ms ease",
+                            boxShadow: `0 0 18px ${it.fill}55`,
+                          }}
+                        />
+                      </div>
+
+                      <div className="mt-2 flex items-center justify-between gap-3">
+                        <span className="text-[10px] font-mono uppercase tracking-wide" style={{ color: "#374151" }}>
+                          Var.
+                        </span>
+                        <span className="text-[11px] font-mono font-bold" style={{ color: it.varPct >= 0 ? "oklch(0.65 0.22 25)" : "oklch(0.68 0.22 145)" }}>
+                          {it.varPct >= 0 ? "+" : ""}{it.varPct.toFixed(1)}%
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+
+                {/* Tooltip premium via painel lateral (enterprise-like) */}
+                <div className="mt-3">
+                  <div className="rounded-2xl p-3" style={{ border: `1px solid ${BORDER}`, background: "rgba(2,6,23,0.02)" }}>
+                    <p className="text-[11px] font-mono uppercase tracking-wide" style={{ color: "#111827" }}>
+                      Insight
+                    </p>
+                    <p className="text-[12px] font-semibold text-gray-900 mt-1">
+                      {active ? `A fatia ${active.name} lidera com ${active.share.toFixed(1)}% do custo realizado.` : "—"}
+                    </p>
+                    <p className="text-[11px] font-mono mt-2" style={{ color: MUTED }}>
+                      Comparação: orçamento {active ? formatBRL(active.budgeted) : "—"} → realizado {active ? formatBRL(active.realized) : "—"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* mobile: stacks naturally due flex-col */}
+      <div className="mt-4 hidden lg:block" />
     </div>
   );
 }
+
