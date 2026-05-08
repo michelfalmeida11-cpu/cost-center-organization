@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import { supabase, loadCostCenters, saveCostCenters } from "@/lib/supabase";
+
 import {
   ChevronDown,
   ChevronRight,
@@ -681,7 +682,7 @@ function GroupSection({
   onDeleteSub: (gid: string, sid: string) => void;
   onAddSub: (gid: string, sub: Omit<SubGroup, "id">) => void;
   canEdit: boolean;
-}) {
+}) { 
   const [open, setOpen] = useState(false);
   const [addingSub, setAddingSub] = useState(false);
   const [hoveredHeader, setHoveredHeader] = useState(false);
