@@ -263,6 +263,8 @@ export default function DashboardPage() {
               <ModeEditionButton />
             </div>
           </div>
+
+          <AuthModal />
           <CostCenterPanel />
         </section>
 
