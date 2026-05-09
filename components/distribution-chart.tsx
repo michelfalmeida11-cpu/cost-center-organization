@@ -530,7 +530,7 @@ export function DistributionChart({
               )}
 
               <div className="flex flex-col gap-2">
-                {data.items.slice(0, 5).map((it, idx) => {
+                {data.items.slice(0, 8).map((it, idx) => {
                   const isActive = active?.id === it.id;
                   return (
                     <button
