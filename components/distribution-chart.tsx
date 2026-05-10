@@ -536,44 +536,61 @@ export function DistributionChart({
                     <button
                       key={it.id}
                       onMouseEnter={() => onSelect(it.id)}
-                      className="w-full text-left rounded-2xl p-3 transition"
+                      className="w-full text-left rounded-2xl p-2 transition"
                       style={{
-                        border: `1px solid ${isActive ? "oklch(0.75 0.20 185 / 0.32)" : BORDER}`,
+                        border: `1px solid ${isActive ? "oklch(0.75 0.20 185 / 0.28)" : BORDER}`,
                         background: isActive ? "rgba(2,6,23,0.03)" : "#ffffff",
-                        boxShadow: isActive ? `0 0 26px ${it.fill}22` : "none",
+                        boxShadow: isActive ? `0 0 18px ${it.fill}20` : "none",
                       }}
                     >
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <span className="inline-flex h-2.5 w-2.5 rounded-full" style={{ background: it.fill, boxShadow: `0 0 16px ${it.fill}55` }} />
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span
+                            className="inline-flex h-2 w-2 rounded-full mt-[2px]"
+                            style={{ background: it.fill, boxShadow: `0 0 14px ${it.fill}55` }}
+                          />
                           <p className="text-[12px] font-semibold text-gray-900 truncate">
                             {it.name}
                           </p>
                         </div>
                         <div className="text-right">
-                          <p className="text-[12px] font-semibold font-mono text-gray-900">{it.share.toFixed(1)}%</p>
-                          <p className="text-[10px] font-mono" style={{ color: MUTED }}>
+                          <p className="text-[12px] font-semibold font-mono text-gray-900 leading-none">
+                            {it.share.toFixed(1)}%
+                          </p>
+                          <p className="text-[10px] font-mono leading-none mt-1" style={{ color: MUTED }}>
                             {formatBRL(it.realized)}
                           </p>
                         </div>
                       </div>
-                      <div className="mt-2 h-2 rounded-full overflow-hidden" style={{ background: "rgba(2,6,23,0.06)" }}>
+
+                      <div
+                        className="mt-2 h-[6px] rounded-full overflow-hidden"
+                        style={{ background: "rgba(2,6,23,0.06)" }}
+                      >
                         <div
                           className="h-full rounded-full"
                           style={{
                             width: `${clamp(it.share, 0, 100)}%`,
                             background: it.fill,
                             transition: "width 420ms ease",
-                            boxShadow: `0 0 18px ${it.fill}55`,
+                            boxShadow: `0 0 14px ${it.fill}55`,
                           }}
                         />
                       </div>
 
-                      <div className="mt-2 flex items-center justify-between gap-3">
+                      <div className="mt-1 flex items-center justify-between">
                         <span className="text-[10px] font-mono uppercase tracking-wide" style={{ color: "#374151" }}>
                           Var.
                         </span>
-                        <span className="text-[11px] font-mono font-bold" style={{ color: it.varPct >= 0 ? "oklch(0.65 0.22 25)" : "oklch(0.68 0.22 145)" }}>
+                        <span
+                          className="text-[11px] font-mono font-bold"
+                          style={{
+                            color:
+                              it.varPct >= 0
+                                ? "oklch(0.65 0.22 25)"
+                                : "oklch(0.68 0.22 145)",
+                          }}
+                        >
                           {it.varPct >= 0 ? "+" : ""}{it.varPct.toFixed(1)}%
                         </span>
                       </div>
