@@ -404,36 +404,20 @@ export function DistributionChart({
                 <div
                   className="text-center rounded-2xl px-4 py-3"
                   style={{
-                    background: "rgba(255,255,255,0.78)",
+                    background: "rgba(255,255,255,0.92)",
                     border: `1px solid ${BORDER}`,
-                    boxShadow: `0 0 0 1px rgba(255,255,255,0.6) inset, 0 16px 45px rgba(2,6,23,0.08)`,
-                    backdropFilter: "blur(8px)",
-                    width: "78%",
+                    boxShadow: `0 0 0 1px rgba(255,255,255,0.7) inset, 0 12px 30px rgba(2,6,23,0.06)`,
+                    backdropFilter: "blur(4px)",
+                    width: "58%",
+                    maxWidth: 300,
                   }}
                 >
-                  <p className="text-[10px] font-mono uppercase tracking-wide" style={{ color: "#374151" }}>
+                  <p className="text-[10px] font-mono uppercase tracking-wide font-semibold" style={{ color: "#374151" }}>
                     Total realizado
                   </p>
-                  <p className="text-[18px] font-semibold font-mono text-gray-900 mt-1">
+                  <p className="text-[20px] font-semibold font-mono text-gray-900 mt-1 leading-none">
                     {formatBRL(donutCenterText.total)}
                   </p>
-                  <div className="mt-2 flex items-center justify-center gap-3">
-                    <div>
-                      <p className="text-[10px] font-mono uppercase tracking-wide" style={{ color: "#374151" }}>
-                        Centros
-                      </p>
-                      <p className="text-[13px] font-semibold font-mono text-gray-900">{donutCenterText.totalCenters}</p>
-                    </div>
-                    <div className="h-6 w-px" style={{ background: BORDER }} />
-                    <div>
-                      <p className="text-[10px] font-mono uppercase tracking-wide" style={{ color: "#374151" }}>
-                        Tendência
-                      </p>
-                      <p className="text-[13px] font-semibold font-mono" style={{ color: "oklch(0.65 0.22 145)" }}>
-                        ↑ +{donutCenterText.indicatorVar > 0 ? donutCenterText.indicatorVar.toFixed(0) : Math.abs(donutCenterText.indicatorVar).toFixed(0)}%
-                      </p>
-                    </div>
-                  </div>
                 </div>
               </div>
             </div>
