@@ -190,71 +190,7 @@ export function DistributionChart({
     };
   }, [items]);
 
-  const tooltipNode = useMemo(() => {
-    if (!active) return null;
-    return {
-      name: active.name,
-      realized: active.realized,
-      share: active.share,
-      budgeted: active.budgeted,
-      varPct: active.varPct,
-      fill: active.fill,
-    };
-  }, [active]);
 
-  const TooltipContent = useCallback(
-    ({ active: isActive, payload }: any) => {
-      if (!isActive || !payload?.length) return null;
-      const node = payload[0].payload as CenterNode;
-      if (!node) return null;
-      const over = node.varPct > 0.5;
-
-      return (
-        <div
-          className="rounded-xl px-4 py-3"
-          style={{
-            background: "#ffffff",
-            border: `1px solid ${BORDER}`,
-            boxShadow: "0 18px 55px rgba(2, 6, 23, 0.16), 0 0 0 1px rgba(255,255,255,0.75) inset",
-            minWidth: 280,
-          }}
-        >
-          <div className="flex items-center justify-between gap-3">
-            <div className="flex items-center gap-2 min-w-0">
-              <span
-                className="inline-flex h-2.5 w-2.5 rounded-full shrink-0"
-                style={{ background: node.fill, boxShadow: `0 0 18px ${node.fill}55` }}
-              />
-              <p className="text-[12px] font-semibold text-gray-900 truncate">{node.name}</p>
-            </div>
-            <TrendBadge variancePct={node.varPct} />
-          </div>
-
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <div>
-              <p className="text-[10px] font-mono uppercase tracking-wide" style={{ color: "#374151" }}>
-                Realizado
-              </p>
-              <p className="text-[13px] font-semibold font-mono text-gray-900">{formatBRL(node.realized)}</p>
-            </div>
-            <div>
-              <p className="text-[10px] font-mono uppercase tracking-wide" style={{ color: "#374151" }}>
-                Participação
-              </p>
-              <p className="text-[13px] font-semibold font-mono text-gray-900">{node.share.toFixed(1)}%</p>
-            </div>
-            <div className="col-span-2">
-              <p className="text-[10px] font-mono uppercase tracking-wide" style={{ color: "#374151" }}>
-                Orçamento
-              </p>
-              <p className="text-[13px] font-semibold font-mono text-gray-900">{formatBRL(node.budgeted)}</p>
-            </div>
-          </div>
-        </div>
-      );
-    },
-    []
-  );
 
   return (
     <div
