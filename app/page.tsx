@@ -92,63 +92,42 @@ function PeriodFilter({
         {/* Divider */}
         <div className="hidden sm:block h-6 w-[1px]" style={{ background: BORDER }} />
 
-        {/* Month buttons — grid 6×2 on mobile, row on wider */}
-        <div className="flex flex-wrap gap-1 flex-1 justify-start">
-          <span className="text-[9px] font-mono uppercase tracking-widest self-center mr-1" style={{ color: "oklch(0.38 0.025 220)" }}>Mês</span>
-          {/* "Todos" / YTD pill */}
-          <button
-            onClick={() => setMonth(null)}
-            className="text-[10px] font-mono font-bold px-3 py-1 rounded-lg transition-all duration-150"
-            style={{
-              color: month === null ? "oklch(0.08 0.014 240)" : "oklch(0.50 0.03 220)",
-              background: month === null ? "oklch(0.68 0.18 300)" : "var(--secondary)",
-              border: `1px solid ${month === null ? "oklch(0.68 0.18 300)" : BORDER}`,
-              boxShadow: month === null ? "0 0 12px oklch(0.68 0.18 300 / 0.35)" : "none",
-            }}
-          >
-            YTD
-          </button>
-          {MONTHS.map(m => {
-            const isSel = month === m.n;
-            const disabled = false;
-            return (
-              <button
-                key={m.n}
-                onClick={() => setMonth(m.n)}
-                disabled={disabled}
-                className="text-[10px] font-mono font-bold px-2.5 py-1 rounded-lg transition-all duration-150"
-                style={{
-                  color: disabled
-                    ? "oklch(0.28 0.02 240)"
-                    : isSel
-                    ? "oklch(0.08 0.014 240)"
-                    : "oklch(0.55 0.03 220)",
-                  background: isSel ? ACCENT : "var(--secondary)",
-                  border: `1px solid ${isSel ? ACCENT : BORDER}`,
-                  boxShadow: isSel ? `0 0 10px oklch(0.75 0.20 185 / 0.30)` : "none",
-                  cursor: disabled ? "not-allowed" : "pointer",
-                  opacity: disabled ? 0.30 : 1,
-                  pointerEvents: disabled ? "none" : "auto",
-                }}
-              >
-                {m.label}
-              </button>
-            );
-          })}
+        {/* Month selector (premium compact dropdown) */}
+        <div className="flex items-center justify-between gap-3">
+          <span className="text-[9px] font-mono uppercase tracking-widest" style={{ color: "oklch(0.38 0.025 220)" }}>Mês</span>
+
+          {/* Using native select to keep UX clean + no extra visual noise */}
+          <div className="relative flex-1">
+            <select
+              aria-label="Selecionar mês"
+              value={month === null ? "YTD" : String(month)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setMonth(v === "YTD" ? null : Number(v));
+              }}
+              className="w-full appearance-none rounded-lg px-3 py-2 text-[11px] font-mono font-bold transition-all duration-150"
+              style={{
+                background: "var(--secondary)",
+                border: `1px solid ${month === null ? "oklch(0.68 0.18 300)" : BORDER}`,
+                color: month === null ? "oklch(0.08 0.014 240)" : "oklch(0.55 0.03 220)",
+                boxShadow: month === null ? "0 0 12px oklch(0.68 0.18 300 / 0.25)" : "none",
+                paddingRight: 34,
+              }}
+            >
+              <option value="YTD">YTD — {year}</option>
+              {MONTHS.map((m) => (
+                <option key={m.n} value={String(m.n)}>
+                  {m.label} — {year}
+                </option>
+              ))}
+            </select>
+
+            <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
+              <ChevronDown className="h-4 w-4" style={{ color: ACCENT }} />
+            </div>
+          </div>
         </div>
 
-        {/* Current selection pill */}
-        <div
-          className="shrink-0 flex items-center gap-1.5 rounded-lg px-3 py-1.5"
-          style={{ background: "oklch(0.75 0.20 185 / 0.10)", border: `1px solid oklch(0.75 0.20 185 / 0.30)` }}
-        >
-          <ChevronDown className="h-3 w-3" style={{ color: ACCENT }} />
-          <span className="text-[10px] font-mono font-bold" style={{ color: ACCENT }}>
-            {month === null
-              ? `YTD ${year}`
-              : `${MONTHS[month - 1].label} / ${year}`}
-          </span>
-        </div>
       </div>
     </div>
   );
