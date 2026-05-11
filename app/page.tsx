@@ -54,10 +54,10 @@ function PeriodFilter({
 }) {
   return (
     <div
-      className="rounded-xl px-5 py-4"
+      className="rounded-xl px-4 py-3"
       style={{ background: SURFACE, border: `1px solid ${BORDER}` }}
     >
-            <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-2">
         {/* Calendar icon + label */}
         <div className="flex items-center gap-2 shrink-0">
           <Calendar className="h-3.5 w-3.5" style={{ color: ACCENT }} />
@@ -66,64 +66,80 @@ function PeriodFilter({
           </span>
         </div>
 
-        {/* Divider */}
-        <div className="hidden sm:block h-6 w-[1px]" style={{ background: BORDER }} />
-
-        {/* Year buttons */}
-        <div className="flex flex-col gap-1">
-          <span className="text-[9px] font-mono uppercase tracking-widest mr-1" style={{ color: "oklch(0.38 0.025 220)" }}>Ano</span>
-          {YEARS.map(y => (
-            <button
-              key={y}
-              onClick={() => setYear(y)}
-              className="text-[11px] font-mono font-bold px-3 py-1.5 rounded-lg transition-all duration-150"
-              style={{
-                color: year === y ? "oklch(0.08 0.014 240)" : "oklch(0.50 0.03 220)",
-              background: year === y ? ACCENT : "var(--secondary)",
-              border: `1px solid ${year === y ? ACCENT : BORDER}`,
-                boxShadow: year === y ? `0 0 12px oklch(0.75 0.20 185 / 0.35)` : "none",
-              }}
+        {/* Toolbar row: ANO (segmented) + MÊS (compact dropdown) */}
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+          {/* Year segmented control */}
+          <div className="inline-flex items-center rounded-xl p-1"
+            style={{
+              background: "color-mix(in oklch, var(--secondary) 70%, transparent)",
+              border: `1px solid color-mix(in oklch, ${ACCENT} 22%, transparent)`,
+            }}
+          >
+            <span className="hidden sm:inline-block mr-2 text-[9px] font-mono uppercase tracking-widest"
+              style={{ color: "oklch(0.38 0.025 220)" }}
             >
-              {y}
-            </button>
-          ))}
-        </div>
+              Ano
+            </span>
+            <div className="flex items-center gap-1">
+              {YEARS.map((y) => {
+                const selected = year === y;
+                return (
+                  <button
+                    key={y}
+                    type="button"
+                    onClick={() => setYear(y)}
+                    className="min-w-[56px] h-9 rounded-lg px-3 text-[11px] font-mono font-bold transition-all duration-150"
+                    style={{
+                      color: selected ? "oklch(0.08 0.014 240)" : "oklch(0.55 0.03 220)",
+                      background: selected ? ACCENT : "transparent",
+                      border: `1px solid ${selected ? ACCENT : "color-mix(in oklch, var(--border) 90%, transparent)"}`,
+                      boxShadow: selected ? `0 0 10px oklch(0.75 0.20 185 / 0.25)` : "none",
+                      paddingTop: 0,
+                      paddingBottom: 0,
+                    }}
+                  >
+                    {y}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
 
-        {/* Divider */}
-        <div className="hidden sm:block h-6 w-[1px]" style={{ background: BORDER }} />
+          {/* Month dropdown */}
+          <div className="flex items-center gap-2 sm:ml-auto w-full sm:w-auto">
+            <span className="text-[9px] font-mono uppercase tracking-widest hidden sm:block" style={{ color: "oklch(0.38 0.025 220)" }}>
+              Mês
+            </span>
 
-        {/* Month selector (premium compact dropdown) */}
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-[9px] font-mono uppercase tracking-widest" style={{ color: "oklch(0.38 0.025 220)" }}>Mês</span>
+            <div className="relative">
+              <select
+                aria-label="Selecionar mês"
+                value={month === null ? "YTD" : String(month)}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setMonth(v === "YTD" ? null : Number(v));
+                }}
+                className="appearance-none rounded-xl px-3 h-9 text-[11px] font-mono font-bold transition-all duration-150"
+                style={{
+                  background: "var(--card)",
+                  border: `1px solid ${month === null ? "oklch(0.68 0.18 300)" : BORDER}`,
+                  color: month === null ? "oklch(0.08 0.014 240)" : "oklch(0.55 0.03 220)",
+                  boxShadow: month === null ? "0 0 12px oklch(0.68 0.18 300 / 0.18)" : "none",
+                  paddingRight: 34,
+                  minWidth: 162,
+                }}
+              >
+                <option value="YTD">YTD {year}</option>
+                {MONTHS.map((m) => (
+                  <option key={m.n} value={String(m.n)}>
+                    {m.label} {year}
+                  </option>
+                ))}
+              </select>
 
-          {/* Using native select to keep UX clean + no extra visual noise */}
-          <div className="relative flex-1">
-            <select
-              aria-label="Selecionar mês"
-              value={month === null ? "YTD" : String(month)}
-              onChange={(e) => {
-                const v = e.target.value;
-                setMonth(v === "YTD" ? null : Number(v));
-              }}
-              className="w-full appearance-none rounded-lg px-3 py-2 text-[11px] font-mono font-bold transition-all duration-150"
-              style={{
-                background: "var(--secondary)",
-                border: `1px solid ${month === null ? "oklch(0.68 0.18 300)" : BORDER}`,
-                color: month === null ? "oklch(0.08 0.014 240)" : "oklch(0.55 0.03 220)",
-                boxShadow: month === null ? "0 0 12px oklch(0.68 0.18 300 / 0.25)" : "none",
-                paddingRight: 34,
-              }}
-            >
-              <option value="YTD">YTD — {year}</option>
-              {MONTHS.map((m) => (
-                <option key={m.n} value={String(m.n)}>
-                  {m.label} — {year}
-                </option>
-              ))}
-            </select>
-
-            <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
-              <ChevronDown className="h-4 w-4" style={{ color: ACCENT }} />
+              <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">
+                <ChevronDown className="h-4 w-4" style={{ color: ACCENT }} />
+              </div>
             </div>
           </div>
         </div>
