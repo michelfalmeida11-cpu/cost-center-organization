@@ -1130,7 +1130,8 @@ export function CostCenterPanel() {
   }, []);
 
   const handlePasswordSubmit = (password: string) => {
-    if (password === 'admin123') { // Change this password!
+    if (password === 'admin123') { // align with AuthContext password
+
       localStorage.setItem('cost-center-admin', 'true');
       setIsAdmin(true);
       setShowPasswordModal(false);

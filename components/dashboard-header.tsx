@@ -50,13 +50,19 @@ export function DashboardHeader() {
         {/* Brand */}
         <div className="flex items-center gap-4 shrink-0">
           <div className="relative h-10 w-24 shrink-0">
-            <Image
-              src="/avg-logo.png"
-              alt="Grupo AVG"
-              fill
-              className="object-contain object-left"
-              priority
-            />
+            <div className="relative w-full h-full">
+              <Image
+                src="/avg-logo.png"
+                alt="Grupo AVG"
+                fill
+                sizes="(max-width: 640px) 96px, 96px"
+                className="object-contain object-left"
+                priority
+                quality={95}
+                unoptimized
+                placeholder="empty"
+              />
+            </div>
           </div>
           <div className="hidden sm:flex flex-col leading-tight">
             <span

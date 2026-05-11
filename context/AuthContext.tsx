@@ -19,7 +19,7 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 const LS_KEY_ROLE = "avg-auth-role-v1";
 
-const ADMIN_PASSWORD = "AVG12345";
+const ADMIN_PASSWORD = "admin123";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [role, setRole] = useState<AuthRole>("VIEWER");

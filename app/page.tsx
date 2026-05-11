@@ -57,7 +57,7 @@ function PeriodFilter({
       className="rounded-xl px-5 py-4"
       style={{ background: SURFACE, border: `1px solid ${BORDER}` }}
     >
-      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex flex-col gap-4">
         {/* Calendar icon + label */}
         <div className="flex items-center gap-2 shrink-0">
           <Calendar className="h-3.5 w-3.5" style={{ color: ACCENT }} />
@@ -70,7 +70,7 @@ function PeriodFilter({
         <div className="hidden sm:block h-6 w-[1px]" style={{ background: BORDER }} />
 
         {/* Year buttons */}
-        <div className="flex items-center gap-1">
+        <div className="flex flex-col gap-1">
           <span className="text-[9px] font-mono uppercase tracking-widest mr-1" style={{ color: "oklch(0.38 0.025 220)" }}>Ano</span>
           {YEARS.map(y => (
             <button
@@ -93,7 +93,7 @@ function PeriodFilter({
         <div className="hidden sm:block h-6 w-[1px]" style={{ background: BORDER }} />
 
         {/* Month buttons — grid 6×2 on mobile, row on wider */}
-        <div className="flex flex-wrap gap-1 flex-1">
+        <div className="flex flex-wrap gap-1 flex-1 justify-start">
           <span className="text-[9px] font-mono uppercase tracking-widest self-center mr-1" style={{ color: "oklch(0.38 0.025 220)" }}>Mês</span>
           {/* "Todos" / YTD pill */}
           <button
@@ -110,7 +110,7 @@ function PeriodFilter({
           </button>
           {MONTHS.map(m => {
             const isSel = month === m.n;
-            const disabled = year === 2026 && m.n > 4; // Apr 2026 is current month
+            const disabled = false;
             return (
               <button
                 key={m.n}
