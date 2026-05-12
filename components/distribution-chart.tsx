@@ -1,10 +1,6 @@
 "use client";
 
-import React, { useMemo, useState, useCallback } from "react";
-import { ResponsiveContainer } from "recharts";
-import { DistributionChart as DistributionTreemap } from "@/components/distribution-treemap";
-
-import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import React, { useMemo, useState } from "react";
 
 import {
   COST_CENTERS,
@@ -13,36 +9,35 @@ import {
   formatBRL,
 } from "@/lib/cost-centers";
 
+import { TrendingDown, TrendingUp, Minus } from "lucide-react";
+
 type CenterId = (typeof COST_CENTERS)[number]["id"];
+
+type CenterNode = {
+  id: CenterId;
+  name: string;
+  realized: number;
+  budgeted: number;
+  share: number;
+  varPct: number;
+  fill: string;
+};
 
 type SortKey = "value" | "pct" | "name";
 
-// Índices oficiais (Depreciação sempre por último)
-const ORDER: CenterId[] = [
-  "LM" as CenterId,
-  "BEN" as CenterId,
-  "INS" as CenterId,
-  "MA" as CenterId,
-  "ADM" as CenterId,
-  "MAN" as CenterId,
-  "LOG" as CenterId,
-  "DEP" as CenterId,
-];
-
-// Cores executivas (coerentes com o dashboard atual)
+// Executivo/premium palette (coerente com o layout atual)
 const COLOR = {
-  LM: "oklch(0.75 0.20 185)", // teal-ish
-  BEN: "oklch(0.68 0.20 145)", // green-cyan
-  INS: "oklch(0.75 0.22 55)",  // yellow-miner
-  MA: "oklch(0.70 0.20 155)",  // green
-  ADM: "oklch(0.72 0.20 295)", // purple
-  MAN: "oklch(0.74 0.20 190)", // ciano metálico
-  LOG: "oklch(0.76 0.20 45)",  // blue petróleo (aprox)
-  DEP: "oklch(0.55 0.05 240)", // grafite
+  LM: "oklch(0.75 0.20 185)",
+  BEN: "oklch(0.68 0.20 145)",
+  INS: "oklch(0.75 0.22 55)",
+  MA: "oklch(0.70 0.20 155)",
+  ADM: "oklch(0.72 0.20 295)",
+  MAN: "oklch(0.74 0.20 190)",
+  LOG: "oklch(0.76 0.20 45)",
+  DEP: "oklch(0.55 0.05 240)",
 } satisfies Record<CenterId, string>;
 
 const BORDER = "oklch(0.18 0.018 240 / 0.35)";
-const CARD = "hsl(var(--card))";
 const MUTED = "oklch(0.42 0.03 220)";
 
 function getPeriodFactor(year: number, month: number | null): number {
@@ -65,6 +60,7 @@ function TrendBadge({ variancePct }: { variancePct: number }) {
   const over = variancePct > 0.5;
   const under = variancePct < -0.5;
   const Icon = over ? TrendingUp : under ? TrendingDown : Minus;
+
   const color = over
     ? "oklch(0.65 0.22 25)"
     : under
@@ -87,13 +83,43 @@ function TrendBadge({ variancePct }: { variancePct: number }) {
   );
 }
 
-function clamp(n: number, a: number, b: number) {
-  return Math.max(a, Math.min(b, n));
+function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
+  const angleRad = (Math.PI / 180) * angleDeg;
+  return {
+    x: cx + r * Math.cos(angleRad),
+    y: cy + r * Math.sin(angleRad),
+  };
 }
 
-function fmtShortPercent(p: number) {
-  if (!isFinite(p)) return "0%";
-  return `${p.toFixed(0)}%`;
+type DonutArc = {
+  startAngle: number;
+  endAngle: number;
+};
+
+function donutSlicePath(
+  cx: number,
+  cy: number,
+  rOuter: number,
+  rInner: number,
+  arc: DonutArc
+) {
+  const { startAngle, endAngle } = arc;
+
+  const startOuter = polarToCartesian(cx, cy, rOuter, startAngle);
+  const endOuter = polarToCartesian(cx, cy, rOuter, endAngle);
+
+  const startInner = polarToCartesian(cx, cy, rInner, endAngle);
+  const endInner = polarToCartesian(cx, cy, rInner, startAngle);
+
+  const largeArcFlag = endAngle - startAngle <= 180 ? "0" : "1";
+
+  return [
+    `M ${startOuter.x} ${startOuter.y}`,
+    `A ${rOuter} ${rOuter} 0 ${largeArcFlag} 1 ${endOuter.x} ${endOuter.y}`,
+    `L ${startInner.x} ${startInner.y}`,
+    `A ${rInner} ${rInner} 0 ${largeArcFlag} 0 ${endInner.x} ${endInner.y}`,
+    "Z",
+  ].join(" ");
 }
 
 export function DistributionChart({
@@ -103,9 +129,296 @@ export function DistributionChart({
   year?: number;
   month?: number | null;
 }) {
+  const [activeId, setActiveId] = useState<CenterId>("LM");
+  const [sortKey, setSortKey] = useState<SortKey>("value");
+
+  const factor = getPeriodFactor(year, month);
+  const budgetFactor = month !== null ? month / 12 : year === 2026 ? 4 / 12 : 1;
+
+  const { items, totalRealized } = useMemo(() => {
+    const totalR = Math.round(
+      COST_CENTERS.reduce((a, c) => a + getTotalRealized(c), 0) * factor
+    );
+
+    const raw: CenterNode[] = COST_CENTERS.map((c) => {
+      const realized = Math.round(getTotalRealized(c) * factor);
+      const budgeted = Math.round(getTotalBudgeted(c) * budgetFactor);
+      const share = pct(realized, totalR);
+      const varPct = getVariancePct(budgeted, realized);
+
+      return {
+        id: c.id as CenterId,
+        name: c.name ?? "Sem nome",
+        realized,
+        budgeted,
+        share,
+        varPct,
+        fill: COLOR[c.id as CenterId] ?? "oklch(0.55 0.05 240)",
+      };
+    });
+
+    const sorted = (() => {
+      if (sortKey === "value") return [...raw].sort((a, b) => b.realized - a.realized);
+      if (sortKey === "pct") return [...raw].sort((a, b) => b.share - a.share);
+      return [...raw].sort((a, b) => a.name.localeCompare(b.name));
+    })();
+
+    return { items: sorted, totalRealized: totalR };
+  }, [factor, budgetFactor, sortKey]);
+
+  const active = useMemo(() => items.find((i) => i.id === activeId) ?? items[0], [items, activeId]);
+
+  // Geometry
+  const cx = 120;
+  const cy = 120;
+  const rOuter = 86;
+  const rInner = 54;
+
+  const arcs = useMemo(() => {
+    let current = -90;
+    const denom = items.reduce((a, it) => a + Math.max(0, it.share), 0) || 1;
+
+    return items.map((it) => {
+      const sweep = (Math.max(0, it.share) / denom) * 360;
+      const startAngle = current;
+      const endAngle = current + sweep;
+      current = endAngle;
+      return { id: it.id, arc: { startAngle, endAngle } as DonutArc };
+    });
+  }, [items]);
+
   return (
-    <DistributionTreemap year={year} month={month} />
+    <div
+      className="w-full rounded-2xl p-4 sm:p-5"
+      style={{
+        background: "#fff",
+        border: `1px solid ${BORDER}`,
+        boxShadow: "0 14px 45px rgba(2, 6, 23, 0.08)",
+      }}
+    >
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-stretch">
+        {/* Donut + Centro */}
+        <div className="flex-1 lg:flex-[0_0_68%]">
+          <div
+            className="rounded-2xl overflow-hidden"
+            style={{
+              background: "linear-gradient(180deg, rgba(255,255,255,1) 0%, rgba(240,249,255,0.55) 100%)",
+              border: `1px solid color-mix(in oklch, ${BORDER} 65%, transparent)`,
+            }}
+          >
+            <div className="relative w-full h-[320px] sm:h-[360px] lg:h-[430px]">
+              <svg
+                viewBox="0 0 240 240"
+                className="w-full h-full block"
+                role="img"
+                aria-label="Distribuição do Custo Realizado"
+              >
+                <defs>
+                  {/* Shadow leve premium */}
+                  <filter id="donutSoftShadow" x="-40%" y="-40%" width="180%" height="180%">
+                    <feGaussianBlur in="SourceAlpha" stdDeviation="1.2" result="blur" />
+                    <feOffset dx="0" dy="2" result="offsetBlur" />
+                    <feComponentTransfer>
+                      <feFuncA type="linear" slope="0.25" />
+                    </feComponentTransfer>
+                    <feMerge>
+                      <feMergeNode in="offsetBlur" />
+                      <feMergeNode in="SourceGraphic" />
+                    </feMerge>
+                  </filter>
+
+                  {/* Gradiente sutil para acabamento clean */}
+                  <radialGradient id="donutEdge" cx="35%" cy="25%" r="80%">
+                    <stop offset="0%" stopColor="rgba(255,255,255,0.85)" />
+                    <stop offset="30%" stopColor="rgba(255,255,255,0.18)" />
+                    <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+                  </radialGradient>
+                </defs>
+
+                {/* Segments (sem 3D, com separação refinada) */}
+                {arcs.map(({ id, arc }) => {
+                  const it = items.find((x) => x.id === id);
+                  if (!it) return null;
+                  const isActive = id === activeId;
+                  const path = donutSlicePath(cx, cy, rOuter, rInner, arc);
+
+                  return (
+                    <g key={id}>
+                      <path
+                        d={path}
+                        fill={it.fill}
+                        stroke="rgba(255,255,255,0.95)"
+                        strokeWidth={1.25}
+                        strokeLinejoin="round"
+                        style={{
+                          cursor: "pointer",
+                          transition: "transform 220ms ease, filter 220ms ease, opacity 220ms ease",
+                          transformOrigin: `${cx}px ${cy}px`,
+                          transform: isActive ? "translateY(-1px)" : "translateY(0px)",
+                          opacity: isActive ? 1 : 0.92,
+                          filter: isActive ? "url(#donutSoftShadow)" : undefined,
+                        }}
+                        onMouseEnter={() => setActiveId(id)}
+                        onFocus={() => setActiveId(id)}
+                        tabIndex={0}
+                        role="button"
+                        aria-label={`${it.name}: ${it.share.toFixed(1)}% (${formatBRL(it.realized)})`}
+                      />
+                      {/* subtle edge overlay */}
+                      <path
+                        d={path}
+                        fill="url(#donutEdge)"
+                        opacity={isActive ? 0.55 : 0.38}
+                        style={{ pointerEvents: "none" }}
+                      />
+                    </g>
+                  );
+                })}
+
+                {/* Center hole */}
+                <circle
+                  cx={cx}
+                  cy={cy}
+                  r={rInner}
+                  fill="#fff"
+                  stroke="rgba(2, 6, 23, 0.06)"
+                  strokeWidth={1.2}
+                />
+              </svg>
+
+              {/* Núcleo minimalista */}
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div className="text-center">
+                  <div
+                    className="text-[10px] font-mono uppercase tracking-wide"
+                    style={{ color: MUTED }}
+                  >
+                    TOTAL REALIZADO
+                  </div>
+                  <div className="mt-1 text-[15px] sm:text-[16px] font-mono font-bold text-slate-900">
+                    {formatBRL(totalRealized)}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Header + sort */}
+          <div className="mt-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-mono uppercase tracking-wide" style={{ color: MUTED }}>
+                Total
+              </span>
+              <span className="text-[12px] font-mono font-bold text-slate-900">{formatBRL(totalRealized)}</span>
+            </div>
+
+            <div className="flex items-center gap-1">
+              {(
+                [
+                  { k: "value" as SortKey, label: "Valor" },
+                  { k: "pct" as SortKey, label: "%" },
+                  { k: "name" as SortKey, label: "Nome" },
+                ] as const
+              ).map((x) => {
+                const isSel = sortKey === x.k;
+                return (
+                  <button
+                    key={x.k}
+                    type="button"
+                    onClick={() => setSortKey(x.k)}
+                    className="px-2.5 py-1 rounded-xl text-[11px] font-mono font-semibold transition"
+                    style={{
+                      background: isSel
+                        ? "oklch(0.75 0.20 185 / 0.12)"
+                        : "rgba(2,6,23,0.03)",
+                      color: isSel ? "#0f172a" : "#334155",
+                      border: `1px solid ${
+                        isSel ? "oklch(0.75 0.20 185 / 0.28)" : BORDER
+                      }`,
+                    }}
+                  >
+                    {x.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* Ranking */}
+        <div className="flex-1 lg:flex-[0_0_32%]">
+          <div
+            className="rounded-2xl p-3 sm:p-4 h-[320px] sm:h-[360px] lg:h-[430px] flex flex-col"
+            style={{
+              border: `1px solid ${BORDER}`,
+              background: "#fff",
+            }}
+          >
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <p className="text-[10px] font-mono uppercase tracking-wide" style={{ color: "#111827" }}>
+                  Ranking
+                </p>
+                <p className="text-[12px] font-semibold text-gray-900">Participação</p>
+              </div>
+
+              {active && (
+                <span className="inline-flex h-7 w-7 items-center justify-center rounded-xl" style={{ background: `${active.fill}14` }}>
+                  <span className="inline-flex h-2.5 w-2.5 rounded-full" style={{ background: active.fill }} />
+                </span>
+              )}
+            </div>
+
+            <div className="mt-3 flex-1 overflow-hidden">
+              <div className="flex flex-col gap-1" style={{ maxHeight: "100%" }}>
+                {items.map((it) => {
+                  const isActive = it.id === activeId;
+                  return (
+                    <button
+                      key={it.id}
+                      type="button"
+                      onMouseEnter={() => setActiveId(it.id)}
+                      onFocus={() => setActiveId(it.id)}
+                      className="w-full text-left rounded-xl p-2 transition"
+                      style={{
+                        border: `1px solid ${
+                          isActive ? "oklch(0.75 0.20 185 / 0.28)" : BORDER
+                        }`,
+                        background: isActive ? "rgba(2,6,23,0.03)" : "#ffffff",
+                      }}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="inline-flex h-2 w-2 rounded-full mt-[2px]" style={{ background: it.fill }} />
+                          <p className="text-[12px] font-semibold text-gray-900 truncate">{it.name}</p>
+                        </div>
+
+                        <div className="text-right">
+                          <p className="text-[12px] font-semibold font-mono text-gray-900 leading-none">{it.share.toFixed(1)}%</p>
+                          <p className="text-[10px] font-mono leading-none mt-1" style={{ color: MUTED }}>
+                            {formatBRL(it.realized)}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="mt-1">
+                        <TrendBadge variancePct={it.varPct} />
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="mt-2">
+              <p className="text-[10px] font-mono" style={{ color: MUTED }}>
+                Participação total baseada no realizado do período.
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
-
 
