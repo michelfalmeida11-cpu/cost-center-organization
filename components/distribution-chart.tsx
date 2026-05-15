@@ -129,7 +129,7 @@ export function DistributionChart({
   year?: number;
   month?: number | null;
 }) {
-  const [activeId, setActiveId] = useState<CenterId>("LM");
+  const [activeId, setActiveId] = useState<CenterId | null>("LM");
   const [sortKey, setSortKey] = useState<SortKey>("value");
 
   const factor = getPeriodFactor(year, month);
@@ -166,7 +166,10 @@ export function DistributionChart({
     return { items: sorted, totalRealized: totalR };
   }, [factor, budgetFactor, sortKey]);
 
-  const active = useMemo(() => items.find((i) => i.id === activeId) ?? items[0], [items, activeId]);
+  const active = useMemo(() => {
+    if (!activeId) return null;
+    return items.find((i) => i.id === activeId) ?? null;
+  }, [items, activeId]);
 
   // Geometry
   const cx = 120;
