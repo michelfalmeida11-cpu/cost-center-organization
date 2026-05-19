@@ -129,21 +129,20 @@ export function DistributionChart({
   year?: number;
   month?: number | null;
 }) {
-  const [activeId, setActiveId] = useState<CenterId | null>("LM");
+  const [activeId, setActiveId] = useState<CenterId | null>(COST_CENTERS[0]?.id ?? "LM");
   const [sortKey, setSortKey] = useState<SortKey>("value");
 
   const factor = getPeriodFactor(year, month);
   const budgetFactor = month !== null ? month / 12 : year === 2026 ? 4 / 12 : 1;
 
-  const { items, totalRealized } = useMemo(() => {
-    const totalR = Math.round(
-      COST_CENTERS.reduce((a, c) => a + getTotalRealized(c), 0) * factor
-    );
+  const { items, totalRealized, totalBudgeted } = useMemo(() => {
+    const totalR = COST_CENTERS.reduce((a, c) => a + getTotalRealized(c), 0) * factor;
+    const totalB = COST_CENTERS.reduce((a, c) => a + getTotalBudgeted(c), 0) * budgetFactor;
 
     const raw: CenterNode[] = COST_CENTERS.map((c) => {
       const realized = Math.round(getTotalRealized(c) * factor);
       const budgeted = Math.round(getTotalBudgeted(c) * budgetFactor);
-      const share = pct(realized, totalR);
+      const share = pct(realized, Math.round(totalR));
       const varPct = getVariancePct(budgeted, realized);
 
       return {
@@ -163,7 +162,11 @@ export function DistributionChart({
       return [...raw].sort((a, b) => a.name.localeCompare(b.name));
     })();
 
-    return { items: sorted, totalRealized: totalR };
+    return {
+      items: sorted,
+      totalRealized: Math.round(totalR),
+      totalBudgeted: Math.round(totalB),
+    };
   }, [factor, budgetFactor, sortKey]);
 
   const active = useMemo(() => {
@@ -171,11 +174,21 @@ export function DistributionChart({
     return items.find((i) => i.id === activeId) ?? null;
   }, [items, activeId]);
 
+  const maiorCentro = useMemo(() => {
+    if (items.length === 0) return null;
+    return [...items].sort((a, b) => b.realized - a.realized)[0] ?? null;
+  }, [items]);
+
+  const overallVarPct = useMemo(
+    () => getVariancePct(totalBudgeted, totalRealized),
+    [totalBudgeted, totalRealized]
+  );
+
   // Geometry
   const cx = 120;
   const cy = 120;
-  const rOuter = 86;
-  const rInner = 54;
+  const rOuter = 88;
+  const rInner = 52;
 
   const arcs = useMemo(() => {
     let current = -90;
@@ -189,6 +202,8 @@ export function DistributionChart({
       return { id: it.id, arc: { startAngle, endAngle } as DonutArc };
     });
   }, [items]);
+
+  const setActiveSafe = (id: CenterId) => setActiveId(id);
 
   return (
     <div
@@ -205,22 +220,17 @@ export function DistributionChart({
           <div
             className="rounded-2xl overflow-hidden"
             style={{
-              background: "linear-gradient(180deg, rgba(255,255,255,1) 0%, rgba(240,249,255,0.55) 100%)",
+              background:
+                "linear-gradient(180deg, rgba(255,255,255,1) 0%, rgba(240,249,255,0.55) 100%)",
               border: `1px solid color-mix(in oklch, ${BORDER} 65%, transparent)`,
             }}
           >
             <div className="relative w-full h-[320px] sm:h-[360px] lg:h-[430px]">
-              <svg
-                viewBox="0 0 240 240"
-                className="w-full h-full block"
-                role="img"
-                aria-label="Distribuição do Custo Realizado"
-              >
+              <svg viewBox="0 0 240 240" className="w-full h-full block" role="img" aria-label="Distribuição do Custo Realizado">
                 <defs>
-                  {/* Shadow leve premium */}
-                  <filter id="donutSoftShadow" x="-40%" y="-40%" width="180%" height="180%">
-                    <feGaussianBlur in="SourceAlpha" stdDeviation="1.2" result="blur" />
-                    <feOffset dx="0" dy="2" result="offsetBlur" />
+                  <filter id="donutShadow" x="-40%" y="-40%" width="180%" height="180%">
+                    <feGaussianBlur in="SourceAlpha" stdDeviation="2.0" result="blur" />
+                    <feOffset dx="0" dy="4" result="offsetBlur" />
                     <feComponentTransfer>
                       <feFuncA type="linear" slope="0.25" />
                     </feComponentTransfer>
@@ -230,18 +240,23 @@ export function DistributionChart({
                     </feMerge>
                   </filter>
 
-                  {/* Gradiente sutil para acabamento clean */}
+                  <radialGradient id="donutSpec" cx="30%" cy="25%" r="70%">
+                    <stop offset="0%" stopColor="rgba(255,255,255,0.95)" />
+                    <stop offset="35%" stopColor="rgba(255,255,255,0.22)" />
+                    <stop offset="100%" stopColor="rgba(255,255,255,0)" />
+                  </radialGradient>
+
                   <radialGradient id="donutEdge" cx="35%" cy="25%" r="80%">
-                    <stop offset="0%" stopColor="rgba(255,255,255,0.85)" />
-                    <stop offset="30%" stopColor="rgba(255,255,255,0.18)" />
+                    <stop offset="0%" stopColor="rgba(255,255,255,0.88)" />
+                    <stop offset="30%" stopColor="rgba(255,255,255,0.20)" />
                     <stop offset="100%" stopColor="rgba(255,255,255,0)" />
                   </radialGradient>
                 </defs>
 
-                {/* Segments (sem 3D, com separação refinada) */}
                 {arcs.map(({ id, arc }) => {
                   const it = items.find((x) => x.id === id);
                   if (!it) return null;
+
                   const isActive = id === activeId;
                   const path = donutSlicePath(cx, cy, rOuter, rInner, arc);
 
@@ -251,78 +266,125 @@ export function DistributionChart({
                         d={path}
                         fill={it.fill}
                         stroke="rgba(255,255,255,0.95)"
-                        strokeWidth={1.25}
+                        strokeWidth={1.15}
                         strokeLinejoin="round"
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`${it.name}: ${it.share.toFixed(1)}% (${formatBRL(it.realized)})`}
+                        onMouseEnter={() => setActiveSafe(id)}
+                        onFocus={() => setActiveSafe(id)}
+                        onClick={() => setActiveSafe(id)}
                         style={{
                           cursor: "pointer",
                           transition: "transform 220ms ease, filter 220ms ease, opacity 220ms ease",
                           transformOrigin: `${cx}px ${cy}px`,
-                          transform: isActive ? "translateY(-1px)" : "translateY(0px)",
+                          transform: isActive ? "translateY(-1.5px)" : "translateY(0px)",
                           opacity: isActive ? 1 : 0.92,
-                          filter: isActive ? "url(#donutSoftShadow)" : undefined,
+                          filter: isActive ? "url(#donutShadow)" : undefined,
                         }}
-                        onMouseEnter={() => setActiveId(id)}
-                        onFocus={() => setActiveId(id)}
-                        tabIndex={0}
-                        role="button"
-                        aria-label={`${it.name}: ${it.share.toFixed(1)}% (${formatBRL(it.realized)})`}
                       />
-                      {/* subtle edge overlay */}
+                      <path
+                        d={path}
+                        fill="url(#donutSpec)"
+                        opacity={isActive ? 0.9 : 0.7}
+                        style={{ pointerEvents: "none" }}
+                      />
                       <path
                         d={path}
                         fill="url(#donutEdge)"
-                        opacity={isActive ? 0.55 : 0.38}
+                        opacity={isActive ? 0.65 : 0.42}
                         style={{ pointerEvents: "none" }}
                       />
                     </g>
                   );
                 })}
 
-                {/* Center hole */}
-                <circle
-                  cx={cx}
-                  cy={cy}
-                  r={rInner}
-                  fill="#fff"
-                  stroke="rgba(2, 6, 23, 0.06)"
-                  strokeWidth={1.2}
-                />
+                <circle cx={cx} cy={cy} r={rInner} fill="#fff" stroke="rgba(2, 6, 23, 0.06)" strokeWidth={1.25} />
               </svg>
 
-              {/* Núcleo minimalista */}
+              {/* Centro inteligente (4 KPIs via cards abaixo, e 1 foco no centro) */}
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <div className="text-center">
                   <div
-                    className="text-[10px] font-mono uppercase tracking-wide"
+                    className="text-[10px] font-mono uppercase tracking-[0.22em]"
                     style={{ color: MUTED }}
                   >
-                    TOTAL REALIZADO
+                    {active ? active.name : "Total"}
                   </div>
                   <div className="mt-1 text-[15px] sm:text-[16px] font-mono font-bold text-slate-900">
-                    {formatBRL(totalRealized)}
+                    {active ? formatBRL(active.realized) : formatBRL(totalRealized)}
+                  </div>
+                  <div className="mt-2 text-[10px] font-mono" style={{ color: MUTED }}>
+                    {active ? `${active.share.toFixed(1)}% do total` : ""}
+                  </div>
+                  <div className="mt-2">
+                    {active ? <TrendBadge variancePct={active.varPct} /> : null}
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
+          {/* 4 KPIs abaixo do donut */}
+          <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div
+              className="rounded-xl border px-3 py-2"
+              style={{ borderColor: `color-mix(in oklch, ${BORDER} 70%, transparent)` }}
+            >
+              <div className="text-[9px] font-mono uppercase tracking-[0.20em]" style={{ color: MUTED }}>
+                Total realizado
+              </div>
+              <div className="mt-1 text-[12px] font-mono font-bold text-slate-900">{formatBRL(totalRealized)}</div>
+            </div>
+
+            <div
+              className="rounded-xl border px-3 py-2"
+              style={{ borderColor: `color-mix(in oklch, ${BORDER} 70%, transparent)` }}
+            >
+              <div className="text-[9px] font-mono uppercase tracking-[0.20em]" style={{ color: MUTED }}>
+                Variação
+              </div>
+              <div className="mt-1">
+                <TrendBadge variancePct={overallVarPct} />
+              </div>
+            </div>
+
+            <div
+              className="rounded-xl border px-3 py-2"
+              style={{ borderColor: `color-mix(in oklch, ${BORDER} 70%, transparent)` }}
+            >
+              <div className="text-[9px] font-mono uppercase tracking-[0.20em]" style={{ color: MUTED }}>
+                Maior centro
+              </div>
+              <div className="mt-1 text-[12px] font-mono font-bold text-slate-900 truncate">{maiorCentro?.name ?? "—"}</div>
+            </div>
+
+            <div
+              className="rounded-xl border px-3 py-2"
+              style={{ borderColor: `color-mix(in oklch, ${BORDER} 70%, transparent)` }}
+            >
+              <div className="text-[9px] font-mono uppercase tracking-[0.20em]" style={{ color: MUTED }}>
+                Total de centros
+              </div>
+              <div className="mt-1 text-[12px] font-mono font-bold text-slate-900">{items.length}</div>
+            </div>
+          </div>
+
           {/* Header + sort */}
-          <div className="mt-3 flex items-center justify-between gap-3">
+          <div className="mt-4 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-mono uppercase tracking-wide" style={{ color: MUTED }}>
-                Total
+                Ranking inteligente
               </span>
               <span className="text-[12px] font-mono font-bold text-slate-900">{formatBRL(totalRealized)}</span>
             </div>
 
             <div className="flex items-center gap-1">
-              {(
-                [
-                  { k: "value" as SortKey, label: "Valor" },
-                  { k: "pct" as SortKey, label: "%" },
-                  { k: "name" as SortKey, label: "Nome" },
-                ] as const
-              ).map((x) => {
+              {([
+                { k: "value" as SortKey, label: "Valor" },
+                { k: "pct" as SortKey, label: "%" },
+                { k: "name" as SortKey, label: "Nome" },
+              ] as const).map((x) => {
                 const isSel = sortKey === x.k;
                 return (
                   <button
@@ -331,13 +393,9 @@ export function DistributionChart({
                     onClick={() => setSortKey(x.k)}
                     className="px-2.5 py-1 rounded-xl text-[11px] font-mono font-semibold transition"
                     style={{
-                      background: isSel
-                        ? "oklch(0.75 0.20 185 / 0.12)"
-                        : "rgba(2,6,23,0.03)",
+                      background: isSel ? "oklch(0.75 0.20 185 / 0.12)" : "rgba(2,6,23,0.03)",
                       color: isSel ? "#0f172a" : "#334155",
-                      border: `1px solid ${
-                        isSel ? "oklch(0.75 0.20 185 / 0.28)" : BORDER
-                      }`,
+                      border: `1px solid ${isSel ? "oklch(0.75 0.20 185 / 0.28)" : BORDER}`,
                     }}
                   >
                     {x.label}
@@ -348,14 +406,11 @@ export function DistributionChart({
           </div>
         </div>
 
-        {/* Ranking */}
+        {/* Ranking (8 itens, sem scroll interno) */}
         <div className="flex-1 lg:flex-[0_0_32%]">
           <div
             className="rounded-2xl p-3 sm:p-4 h-[320px] sm:h-[360px] lg:h-[430px] flex flex-col"
-            style={{
-              border: `1px solid ${BORDER}`,
-              background: "#fff",
-            }}
+            style={{ border: `1px solid ${BORDER}`, background: "#fff" }}
           >
             <div className="flex items-center justify-between gap-2">
               <div>
@@ -366,56 +421,56 @@ export function DistributionChart({
               </div>
 
               {active && (
-                <span className="inline-flex h-7 w-7 items-center justify-center rounded-xl" style={{ background: `${active.fill}14` }}>
+                <span
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-xl"
+                  style={{ background: `${active.fill}14` }}
+                >
                   <span className="inline-flex h-2.5 w-2.5 rounded-full" style={{ background: active.fill }} />
                 </span>
               )}
             </div>
 
-            <div className="mt-3 flex-1 overflow-hidden">
-              <div className="flex flex-col gap-1" style={{ maxHeight: "100%" }}>
-                {items.map((it) => {
-                  const isActive = it.id === activeId;
-                  return (
-                    <button
-                      key={it.id}
-                      type="button"
-                      onMouseEnter={() => setActiveId(it.id)}
-                      onFocus={() => setActiveId(it.id)}
-                      className="w-full text-left rounded-xl p-2 transition"
-                      style={{
-                        border: `1px solid ${
-                          isActive ? "oklch(0.75 0.20 185 / 0.28)" : BORDER
-                        }`,
-                        background: isActive ? "rgba(2,6,23,0.03)" : "#ffffff",
-                      }}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="inline-flex h-2 w-2 rounded-full mt-[2px]" style={{ background: it.fill }} />
-                          <p className="text-[12px] font-semibold text-gray-900 truncate">{it.name}</p>
-                        </div>
-
-                        <div className="text-right">
-                          <p className="text-[12px] font-semibold font-mono text-gray-900 leading-none">{it.share.toFixed(1)}%</p>
-                          <p className="text-[10px] font-mono leading-none mt-1" style={{ color: MUTED }}>
-                            {formatBRL(it.realized)}
-                          </p>
-                        </div>
+            {/* sem overflow interno: layout em 4 linhas para caber */}
+            <div className="mt-3 flex-1 grid grid-rows-4 gap-1.5">
+              {items.map((it) => {
+                const isActive = it.id === activeId;
+                return (
+                  <button
+                    key={it.id}
+                    type="button"
+                    onClick={() => setActiveSafe(it.id)}
+                    onMouseEnter={() => setActiveSafe(it.id)}
+                    onFocus={() => setActiveSafe(it.id)}
+                    className="w-full text-left rounded-xl p-2 transition"
+                    style={{
+                      border: `1px solid ${isActive ? "oklch(0.75 0.20 185 / 0.28)" : BORDER}`,
+                      background: isActive ? "rgba(2,6,23,0.03)" : "#ffffff",
+                      boxShadow: isActive ? `0 0 0 3px ${it.fill}10` : "none",
+                    }}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="inline-flex h-2 w-2 rounded-full mt-[2px]" style={{ background: it.fill }} />
+                        <p className="text-[12px] font-semibold text-gray-900 truncate">{it.name}</p>
                       </div>
-
-                      <div className="mt-1">
-                        <TrendBadge variancePct={it.varPct} />
+                      <div className="text-right">
+                        <p className="text-[12px] font-semibold font-mono text-gray-900 leading-none">{it.share.toFixed(1)}%</p>
+                        <p className="text-[10px] font-mono leading-none mt-1" style={{ color: MUTED }}>
+                          {formatBRL(it.realized)}
+                        </p>
                       </div>
-                    </button>
-                  );
-                })}
-              </div>
+                    </div>
+                    <div className="mt-1">
+                      <TrendBadge variancePct={it.varPct} />
+                    </div>
+                  </button>
+                );
+              })}
             </div>
 
             <div className="mt-2">
               <p className="text-[10px] font-mono" style={{ color: MUTED }}>
-                Participação total baseada no realizado do período.
+                Clique no ranking ou no gráfico para sincronizar destaque.
               </p>
             </div>
           </div>
@@ -424,4 +479,5 @@ export function DistributionChart({
     </div>
   );
 }
+
 
