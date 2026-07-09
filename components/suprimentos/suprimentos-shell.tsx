@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../ui/tabs";
 
 export type SuprimentosTab = "dashboard" | "gestao" | "notas" | "fornecedores" | "contratos";
 

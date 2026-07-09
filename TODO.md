@@ -1,11 +1,19 @@
-# TODO - Treemap enterprise (Distribuição do Custo Realizado)
+# TODO — Estrutura visual Fiori/Fusion (sem Dashboard/CRUD/páginas)
 
-- [x] Atualizar `components/distribution-treemap.tsx` para TREEMAP premium ocupar o container (remover espaço morto, eliminar sensação de painel grande).
-
-- [ ] Ajustar layout responsivo: treemap sem height fixa; sidebar de ranking lateral compacta com tipografia/spacing premium.
-- [ ] Garantir que cada bloco do treemap exibe: centro de custo, percentual (participação do total realizado), valor realizado, e “participação total” como a mesma métrica %.
-- [ ] Aplicar UX/UI: bordas refinadas, sombras suaves, hover elegante, animação suave e contraste corporativo (branco/cinza-teal).
-- [ ] Remover/evitar qualquer overlay central que prejudique a leitura.
-- [ ] Validar TS: eliminar warnings quando possível (reduzir `@ts-expect-error` se houver alternativa segura).
-- [ ] Rodar typecheck/lint e revisar visual manualmente.
+- [ ] Passo 1: Criar módulo `components/fiori/**` com tokens/utilidades (paleta + tipografia + bordas + sombras)
+- [ ] Passo 2: Criar design system base em `components/fiori/components/ui/**`
+  - [ ] Button, Input, Select, DatePicker
+  - [ ] Card, MetricCard, InfoCard, StatusCard, ChartCard
+  - [ ] Section, Tabs, Accordion, Badge, Progress
+  - [ ] Tooltip, Popover, Dropdown
+  - [ ] Table, Loading, Skeleton, EmptyState/ErrorState
+- [ ] Passo 3: Implementar layout visual no módulo
+  - [ ] `FioriSidebar` (fixa 280px, colapso, tooltips, scroll independente, menu ativo destacado, separadores, rodapé)
+  - [ ] `FioriHeader` (fixo 72px, blur, breadcrumb, search + filtros + atualizar/exportar + notificações + theme toggle + avatar dropdown)
+  - [ ] `FioriFooter` (versão/usuário/banco/ambiente/ano)
+  - [ ] `FioriShell` (montagem completa)
+- [ ] Passo 4: Adicionar animações (framer-motion) nos componentes principais e estados
+- [ ] Passo 5: Revisão final: TypeScript, imports, responsividade, performance (lazy/dynamic), acessibilidade
+- [ ] Passo 6: Rodar `npm run lint` e `npm run build`
+- [ ] Passo 7: Listar arquivos criados e explicar rapidamente cada componente
 
