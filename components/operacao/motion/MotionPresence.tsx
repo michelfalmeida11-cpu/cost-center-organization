@@ -1,9 +1,14 @@
 "use client";
 
-import React from "react";
-import { AnimatePresence } from "framer-motion";
+import type { ReactNode } from "react";
+import { Presence } from "@/components/fiori/motion";
 
-export function MotionPresence({ children }: { children: React.ReactNode }) {
-  return <AnimatePresence mode="wait">{children}</AnimatePresence>;
+interface MotionPresenceProps {
+  children: ReactNode;
 }
 
+export default function MotionPresence({
+  children,
+}: MotionPresenceProps) {
+  return <Presence>{children}</Presence>;
+}

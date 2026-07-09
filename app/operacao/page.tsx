@@ -5,12 +5,6 @@ import React, { useMemo, useState } from "react";
 import { DashboardHeader } from "@/components/dashboard-header";
 import { OperacaoShell } from "@/components/operacao/operacao-shell";
 
-export const metadata = {
-  title: "Operação da Mineração — AVG | Mina do Brumado",
-  description:
-    "Módulo completo da OPERAÇÃO DA MINERAÇÃO (Equipamentos, Diesel, Perfuração, Desmonte e Logística).",
-};
-
 export default function OperacaoPage() {
   const [active, setActive] = useState<
     "equipamentos" | "diesel" | "perfuracao" | "desmonte" | "logistica"
