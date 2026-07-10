@@ -4,9 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm run check:app-pages && next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "check:app-pages": "node scripts/check-app-pages-default-export.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.4.0",
