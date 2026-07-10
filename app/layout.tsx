@@ -21,7 +21,7 @@ export default function RootLayout({
 }) {
 
   return (
-    <html lang="pt-BR" className="light">
+    <html lang="pt-BR">
       <body className={`${inter.className} antialiased`}>
         <AuthProvider>
           <CostCenterDataProvider>

@@ -33,39 +33,34 @@
 /* Disable dark mode for professional light theme */
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: 0 0% 98%;
-    --foreground: 0 0% 10%;
-    --card: 0 0% 100%;
-    --card-foreground: 0 0% 10%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 10%;
-    --primary: 222.2 84% 22.9%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 12% 95%;
-    --secondary-foreground: 222.2 13.3% 15%;
-    --muted: 210 10% 92%;
-    --muted-foreground: 222.2 9.5% 36.9%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 222.2 13.3% 15%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 220 9.5% 85%;
-    --input: 220 9.5% 85%;
-    --ring: 222.2 84% 22.9%;
+    --background: 215 10% 10%;
+    --foreground: 210 18% 96%;
+    --card: 215 10% 12%;
+    --card-foreground: 210 18% 96%;
+    --popover: 215 12% 14%;
+    --popover-foreground: 210 20% 96%;
+    --primary: 215 64% 70%;
+    --primary-foreground: 210 20% 96%;
+    --secondary: 215 20% 22%;
+    --secondary-foreground: 210 18% 96%;
+    --muted: 215 10% 18%;
+    --muted-foreground: 210 18% 86%;
+    --accent: 214 96% 92%;
+    --accent-foreground: 210 20% 10%;
+    --destructive: 18 84% 64%;
+    --destructive-foreground: 210 20% 96%;
+    --border: 216 18% 16%;
+    --input: 216 18% 18%;
+    --ring: 214 68% 72%;
   }
-}
-
-.dark {
-  display: none !important;
-}
-
-* {
-  border-color: hsl(var(--border));
-  color-scheme: light !important;
 }
 
 body {
   background-color: hsl(var(--background)) !important;
   color: hsl(var(--foreground)) !important;
   font-feature-settings: "cv11" 1, "cv10" 1;
+}
+
+* {
+  border-color: hsl(var(--border));
 }
