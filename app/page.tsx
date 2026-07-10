@@ -1,98 +1,288 @@
 ﻿"use client";
 
 import { useState, type ElementType } from "react";
+import { motion } from "framer-motion";
+import Link from "next/link";
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  RadialBarChart,
+  RadialBar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  Cell,
+} from "recharts";
 import {
   Activity,
   BarChart3,
   Bell,
-  ChevronDown,
+  Bomb,
+  Calendar,
+  CircleUser,
+  Clock,
+  Download,
+  Drill,
   DollarSign,
-  Droplet,
+  FileSpreadsheet,
   FileText,
+  Fuel,
+  Gauge,
   HardDrive,
   LayoutDashboard,
   Presentation,
+  Search,
   Settings,
   Target,
   Truck,
   UserCircle,
   Zap,
+  BadgeCheck,
 } from "lucide-react";
+
+import DashboardCard from "../components/dashboard/DashboardCard";
+import Sparkline from "../components/dashboard/Sparkline";
+import MetricCard from "../components/dashboard/MetricCard";
+import DetailCard from "../components/dashboard/DetailCard";
+import CostSharePanel from "../components/dashboard/CostSharePanel";
+import EvolutionPanel from "../components/dashboard/EvolutionPanel";
+import TopExpensesPanel from "../components/dashboard/TopExpensesPanel";
+import GaugePanel from "../components/dashboard/GaugePanel";
+import IndicatorPanel from "../components/dashboard/IndicatorPanel";
+import RankingPanel from "../components/dashboard/RankingPanel";
+import AlertPanel from "../components/dashboard/AlertPanel";
+import QuickActionsPanel from "../components/dashboard/QuickActionsPanel";
 
 const filterOptions = ["Todos", "Perfuração", "Desmonte", "Logística"];
 const sidebarItems = [
-  { label: "Dashboard Executivo", icon: LayoutDashboard, active: true },
-  { label: "Custos Operacionais", icon: DollarSign },
-  { label: "Equipamentos", icon: HardDrive },
-  { label: "Diesel", icon: Droplet },
-  { label: "Perfuração", icon: Target },
-  { label: "Desmonte", icon: Zap },
-  { label: "Logística", icon: Truck },
-  { label: "Indicadores", icon: BarChart3 },
-  { label: "Relatórios", icon: FileText },
-  { label: "Apresentação Executiva", icon: Presentation },
-  { label: "Configurações", icon: Settings },
+  { label: "Dashboard Executivo", icon: LayoutDashboard, href: "/" },
+  { label: "Administração", icon: LayoutDashboard, href: "/administracao" },
+  { label: "Custos Operacionais", icon: DollarSign, href: "/" },
+  { label: "Equipamentos", icon: HardDrive, href: "/operacao" },
+  { label: "Diesel", icon: Fuel, href: "/suprimentos" },
+  { label: "Perfuração", icon: Drill, href: "/operacao" },
+  { label: "Desmonte", icon: Bomb, href: "/operacao" },
+  { label: "Logística", icon: Truck, href: "/operacao" },
+  { label: "Indicadores", icon: BarChart3, href: "/operacao" },
+  { label: "Relatórios", icon: FileText, href: "/" },
+  { label: "Apresentação Executiva", icon: Presentation, href: "/suprimentos" },
+  { label: "Configurações", icon: Settings, href: "/administracao" },
 ];
 
 const topKpis = [
-  { label: "Custo Operacional Total", value: "R$ 8.764.520,45", trend: "+8,62%", trendColor: "oklch(0.65 0.20 145)", subtitle: "vs período anterior" },
-  { label: "Custo por Tonelada", value: "R$ 12,58/t", trend: "-4,31%", trendColor: "oklch(0.65 0.22 25)", subtitle: "vs período anterior" },
-  { label: "Custo por Metro Perfurado", value: "R$ 28,62/m", trend: "+6,12%", trendColor: "oklch(0.65 0.20 145)", subtitle: "vs período anterior" },
-  { label: "Custo por Furo", value: "R$ 1.152,35/furo", trend: "-3,45%", trendColor: "oklch(0.65 0.20 145)", subtitle: "vs período anterior" },
-  { label: "Consumo Diesel", value: "62.450 L", trend: "+5,21%", trendColor: "oklch(0.65 0.20 145)", subtitle: "vs período anterior" },
-  { label: "Disponibilidade Física", value: "87,43%", trend: "+3,21%", trendColor: "oklch(0.65 0.20 145)", subtitle: "vs período anterior" },
+  {
+    label: "Custo Operacional",
+    value: "R$ 8.764.520,45",
+    trend: "+8,62%",
+    positive: true,
+    icon: DollarSign,
+    gradient: "linear-gradient(135deg, #3B82F6 0%, #0EA5E9 100%)",
+    sparkline: [22, 29, 28, 32, 38, 45],
+    color: "#3B82F6",
+    baseline: 8764520.45,
+    unit: "currency",
+  },
+  {
+    label: "Custo por Tonelada",
+    value: "R$ 12,58/t",
+    trend: "-4,31%",
+    positive: false,
+    icon: BarChart3,
+    gradient: "linear-gradient(135deg, #94A3B8 0%, #CBD5E1 100%)",
+    sparkline: [14, 16, 15, 14, 13, 12],
+    color: "#94A3B8",
+    baseline: 12.58,
+    unit: "per_t",
+  },
+  {
+    label: "Custo por Metro",
+    value: "R$ 28,62/m",
+    trend: "+6,12%",
+    positive: true,
+    icon: Drill,
+    gradient: "linear-gradient(135deg, #22D3EE 0%, #0EA5E9 100%)",
+    sparkline: [18, 20, 22, 24, 26, 28],
+    color: "#22D3EE",
+    baseline: 28.62,
+    unit: "per_m",
+  },
+  {
+    label: "Custo por Furo",
+    value: "R$ 1.152,35/furo",
+    trend: "-3,45%",
+    positive: false,
+    icon: Target,
+    gradient: "linear-gradient(135deg, #2DD4BF 0%, #14B8A6 100%)",
+    sparkline: [11, 12, 12, 11, 10, 10],
+    color: "#2DD4BF",
+    baseline: 1152.35,
+    unit: "currency",
+  },
+  {
+    label: "Consumo Diesel",
+    value: "62.450 L",
+    trend: "+5,21%",
+    positive: true,
+    icon: Fuel,
+    gradient: "linear-gradient(135deg, #FACC15 0%, #F59E0B 100%)",
+    sparkline: [51, 52, 54, 58, 61, 62],
+    color: "#FACC15",
+    baseline: 62450,
+    unit: "liters",
+  },
+  {
+    label: "Disponibilidade Física",
+    value: "87,43%",
+    trend: "+3,21%",
+    positive: true,
+    icon: BadgeCheck,
+    gradient: "linear-gradient(135deg, #A855F7 0%, #8B5CF6 100%)",
+    sparkline: [80, 82, 84, 85, 86, 87],
+    color: "#A855F7",
+    baseline: 87.43,
+    unit: "percent",
+  },
 ];
 
-const highlights = [
-  { label: "Equipamentos", value: "R$ 3.156.280,50", meta: "36,02% do total", color: "oklch(0.65 0.20 145)" },
-  { label: "Diesel", value: "R$ 1.872.450,00", meta: "21,37% do total", color: "oklch(0.75 0.20 185)" },
-  { label: "Perfuração", value: "R$ 1.982.350,75", meta: "22,63% do total", color: "oklch(0.72 0.18 270)" },
-  { label: "Desmonte", value: "R$ 1.134.250,20", meta: "12,94% do total", color: "oklch(0.74 0.20 45)" },
-  { label: "Logística", value: "R$ 619.189,00", meta: "7,06% do total", color: "oklch(0.62 0.24 25)" },
+const detailCards = [
+  {
+    label: "Equipamentos",
+    value: "R$ 3.156.280,50",
+    percent: "36,02%",
+    icon: HardDrive,
+    color: "#3B82F6",
+    series: [24, 28, 31, 29, 34, 36],
+  },
+  {
+    label: "Diesel",
+    value: "R$ 1.872.450,00",
+    percent: "21,37%",
+    icon: Fuel,
+    color: "#FACC15",
+    series: [18, 20, 22, 20, 23, 25],
+  },
+  {
+    label: "Perfuração",
+    value: "R$ 1.982.350,75",
+    percent: "22,63%",
+    icon: Drill,
+    color: "#22D3EE",
+    series: [21, 20, 23, 24, 29, 27],
+  },
+  {
+    label: "Desmonte",
+    value: "R$ 1.134.250,20",
+    percent: "12,94%",
+    icon: Bomb,
+    color: "#A855F7",
+    series: [12, 14, 13, 15, 16, 14],
+  },
+  {
+    label: "Logística",
+    value: "R$ 619.189,00",
+    percent: "7,06%",
+    icon: Truck,
+    color: "#4ADE80",
+    series: [9, 11, 10, 12, 13, 14],
+  },
 ];
 
-const dieselMetrics = [
-  { label: "Consumo Diesel S10", value: "42.650 L", trend: "+2,8%" },
-  { label: "Consumo Diesel S500", value: "19.800 L", trend: "-1,2%" },
-  { label: "Custo Diesel", value: "R$ 1.872.450", trend: "+5,2%" },
-  { label: "Economia projetada", value: "R$ 125.900", trend: "+4,1%" },
+const costShareData = [
+  { name: "Equipamentos", value: 36.02, color: "#3B82F6" },
+  { name: "Diesel", value: 21.37, color: "#FACC15" },
+  { name: "Perfuração", value: 22.63, color: "#22D3EE" },
+  { name: "Desmonte", value: 12.94, color: "#A855F7" },
+  { name: "Logística", value: 7.06, color: "#4ADE80" },
 ];
 
-const rankings = [
-  { title: "Locação Escavadeira CAT 390", value: "R$ 856.250,00", color: "oklch(0.72 0.18 270)" },
-  { title: "Diesel S10", value: "R$ 1.125.450,00", color: "oklch(0.75 0.20 185)" },
-  { title: "Bits de Perfuração", value: "R$ 684.350,75", color: "oklch(0.65 0.20 145)" },
-  { title: "ANFO", value: "R$ 456.270,20", color: "oklch(0.68 0.18 300)" },
-  { title: "Transporte de Minério", value: "R$ 384.189,00", color: "oklch(0.62 0.24 25)" },
+const monthlyEvolutionData = [
+  { month: "Jan", Equipamentos: 6.1, Diesel: 5.4, Perfuração: 4.8, Desmonte: 3.6, Logística: 2.8 },
+  { month: "Fev", Equipamentos: 6.8, Diesel: 5.9, Perfuração: 5.2, Desmonte: 3.9, Logística: 3.1 },
+  { month: "Mar", Equipamentos: 7.2, Diesel: 6.2, Perfuração: 5.6, Desmonte: 4.1, Logística: 3.4 },
+  { month: "Abr", Equipamentos: 7.9, Diesel: 6.6, Perfuração: 6.0, Desmonte: 4.3, Logística: 3.6 },
+  { month: "Mai", Equipamentos: 8.4, Diesel: 7.0, Perfuração: 6.4, Desmonte: 4.7, Logística: 3.9 },
+  { month: "Jun", Equipamentos: 8.8, Diesel: 7.5, Perfuração: 6.8, Desmonte: 5.0, Logística: 4.1 },
 ];
 
-const operationMetrics = [
-  { label: "Metros Perfurados", value: "22.350 m", trend: "+8,20%" },
-  { label: "Quantidade de Furos", value: "172", trend: "+5,48%" },
-  { label: "Toneladas Produzidas", value: "696.000 t", trend: "+6,21%" },
-  { label: "Horas Trabalhadas", value: "8.325 h", trend: "+4,45%" },
-  { label: "Horas Improdutivas", value: "1.058 h", trend: "-2,21%" },
-  { label: "Disponibilidade Física", value: "87,43%", trend: "+3,21%" },
-  { label: "MTBF", value: "245 h", trend: "+4,12%" },
-  { label: "MTTR", value: "8,45 h", trend: "-6,23%" },
+const topExpenses = [
+  { label: "Locação Escavadeira CAT 390", value: "R$ 856.250,00", color: "#3B82F6", progress: 100 },
+  { label: "Diesel S10", value: "R$ 1.125.450,00", color: "#FACC15", progress: 92 },
+  { label: "Bits de Perfuração", value: "R$ 684.350,75", color: "#22D3EE", progress: 76 },
+  { label: "ANFO", value: "R$ 456.270,20", color: "#A855F7", progress: 58 },
+  { label: "Transporte de Minério", value: "R$ 384.189,00", color: "#4ADE80", progress: 45 },
+];
+
+const gaugeStats = [
+  { label: "Consumido", value: "62.450 L", icon: Fuel, color: "#FACC15" },
+  { label: "Meta", value: "100.000 L", icon: Gauge, color: "#3B82F6" },
+  { label: "Estoque", value: "37.550 L", icon: Truck, color: "#4ADE80" },
+  { label: "Custo Médio", value: "R$ 6,02/L", icon: DollarSign, color: "#94A3B8" },
+];
+
+const indicatorCards = [
+  { label: "Metros Perfurados", value: "22.350 m", trend: "+7,82%", icon: Drill, color: "#3B82F6" },
+  { label: "Quantidade de Furos", value: "172", trend: "+5,48%", icon: Target, color: "#94A3B8" },
+  { label: "Toneladas Produzidas", value: "696.000 t", trend: "+6,21%", icon: Truck, color: "#22D3EE" },
+  { label: "Horas Trabalhadas", value: "8.325 h", trend: "+4,45%", icon: Clock, color: "#A855F7" },
+  { label: "Horas Improdutivas", value: "1.058 h", trend: "-2,21%", icon: Bell, color: "#F97316" },
+  { label: "Disponibilidade Física", value: "87,43%", trend: "+3,21%", icon: BadgeCheck, color: "#A855F7" },
+  { label: "MTBF", value: "245 h", trend: "+4,12%", icon: Gauge, color: "#4ADE80" },
+  { label: "MTTR", value: "8,45 h", trend: "-6,23%", icon: Bomb, color: "#F87171" },
+  { label: "Produtividade", value: "83,6 t/h", trend: "+5,32%", icon: Activity, color: "#38BDF8" },
+];
+
+const rankingItems = [
+  { label: "Perfuratriz ROC D65", value: "R$ 1.245.350,00", color: "#3B82F6", progress: 98 },
+  { label: "Escavadeira CAT 390", value: "R$ 1.125.450,00", color: "#FACC15", progress: 92 },
+  { label: "Caminhão Volvo FMX 540", value: "R$ 856.250,00", color: "#22D3EE", progress: 76 },
+  { label: "Carregadeira CAT 980", value: "R$ 654.320,00", color: "#A855F7", progress: 63 },
+  { label: "Compressor Atlas Copco XATS", value: "R$ 456.270,00", color: "#4ADE80", progress: 52 },
 ];
 
 const alertItems = [
-  { title: "CUSTO ACIMA DA META", description: "Equipamentos acima de 10% da meta mensal.", color: "oklch(0.65 0.22 25)" },
-  { title: "DIESEL ACIMA DO PREVISTO", description: "Consumo 8% acima do previsto para o período.", color: "oklch(0.75 0.20 185)" },
-  { title: "EQUIPAMENTO PARADO", description: "Perfuração ROC D65 parada há 6 horas.", color: "oklch(0.65 0.20 145)" },
+  { label: "CUSTO ACIMA DA META", description: "Equipamentos acima de 10% da meta mensal.", icon: Bomb, color: "#F87171", bg: "#5F1721" },
+  { label: "DIESEL ACIMA DO PREVISTO", description: "Consumo 8% acima do previsto para o período.", icon: Fuel, color: "#FACC15", bg: "#4D3C07" },
+  { label: "EQUIPAMENTO PARADO", description: "Perfuração ROC D65 parada há 6 horas.", icon: Bell, color: "#FB923C", bg: "#4B1F0C" },
+  { label: "DENTRO DA META", description: "Todos os indicadores dentro dos parâmetros.", icon: BadgeCheck, color: "#4ADE80", bg: "#0F2E18" },
 ];
 
-const quickActions = ["Novo Registro", "Relatório PDF", "Exportar Excel", "Apresentação"];
+const quickActions = [
+  { label: "Novo Registro", icon: CircleUser },
+  { label: "Relatório PDF", icon: FileText },
+  { label: "Exportar Excel", icon: FileSpreadsheet },
+  { label: "Apresentação", icon: Presentation },
+];
 
-function SidebarButton({ label, Icon, active }: { label: string; Icon: ElementType; active?: boolean }) {
+const itemVariants = {
+  hidden: { opacity: 0, y: 16 },
+  visible: { opacity: 1, y: 0 },
+};
+
+// Dashboard primitives extracted to components/dashboard/
+
+// Panels extracted to components/dashboard; they are imported above and receive data via props.
+
+function SidebarButton({ label, Icon, active, href, onClick }: { label: string; Icon: ElementType; active?: boolean; href?: string; onClick?: () => void }) {
+  const baseClass = `flex w-full items-center gap-3 rounded-[18px] px-4 py-3 text-left text-sm font-semibold transition ${active ? "bg-[#0F2A55] text-sky-200 shadow-[0_12px_30px_rgba(59,130,246,0.24)]" : "text-slate-400 hover:bg-[#17263F] hover:text-white"}`;
+  if (href) {
+    return (
+      <Link href={href} className={baseClass} onClick={onClick}>
+        <Icon className="h-5 w-5" />
+        <span>{label}</span>
+      </Link>
+    );
+  }
   return (
-    <button
-      type="button"
-      className={`flex w-full items-center gap-3 rounded-3xl px-4 py-3 text-left text-sm font-semibold transition ${active ? "bg-[rgba(56,107,231,0.18)] text-sky-200" : "text-slate-400 hover:bg-[#14284f] hover:text-white"}`}
-    >
-      <Icon className="h-4 w-4" />
-      {label}
+    <button type="button" onClick={onClick} className={baseClass}>
+      <Icon className="h-5 w-5" />
+      <span>{label}</span>
     </button>
   );
 }
@@ -101,14 +291,100 @@ export default function DashboardPage() {
   const [equipamento, setEquipamento] = useState("Todos");
   const [centro, setCentro] = useState("Todos");
   const [setor, setSetor] = useState("Todos");
-
+  const [activeTab, setActiveTab] = useState("Dashboard Executivo");
+  const [activeMetric, setActiveMetric] = useState<string | null>(null);
+  const [activeExpense, setActiveExpense] = useState<string | null>(null);
+  const [visibleCostShare, setVisibleCostShare] = useState<Set<string>>(new Set(costShareData.map((d) => d.name)));
   const dateRange = "01/06/2025 até 30/06/2025";
 
+  function handleKpiSelect(label: string) {
+    setActiveMetric((prev) => (prev === label ? null : label));
+  }
+
+  function handleExpenseSelect(label: string) {
+    setActiveExpense((prev) => (prev === label ? null : label));
+  }
+
+  function handleToggleCostShare(name: string) {
+    setVisibleCostShare((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  }
+
+  function formatCurrencyBR(value: number) {
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 2 }).format(value);
+  }
+
+  function formatPercent(value: number) {
+    return `${(value * 100).toFixed(2).replace('.', ',')}%`;
+  }
+
+  const seriesMap: Record<string, string | null> = {
+    'Custo Operacional': null,
+    'Custo por Tonelada': 'Equipamentos',
+    'Custo por Metro': 'Perfuração',
+    'Custo por Furo': 'Perfuração',
+    'Consumo Diesel': 'Diesel',
+    'Disponibilidade Física': null,
+  };
+
+  // If an active metric is selected, compute the percent change from the
+  // last two months for the metric's mapped series (if any) and apply that
+  // change to all KPI baselines so the dashboard shows a global filtered view.
+  const derivedTopKpis = (() => {
+    if (!activeMetric) return topKpis;
+    const seriesKey = seriesMap[activeMetric];
+    if (!seriesKey) {
+      // No mapped series: fallback to recomputing only the selected KPI
+      return topKpis.map((kpi) => {
+        if (kpi.label !== activeMetric) return kpi;
+        const len = monthlyEvolutionData.length;
+        if (len < 2) return kpi;
+        const last = (monthlyEvolutionData[len - 1] as any)[kpi.label] ?? null;
+        const prev = (monthlyEvolutionData[len - 2] as any)[kpi.label] ?? null;
+        if (last == null || prev == null || prev === 0) return kpi;
+        const change = (last - prev) / prev;
+        const newNumeric = (kpi.baseline ?? 0) * (1 + change);
+        const newKpi = { ...kpi } as any;
+        if (kpi.unit === 'currency') newKpi.value = formatCurrencyBR(newNumeric);
+        else if (kpi.unit === 'per_t' || kpi.unit === 'per_m') newKpi.value = `R$ ${(newNumeric).toFixed(2)}`;
+        else if (kpi.unit === 'liters') newKpi.value = `${Math.round(newNumeric).toLocaleString('pt-BR')} L`;
+        else if (kpi.unit === 'percent') newKpi.value = `${newNumeric.toFixed(2).replace('.', ',')}%`;
+        newKpi.trend = change >= 0 ? `+${(change * 100).toFixed(2).replace('.', ',')}%` : `${(change * 100).toFixed(2).replace('.', ',')}%`;
+        newKpi.positive = change >= 0;
+        return newKpi;
+      });
+    }
+
+    const len = monthlyEvolutionData.length;
+    if (len < 2) return topKpis;
+    const last = (monthlyEvolutionData[len - 1] as any)[seriesKey] ?? null;
+    const prev = (monthlyEvolutionData[len - 2] as any)[seriesKey] ?? null;
+    if (last == null || prev == null || prev === 0) return topKpis;
+    const change = (last - prev) / prev;
+
+    return topKpis.map((kpi) => {
+      if (kpi.baseline == null) return kpi;
+      const newNumeric = (kpi.baseline ?? 0) * (1 + change);
+      const newKpi = { ...kpi } as any;
+      if (kpi.unit === 'currency') newKpi.value = formatCurrencyBR(newNumeric);
+      else if (kpi.unit === 'per_t' || kpi.unit === 'per_m') newKpi.value = `R$ ${(newNumeric).toFixed(2)}`;
+      else if (kpi.unit === 'liters') newKpi.value = `${Math.round(newNumeric).toLocaleString('pt-BR')} L`;
+      else if (kpi.unit === 'percent') newKpi.value = `${newNumeric.toFixed(2).replace('.', ',')}%`;
+      newKpi.trend = change >= 0 ? `+${(change * 100).toFixed(2).replace('.', ',')}%` : `${(change * 100).toFixed(2).replace('.', ',')}%`;
+      newKpi.positive = change >= 0;
+      return newKpi;
+    });
+  })();
+
   return (
-    <div className="min-h-screen bg-[#071021] text-slate-100">
-      <div className="grid min-h-screen grid-cols-[280px_1fr]">
-        <aside className="flex flex-col bg-[#081226] border-r border-[#12203a] px-4 py-6">
-          <div className="mb-8 rounded-[28px] border border-[#17315c] bg-[radial-gradient(circle_at_top_left,_rgba(103,169,255,0.18),transparent_55%)] p-5 shadow-[0_15px_45px_rgba(0,0,0,0.20)]">
+    <div className="min-h-screen bg-[#08111F] text-slate-100">
+      <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[280px_1fr]">
+        <aside className="hidden lg:flex flex-col bg-[#081226] border-r border-[#12203a] px-4 py-6">
+          <div className="mb-8 rounded-[28px] border border-[#233754] bg-[#111C2E] p-5 shadow-[0_15px_45px_rgba(0,0,0,0.20)]">
             <div className="flex items-center gap-3 mb-4">
               <div className="flex h-11 w-11 items-center justify-center rounded-3xl border border-[#1f3565] bg-[#0f2144] text-sky-300 shadow-[0_0_20px_rgba(56,144,255,0.28)]">
                 <span className="text-lg font-black">C</span>
@@ -118,270 +394,134 @@ export default function DashboardPage() {
                 <p className="font-semibold text-white">Operacionais</p>
               </div>
             </div>
-            <div className="rounded-3xl border border-[#152c57] bg-[#091827] p-4">
+            <div className="rounded-3xl border border-[#233754] bg-[#091827] p-4">
               <p className="text-[10px] uppercase tracking-[0.33em] text-slate-500">Mina do Brumado</p>
               <p className="mt-3 text-sm font-semibold text-white">Dashboard Executivo</p>
             </div>
           </div>
 
-          <nav className="space-y-1">
+          <nav className="space-y-2">
             {sidebarItems.map((item) => (
-              <SidebarButton key={item.label} label={item.label} Icon={item.icon} active={item.active} />
+              <SidebarButton
+                key={item.label}
+                label={item.label}
+                Icon={item.icon}
+                active={activeTab === item.label}
+                onClick={() => setActiveTab(item.label)}
+              />
             ))}
           </nav>
 
-          <div className="mt-auto rounded-[32px] border border-[#13203b] bg-[#081428] p-5 text-[11px] text-slate-400 shadow-[0_20px_60px_rgba(0,0,0,0.12)]">
+          <div className="mt-auto rounded-[28px] border border-[#233754] bg-[#081428] p-5 text-[11px] text-slate-400 shadow-[0_20px_60px_rgba(0,0,0,0.12)]">
             <p className="mb-2 uppercase tracking-[0.24em] text-slate-500">Período Selecionado</p>
             <p className="font-semibold text-white">{dateRange}</p>
-            <div className="mt-4 border-t border-[#12203a] pt-3 text-[10px] text-slate-500">
+            <div className="mt-4 border-t border-[#233754] pt-3 text-[10px] text-slate-500">
               Última atualização:<br />30/06/2025 18:45:32
             </div>
           </div>
         </aside>
 
         <main className="px-6 py-6">
-          <header className="mb-6 rounded-[32px] border border-[#152553] bg-[#081528] p-6 shadow-[0_18px_60px_rgba(0,0,0,0.15)]">
+          <header className="mb-6 rounded-[28px] border border-[#233754] bg-[#091523] p-6 shadow-[0_18px_60px_rgba(0,0,0,0.15)] backdrop-blur-xl">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-              <div>
-                <p className="text-sm uppercase tracking-[0.35em] text-slate-400">Dashboard Executivo</p>
-                <h1 className="mt-2 text-3xl font-semibold text-white">Centro de Custos Operacionais</h1>
+                <div>
+                    <p className="text-sm uppercase tracking-[0.35em] text-slate-400">{activeTab}</p>
+                      <h1 className="mt-2 text-2xl md:text-3xl lg:text-4xl font-bold text-white">Centro de Custos Operacionais</h1>
               </div>
-              <div className="flex items-center gap-3 rounded-3xl border border-[#132a54] bg-[#09172c] p-3 shadow-[0_10px_50px_rgba(0,0,0,0.12)]">
-                <Bell className="h-5 w-5 text-slate-300" />
-                <div className="rounded-2xl bg-[#0e213f] px-3 py-2 text-sm text-slate-200">{dateRange}</div>
-                <UserCircle className="h-8 w-8 rounded-full bg-[#12284d] p-1 text-slate-200" />
+              <div className="flex flex-wrap items-center gap-3 rounded-3xl border border-[#233754] bg-[#0E1B34] p-3 shadow-[0_10px_40px_rgba(0,0,0,0.14)]">
+                <div className="flex items-center gap-2 rounded-2xl bg-[#0A1A2F] px-3 py-2 text-sm text-slate-200">
+                  <Calendar className="h-4 w-4 text-slate-300" />
+                  <span>{dateRange}</span>
+                </div>
+                <div className="flex items-center gap-3 rounded-2xl bg-[#0A1A2F] px-3 py-2 text-sm text-slate-200">
+                  <Bell className="h-5 w-5 text-slate-300" />
+                  <UserCircle className="h-8 w-8 rounded-full bg-[#12284d] p-1 text-slate-200" />
+                </div>
               </div>
             </div>
 
-            <div className="mt-6 grid gap-3 xl:grid-cols-[1fr_1fr_1fr]">
+            <div className="mt-6 grid gap-6 xl:grid-cols-3">
               {[
                 { label: "Equipamento", value: equipamento, setter: setEquipamento },
                 { label: "Centro de Custo", value: centro, setter: setCentro },
                 { label: "Setor", value: setor, setter: setSetor },
               ].map((filter) => (
                 <label key={filter.label} className="block">
-                  <span className="text-[10px] uppercase tracking-[0.28em] text-slate-400">{filter.label}</span>
-                  <select
-                    aria-label={filter.label}
-                    value={filter.value}
-                    onChange={(event) => filter.setter(event.target.value)}
-                    className="mt-2 w-full rounded-3xl border border-[#1b3058] bg-[#091828] px-4 py-3 text-sm text-white outline-none transition focus:border-sky-400"
-                  >
-                    {filterOptions.map((option) => (
-                      <option key={option} value={option}>{option}</option>
-                    ))}
-                  </select>
+                  <p className="text-[10px] uppercase tracking-[0.28em] text-slate-500">{filter.label}</p>
+                  <div className="mt-2 relative rounded-[18px] border border-[#233754] bg-[#0A162A] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
+                    <select
+                      aria-label={filter.label}
+                      value={filter.value}
+                      onChange={(event) => filter.setter(event.target.value)}
+                      className="w-full bg-transparent text-sm text-white outline-none"
+                    >
+                      {filterOptions.map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
+                    <Search className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                  </div>
                 </label>
               ))}
             </div>
           </header>
 
-          <section className="grid gap-4 xl:grid-cols-[1.4fr_0.85fr]">
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-              {topKpis.map((item) => (
-                <div key={item.label} className="rounded-[32px] border border-[#1a2c52] bg-[#0b162c] p-5 shadow-[0_16px_40px_rgba(0,0,0,0.16)]">
-                  <p className="text-[10px] uppercase tracking-[0.28em] text-slate-400">{item.label}</p>
-                  <p className="mt-3 text-3xl font-semibold text-white">{item.value}</p>
-                  <div className="mt-4 flex items-center justify-between gap-3">
-                    <span className="text-[11px] text-slate-400">{item.subtitle}</span>
-                    <span className="rounded-full border px-3 py-1 text-[11px] font-semibold" style={{ background: `${item.trendColor} / 0.12`, color: item.trendColor, borderColor: `${item.trendColor}33` }}>{item.trend}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-1">
-              {highlights.map((item) => (
-                <div key={item.label} className="rounded-[32px] border border-[#1a2c52] bg-[#0b162c] p-5 shadow-[0_16px_40px_rgba(0,0,0,0.16)]">
-                  <p className="text-[10px] uppercase tracking-[0.28em] text-slate-400">{item.label}</p>
-                  <p className="mt-3 text-xl font-semibold text-white">{item.value}</p>
-                  <p className="mt-2 text-sm text-slate-400">{item.meta}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <section className="mt-4 grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
-            <div className="rounded-[36px] border border-[#1b2f56] bg-[#081225] p-6 shadow-[0_24px_70px_rgba(0,0,0,0.18)]">
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                <div>
-                  <p className="text-[10px] uppercase tracking-[0.24em] text-slate-400">Consumo Diesel</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-white">Economia de Diesel e Performance</h2>
-                </div>
-                <div className="rounded-3xl border border-[#152a52] bg-[#091227] px-4 py-3 text-sm text-slate-200">
-                  <p className="text-[10px] uppercase tracking-[0.24em] text-slate-400">Meta Atual</p>
-                  <p className="mt-2 font-semibold text-white">-8,4% vs. previsão</p>
-                </div>
-              </div>
-
-              <div className="mt-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-[1fr_0.9fr]">
-                <div className="rounded-[28px] bg-[#09172f] p-5">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-white">Diesel total</p>
-                    <span className="rounded-full border border-slate-700 bg-slate-800/80 px-3 py-1 text-[11px] uppercase tracking-[0.24em] text-slate-400">Atual</span>
-                  </div>
-                  <p className="mt-4 text-4xl font-semibold text-white">62.450 L</p>
-                  <p className="mt-3 text-sm text-slate-400">Uso acumulado no período com eficiência de frota ajustada.</p>
-                </div>
-                <div className="rounded-[28px] bg-[#09172f] p-5">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-white">Custo Diesel</p>
-                    <span className="rounded-full bg-emerald-500/10 px-3 py-1 text-[11px] font-semibold text-emerald-200">R$ 1,87M</span>
-                  </div>
-                  <div className="mt-6 space-y-4">
-                    <div className="h-3 overflow-hidden rounded-full bg-[#0b1732]">
-                      <div className="h-full w-3/4 rounded-full bg-[#69c2ff]" />
-                    </div>
-                    <div className="text-sm text-slate-300">
-                      <p>Meta diária de consumo em 18% abaixo do histórico.</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                {dieselMetrics.map((item) => (
-                  <div key={item.label} className="rounded-3xl border border-[#15274f] bg-[#081427] p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <span className="text-sm font-semibold text-white">{item.label}</span>
-                      <span className="text-sm font-semibold text-slate-200">{item.value}</span>
-                    </div>
-                    <p className="mt-3 text-sm text-slate-400">Variação {item.trend}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-[36px] border border-[#1b2f56] bg-[#081225] p-6 shadow-[0_24px_70px_rgba(0,0,0,0.18)]">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-[10px] uppercase tracking-[0.24em] text-slate-400">Indicadores de Operação</p>
-                  <h2 className="mt-2 text-xl font-semibold text-white">Visão de Performance</h2>
-                </div>
-              </div>
-              <div className="mt-5 grid gap-3 sm:grid-cols-2">
-                {operationMetrics.map((metric) => (
-                  <div key={metric.label} className="rounded-3xl border border-[#15274f] bg-[#081427] p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-semibold text-white">{metric.label}</p>
-                      <span className="text-sm font-semibold text-slate-200">{metric.trend}</span>
-                    </div>
-                    <p className="mt-3 text-lg font-semibold text-slate-100">{metric.value}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          <section className="mt-4 grid gap-4 xl:grid-cols-[1.6fr_1fr]">
-            <div className="rounded-[36px] border border-[#1b2f56] bg-[#081225] p-6 shadow-[0_24px_70px_rgba(0,0,0,0.18)]">
-              <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                <div>
-                  <p className="text-[10px] uppercase tracking-[0.24em] text-slate-400">Participação dos Custos</p>
-                  <h2 className="mt-2 text-2xl font-semibold text-white">Custo Total R$ 8.764.520,45</h2>
-                </div>
-                <div className="rounded-3xl border border-[#152a52] bg-[#091227] px-4 py-3 text-sm text-slate-200">
-                  <p className="text-[10px] uppercase tracking-[0.24em] text-slate-400">Período</p>
-                  <p className="mt-2 font-semibold text-white">{dateRange}</p>
-                </div>
-              </div>
-
-              <div className="mt-7 grid gap-6 xl:grid-cols-[280px_1fr] xl:items-center">
-                <div className="relative mx-auto h-56 w-56 rounded-full bg-[#081228] p-5">
-                  <div className="absolute inset-0 rounded-full bg-[conic-gradient(at_top,_#4f98ff_0deg,_#65b8ff_80deg,_#8c64ff_165deg,_#8fd775_250deg,_#4f98ff_360deg)]" />
-                  <div className="absolute inset-14 rounded-full bg-[#081325]" />
-                  <div className="absolute inset-0 flex flex-col items-center justify-center text-center text-slate-200">
-                    <span className="text-[10px] uppercase tracking-[0.24em] text-slate-400">Custo Total</span>
-                    <span className="mt-3 text-sm font-semibold text-white">R$ 8,764M</span>
-                  </div>
-                </div>
-                <div className="grid gap-3">
-                  {highlights.slice(0, 5).map((item) => (
-                    <div key={item.label} className="rounded-3xl border border-[#15274f] bg-[#081427] p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-sm font-semibold text-white">{item.label}</span>
-                        <span className="text-sm font-bold" style={{ color: item.color }}>{item.meta}</span>
-                      </div>
-                      <p className="mt-2 text-lg text-slate-200">{item.value}</p>
+          <section className="grid grid-cols-1 gap-6 xl:grid-cols-12">
+                      {derivedTopKpis.map((item) => (
+                    <div key={item.label} className="col-span-12 sm:col-span-6 xl:col-span-2">
+                      <MetricCard item={item} onSelect={handleKpiSelect} active={activeMetric === item.label} />
                     </div>
                   ))}
-                </div>
-              </div>
-            </div>
+          </section>
 
-            <div className="space-y-4">
-              <div className="rounded-[36px] border border-[#1b2f56] bg-[#081225] p-6 shadow-[0_24px_70px_rgba(0,0,0,0.18)]">
-                <div className="flex items-center justify-between gap-3">
+          <section className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-5">
+            {detailCards.map((item) => (
+              <div key={item.label} className="col-span-1">
+                <DetailCard item={item} />
+              </div>
+            ))}
+          </section>
+
+          <section className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-12">
+            <div className="col-span-12 xl:col-span-5">
+              <CostSharePanel data={costShareData} total={"R$ 8.764.520,45"} visible={visibleCostShare} onToggle={handleToggleCostShare} />
+            </div>
+            <div className="col-span-12 xl:col-span-5">
+              <EvolutionPanel data={monthlyEvolutionData} />
+            </div>
+            <div className="col-span-12 xl:col-span-2">
+              <TopExpensesPanel data={topExpenses} onSelect={handleExpenseSelect} active={activeExpense} />
+            </div>
+          </section>
+
+          <section className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-12">
+            <div className="col-span-12 xl:col-span-4">
+              <GaugePanel stats={gaugeStats} value={62450} />
+            </div>
+            <div className="col-span-12 xl:col-span-4">
+              <IndicatorPanel data={indicatorCards} />
+            </div>
+            <div className="col-span-12 xl:col-span-4">
+              <RankingPanel data={rankingItems} />
+            </div>
+          </section>
+
+          <section className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-12">
+            <div className="col-span-12 xl:col-span-8">
+              <AlertPanel data={alertItems} />
+            </div>
+            <div className="col-span-12 xl:col-span-4">
+              <DashboardCard>
+                <div className="flex items-center justify-between gap-4">
                   <div>
-                    <p className="text-[10px] uppercase tracking-[0.24em] text-slate-400">Top 5 Maiores Gastos</p>
-                    <h2 className="mt-2 text-xl font-semibold text-white">Ranking de Gastos</h2>
+                    <p className="text-[12px] uppercase tracking-[0.1667em] text-slate-400">Ações Rápidas</p>
+                    <h2 className="mt-2 text-xl font-semibold text-white">Ações Rápidas</h2>
                   </div>
                 </div>
-                <div className="mt-5 space-y-4">
-                  {rankings.map((item, index) => (
-                    <div key={item.title} className="space-y-2">
-                      <div className="flex items-center justify-between gap-3">
-                        <span className="text-sm text-slate-200 truncate">{item.title}</span>
-                        <span className="text-sm font-semibold text-white">{item.value}</span>
-                      </div>
-                      <div className="h-2 overflow-hidden rounded-full bg-[#0b1732]">
-                        <div className="h-full rounded-full" style={{ width: `${100 - index * 12}%`, background: item.color }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-[36px] border border-[#1b2f56] bg-[#081225] p-6 shadow-[0_24px_70px_rgba(0,0,0,0.18)]">
-                <p className="text-[10px] uppercase tracking-[0.24em] text-slate-400">Custo por Equipamento (R$)</p>
-                <div className="mt-5 space-y-4">
-                  {rankings.slice(0, 4).map((item, index) => (
-                    <div key={item.title}>
-                      <div className="flex items-center justify-between gap-3 text-sm text-slate-200">
-                        <span>{item.title}</span>
-                        <span className="font-semibold text-white">{item.value}</span>
-                      </div>
-                      <div className="h-2 rounded-full bg-[#0b1732]">
-                        <div className="h-full rounded-full" style={{ width: `${94 - index * 15}%`, background: item.color }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </section>
-
-          <section className="mt-4 grid gap-4 xl:grid-cols-[1.25fr_0.75fr]">
-            <div className="rounded-[36px] border border-[#1b2f56] bg-[#081225] p-6 shadow-[0_24px_70px_rgba(0,0,0,0.18)]">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-[10px] uppercase tracking-[0.24em] text-slate-400">Alertas</p>
-                  <h2 className="mt-2 text-xl font-semibold text-white">Principais riscos ativos</h2>
-                </div>
-              </div>
-              <div className="mt-5 space-y-3">
-                {alertItems.map((alert) => (
-                  <div key={alert.title} className="rounded-3xl border border-[rgba(255,255,255,0.08)] p-5" style={{ background: `${alert.color} / 0.12` }}>
-                    <p className="text-sm font-semibold" style={{ color: alert.color }}>{alert.title}</p>
-                    <p className="mt-2 text-sm text-slate-300">{alert.description}</p>
+                  <div className="mt-6">
+                    <QuickActionsPanel data={quickActions} />
                   </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="rounded-[36px] border border-[#1b2f56] bg-[#081225] p-6 shadow-[0_24px_70px_rgba(0,0,0,0.18)]">
-              <p className="text-[10px] uppercase tracking-[0.24em] text-slate-400">Ações Rápidas</p>
-              <div className="mt-5 grid gap-3">
-                {quickActions.map((action) => (
-                  <button
-                    key={action}
-                    type="button"
-                    className="rounded-3xl border border-[#12203a] bg-[#081329] px-4 py-4 text-left text-sm font-semibold text-white transition hover:border-sky-500"
-                  >
-                    {action}
-                  </button>
-                ))}
-              </div>
+              </DashboardCard>
             </div>
           </section>
         </main>
