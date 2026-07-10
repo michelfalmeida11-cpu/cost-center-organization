@@ -11,7 +11,7 @@ import {
   FileText,
   HardDrive,
   LayoutDashboard,
-  PresentationChartBar,
+  Presentation,
   Settings,
   Target,
   Truck,
@@ -30,7 +30,7 @@ const sidebarItems = [
   { label: "Logística", icon: Truck },
   { label: "Indicadores", icon: BarChart3 },
   { label: "Relatórios", icon: FileText },
-  { label: "Apresentação Executiva", icon: PresentationChartBar },
+  { label: "Apresentação Executiva", icon: Presentation },
   { label: "Configurações", icon: Settings },
 ];
 
