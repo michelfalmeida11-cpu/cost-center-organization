@@ -1,59 +1,171 @@
 "use client";
 
-import React, { useState } from "react";
-
+import { useMemo, useState } from "react";
 import { DashboardHeader } from "@/components/dashboard-header";
-import { AdministracaoShell, type AdministracaoTab } from "@/components/administracao/administracao-shell";
+import { CrudPage, type CrudField } from "@/components/erp/CrudPage";
 
-const tabContent: Record<AdministracaoTab, { title: string; description: string }> = {
-  dashboard: {
-    title: "Visão Geral Administrativa",
-    description: "Painel consolidado com status da administração, acessos, auditoria e operação de segurança.",
+type AdminTab =
+  | "empresas"
+  | "usuarios"
+  | "perfis"
+  | "permissoes"
+  | "centros"
+  | "categorias"
+  | "fornecedores"
+  | "tipos";
+
+const tabConfig: Record<
+  AdminTab,
+  {
+    label: string;
+    table: string;
+    orderBy?: string;
+    fields: CrudField[];
+    defaults: Record<string, string | number>;
+    description: string;
+  }
+> = {
+  empresas: {
+    label: "Empresas",
+    table: "erp_companies",
+    orderBy: "updated_at",
+    description: "Cadastro corporativo (empresa, razao social, CNPJ e status).",
+    fields: [
+      { key: "name", label: "Nome", required: true },
+      { key: "legal_name", label: "Razao Social" },
+      { key: "tax_id", label: "CNPJ" },
+      { key: "logo_url", label: "Logo URL" },
+      { key: "is_active", label: "Ativa" },
+    ],
+    defaults: { name: "", legal_name: "", tax_id: "", logo_url: "", is_active: "true" },
   },
   usuarios: {
-    title: "Gestão de Usuários",
-    description: "Cadastro, ativação, bloqueio e ciclo de vida de usuários da plataforma.",
+    label: "Usuarios",
+    table: "erp_users",
+    orderBy: "updated_at",
+    description: "Usuarios vinculados ao Supabase Auth com empresa e status.",
+    fields: [
+      { key: "id", label: "ID (auth.users)", required: true },
+      { key: "company_id", label: "Empresa" },
+      { key: "full_name", label: "Nome", required: true },
+      { key: "email", label: "Email", required: true },
+      { key: "is_active", label: "Ativo" },
+    ],
+    defaults: { id: "", company_id: "", full_name: "", email: "", is_active: "true" },
   },
   perfis: {
-    title: "Gestão de Perfis",
-    description: "Definição de perfis com escopos funcionais para cada área do negócio.",
+    label: "Perfis",
+    table: "erp_profiles",
+    orderBy: "updated_at",
+    description: "Perfis de acesso (Admin, Operacao, Financeiro, etc.).",
+    fields: [
+      { key: "code", label: "Codigo", required: true },
+      { key: "name", label: "Nome", required: true },
+      { key: "description", label: "Descricao", type: "textarea" },
+      { key: "is_active", label: "Ativo" },
+    ],
+    defaults: { code: "", name: "", description: "", is_active: "true" },
   },
   permissoes: {
-    title: "Gestão de Permissões",
-    description: "Matriz de acesso por módulo, ação e criticidade de informação.",
+    label: "Permissoes",
+    table: "erp_permissions",
+    orderBy: "created_at",
+    description: "Permissoes por modulo e acao para montagem da matriz RBAC.",
+    fields: [
+      { key: "module_key", label: "Modulo", required: true },
+      { key: "action_key", label: "Acao", required: true },
+      { key: "description", label: "Descricao", type: "textarea" },
+    ],
+    defaults: { module_key: "", action_key: "", description: "" },
   },
-  auditoria: {
-    title: "Auditoria",
-    description: "Rastreabilidade completa de alterações e eventos relevantes de segurança.",
+  centros: {
+    label: "Centros de Custo",
+    table: "erp_cost_centers",
+    orderBy: "updated_at",
+    description: "Cadastro de centros e setores por empresa.",
+    fields: [
+      { key: "company_id", label: "Empresa", required: true },
+      { key: "code", label: "Codigo", required: true },
+      { key: "name", label: "Nome", required: true },
+      { key: "sector", label: "Setor" },
+      { key: "is_active", label: "Ativo" },
+    ],
+    defaults: { company_id: "", code: "", name: "", sector: "", is_active: "true" },
   },
-  configuracoes: {
-    title: "Configurações",
-    description: "Parâmetros globais da aplicação e políticas administrativas.",
+  categorias: {
+    label: "Categorias",
+    table: "erp_cost_categories",
+    orderBy: "updated_at",
+    description: "Categorias usadas nos custos operacionais.",
+    fields: [
+      { key: "company_id", label: "Empresa", required: true },
+      { key: "name", label: "Nome", required: true },
+      { key: "description", label: "Descricao", type: "textarea" },
+    ],
+    defaults: { company_id: "", name: "", description: "" },
   },
-  logs: {
-    title: "Logs do Sistema",
-    description: "Consulta de logs operacionais e técnicos com foco em diagnóstico rápido.",
+  fornecedores: {
+    label: "Fornecedores",
+    table: "erp_suppliers",
+    orderBy: "updated_at",
+    description: "Cadastro de fornecedores para custos e suprimentos.",
+    fields: [
+      { key: "company_id", label: "Empresa", required: true },
+      { key: "name", label: "Nome", required: true },
+      { key: "document", label: "Documento" },
+      { key: "email", label: "Email" },
+      { key: "phone", label: "Telefone" },
+      { key: "is_active", label: "Ativo" },
+    ],
+    defaults: { company_id: "", name: "", document: "", email: "", phone: "", is_active: "true" },
   },
-  backup: {
-    title: "Backup e Recuperação",
-    description: "Status de backups, janelas de retenção e histórico de restaurações.",
+  tipos: {
+    label: "Tipos de Custos",
+    table: "erp_cost_types",
+    orderBy: "updated_at",
+    description: "Classificacao de tipos de custos para analise gerencial.",
+    fields: [
+      { key: "company_id", label: "Empresa", required: true },
+      { key: "name", label: "Nome", required: true },
+      { key: "unit", label: "Unidade" },
+    ],
+    defaults: { company_id: "", name: "", unit: "" },
   },
 };
 
 export default function AdministracaoPage() {
-  const [activeTab, setActiveTab] = useState<AdministracaoTab>("dashboard");
-  const current = tabContent[activeTab];
+  const [active, setActive] = useState<AdminTab>("empresas");
+  const current = useMemo(() => tabConfig[active], [active]);
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-slate-950 text-white">
       <DashboardHeader />
-      <main className="mx-auto max-w-screen-2xl px-4 py-6 sm:px-6">
-        <AdministracaoShell activeTab={activeTab} onTabChange={setActiveTab}>
-          <div className="space-y-2">
-            <h2 className="text-lg font-semibold text-foreground">{current.title}</h2>
-            <p className="text-sm text-muted-foreground">{current.description}</p>
+      <main className="mx-auto max-w-screen-2xl space-y-4 px-4 py-6">
+        <section className="rounded-2xl border border-white/10 bg-slate-900/70 p-4">
+          <h1 className="text-xl font-semibold">Administracao</h1>
+          <p className="text-sm text-slate-400">Gestao central do ERP (cadastros mestres, usuarios e permissoes).</p>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {(Object.keys(tabConfig) as AdminTab[]).map((tab) => (
+              <button
+                key={tab}
+                className={`rounded-lg border px-3 py-2 text-sm ${active === tab ? "border-cyan-400 bg-cyan-500/15 text-cyan-200" : "border-white/10 text-slate-300"}`}
+                onClick={() => setActive(tab)}
+                type="button"
+              >
+                {tabConfig[tab].label}
+              </button>
+            ))}
           </div>
-        </AdministracaoShell>
+        </section>
+
+        <CrudPage
+          title={current.label}
+          description={current.description}
+          table={current.table}
+          fields={current.fields}
+          defaultValues={current.defaults}
+          orderBy={current.orderBy}
+        />
       </main>
     </div>
   );
