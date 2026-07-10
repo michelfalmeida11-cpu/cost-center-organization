@@ -59,6 +59,7 @@ import IndicatorPanel from "../components/dashboard/IndicatorPanel";
 import RankingPanel from "../components/dashboard/RankingPanel";
 import AlertPanel from "../components/dashboard/AlertPanel";
 import QuickActionsPanel from "../components/dashboard/QuickActionsPanel";
+import ExecutiveDashboardGrid from "../components/layout/ExecutiveDashboardGrid";
 
 const filterOptions = ["Todos", "Perfuração", "Desmonte", "Logística"];
 const sidebarItems = [
@@ -270,19 +271,29 @@ const itemVariants = {
 // Panels extracted to components/dashboard; they are imported above and receive data via props.
 
 function SidebarButton({ label, Icon, active, href, onClick }: { label: string; Icon: ElementType; active?: boolean; href?: string; onClick?: () => void }) {
-  const baseClass = `flex w-full items-center gap-3 rounded-[18px] px-4 py-3 text-left text-sm font-semibold transition ${active ? "bg-[#0F2A55] text-sky-200 shadow-[0_12px_30px_rgba(59,130,246,0.24)]" : "text-slate-400 hover:bg-[#17263F] hover:text-white"}`;
+  const baseClass = `group relative flex w-full items-center gap-4 rounded-[20px] border border-transparent px-4 py-4 text-left text-sm font-semibold transition duration-200 ${active ? 'bg-sky-500/10 text-sky-100 shadow-[0_22px_65px_rgba(56,189,248,0.16)] border-sky-500/15' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`;
+  const iconClass = active ? 'text-sky-300' : 'text-slate-400 group-hover:text-white';
+
+  const content = (
+    <>
+      <span className={`flex h-12 w-12 items-center justify-center rounded-3xl ${active ? 'bg-sky-500/10' : 'bg-[#0D1830]'}`}>
+        <Icon className={`h-5 w-5 ${iconClass}`} />
+      </span>
+      <span className="truncate">{label}</span>
+      {active ? <span className="absolute left-0 top-0 h-full w-1 rounded-r-full bg-sky-400" /> : null}
+    </>
+  );
+
   if (href) {
     return (
       <Link href={href} className={baseClass} onClick={onClick}>
-        <Icon className="h-5 w-5" />
-        <span>{label}</span>
+        {content}
       </Link>
     );
   }
   return (
     <button type="button" onClick={onClick} className={baseClass}>
-      <Icon className="h-5 w-5" />
-      <span>{label}</span>
+      {content}
     </button>
   );
 }
@@ -296,6 +307,7 @@ export default function DashboardPage() {
   const [activeExpense, setActiveExpense] = useState<string | null>(null);
   const [visibleCostShare, setVisibleCostShare] = useState<Set<string>>(new Set(costShareData.map((d) => d.name)));
   const dateRange = "01/06/2025 até 30/06/2025";
+  const pageTitle = "Dashboard Executivo";
 
   function handleKpiSelect(label: string) {
     setActiveMetric((prev) => (prev === label ? null : label));
@@ -381,22 +393,24 @@ export default function DashboardPage() {
   })();
 
   return (
-    <div className="min-h-screen bg-[#08111F] text-slate-100">
-      <div className="grid min-h-screen grid-cols-1 lg:grid-cols-[280px_1fr]">
-        <aside className="hidden lg:flex flex-col bg-[#081226] border-r border-[#12203a] px-4 py-6">
-          <div className="mb-8 rounded-[28px] border border-[#233754] bg-[#111C2E] p-5 shadow-[0_15px_45px_rgba(0,0,0,0.20)]">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="flex h-11 w-11 items-center justify-center rounded-3xl border border-[#1f3565] bg-[#0f2144] text-sky-300 shadow-[0_0_20px_rgba(56,144,255,0.28)]">
-                <span className="text-lg font-black">C</span>
+    <ExecutiveDashboardGrid
+      aside={(
+        <>
+          <div className="rounded-[28px] border border-white/10 bg-[#081429] p-6 shadow-[0_25px_80px_rgba(0,0,0,0.20)]">
+            <div className="flex items-center gap-4 mb-5">
+              <div className="flex h-14 w-14 items-center justify-center rounded-3xl border border-sky-500/20 bg-sky-500/10 text-sky-300 shadow-[0_20px_60px_rgba(56,189,248,0.14)]">
+                <span className="text-lg font-semibold">C</span>
               </div>
               <div>
-                <p className="text-[10px] uppercase tracking-[0.35em] text-slate-400">Centro de Custo</p>
-                <p className="font-semibold text-white">Operacionais</p>
+                <p className="text-[11px] uppercase tracking-[0.32em] text-slate-400">Centro de Custo</p>
+                <p className="mt-1 text-lg font-semibold text-white">Operacionais</p>
               </div>
             </div>
-            <div className="rounded-3xl border border-[#233754] bg-[#091827] p-4">
+            <div className="rounded-[24px] border border-[#233754] bg-[#091827] p-5">
               <p className="text-[10px] uppercase tracking-[0.33em] text-slate-500">Mina do Brumado</p>
               <p className="mt-3 text-sm font-semibold text-white">Dashboard Executivo</p>
+              <p className="mt-4 text-[10px] text-slate-500">Última atualização</p>
+              <p className="text-sm font-semibold text-slate-200">30/06/2025 18:45</p>
             </div>
           </div>
 
@@ -419,113 +433,117 @@ export default function DashboardPage() {
               Última atualização:<br />30/06/2025 18:45:32
             </div>
           </div>
-        </aside>
-
-        <main className="px-6 py-6">
-          <header className="mb-6 rounded-[28px] border border-[#233754] bg-[#091523] p-6 shadow-[0_18px_60px_rgba(0,0,0,0.15)] backdrop-blur-xl">
-            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                <div>
-                    <p className="text-sm uppercase tracking-[0.35em] text-slate-400">{activeTab}</p>
-                      <h1 className="mt-2 text-2xl md:text-3xl lg:text-4xl font-bold text-white">Centro de Custos Operacionais</h1>
+        </>
+      )}
+    >
+      <div className="grid gap-6 2xl:gap-8">
+        <section className="rounded-[32px] border border-white/10 bg-[#081827] p-5 xl:p-5 2xl:p-6 shadow-[0_24px_80px_rgba(0,0,0,0.24)] backdrop-blur-xl">
+          <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+            <div>
+              <p className="text-sm uppercase tracking-[0.35em] text-slate-400">{pageTitle}</p>
+              <h1 className="mt-2 text-[28px] font-semibold leading-tight text-white xl:text-[30px] 2xl:text-[34px]">Centro de Custos Operacionais</h1>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center 2xl:gap-3">
+              <div className="flex h-11 items-center gap-3 rounded-3xl border border-[#233754] bg-[#0E1B34] px-4 shadow-[0_10px_40px_rgba(0,0,0,0.14)] xl:px-4 2xl:px-5">
+                <Calendar className="h-4 w-4 text-slate-300" />
+                <span className="text-sm text-slate-200">{dateRange}</span>
               </div>
-              <div className="flex flex-wrap items-center gap-3 rounded-3xl border border-[#233754] bg-[#0E1B34] p-3 shadow-[0_10px_40px_rgba(0,0,0,0.14)]">
-                <div className="flex items-center gap-2 rounded-2xl bg-[#0A1A2F] px-3 py-2 text-sm text-slate-200">
-                  <Calendar className="h-4 w-4 text-slate-300" />
-                  <span>{dateRange}</span>
-                </div>
-                <div className="flex items-center gap-3 rounded-2xl bg-[#0A1A2F] px-3 py-2 text-sm text-slate-200">
+              <div className="flex h-11 items-center justify-between gap-3 rounded-3xl border border-[#233754] bg-[#0E1B34] px-4 shadow-[0_10px_40px_rgba(0,0,0,0.14)] xl:px-4 2xl:px-5">
+                <div className="flex items-center gap-3">
                   <Bell className="h-5 w-5 text-slate-300" />
-                  <UserCircle className="h-8 w-8 rounded-full bg-[#12284d] p-1 text-slate-200" />
+                  <span className="text-sm text-slate-200">Notificações</span>
+                </div>
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#0B1B34] text-slate-200 xl:h-11 xl:w-11">
+                  <UserCircle className="h-6 w-6 xl:h-[26px] xl:w-[26px]" />
                 </div>
               </div>
             </div>
-
-            <div className="mt-6 grid gap-6 xl:grid-cols-3">
-              {[
-                { label: "Equipamento", value: equipamento, setter: setEquipamento },
-                { label: "Centro de Custo", value: centro, setter: setCentro },
-                { label: "Setor", value: setor, setter: setSetor },
-              ].map((filter) => (
-                <label key={filter.label} className="block">
-                  <p className="text-[10px] uppercase tracking-[0.28em] text-slate-500">{filter.label}</p>
-                  <div className="mt-2 relative rounded-[18px] border border-[#233754] bg-[#0A162A] px-4 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-                    <select
-                      aria-label={filter.label}
-                      value={filter.value}
-                      onChange={(event) => filter.setter(event.target.value)}
-                      className="w-full bg-transparent text-sm text-white outline-none"
-                    >
-                      {filterOptions.map((option) => (
-                        <option key={option} value={option}>{option}</option>
-                      ))}
-                    </select>
-                    <Search className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                  </div>
-                </label>
-              ))}
-            </div>
-          </header>
-
-          <section className="grid grid-cols-1 gap-6 xl:grid-cols-12">
-                      {derivedTopKpis.map((item) => (
-                    <div key={item.label} className="col-span-12 sm:col-span-6 xl:col-span-2">
-                      <MetricCard item={item} onSelect={handleKpiSelect} active={activeMetric === item.label} />
-                    </div>
-                  ))}
-          </section>
-
-          <section className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-5">
-            {detailCards.map((item) => (
-              <div key={item.label} className="col-span-1">
-                <DetailCard item={item} />
-              </div>
+          </div>
+          <div className="mt-4 grid gap-4 xl:grid-cols-3 2xl:gap-6">
+            {[
+              { label: "Equipamento", value: equipamento, setter: setEquipamento },
+              { label: "Centro de Custo", value: centro, setter: setCentro },
+              { label: "Setor", value: setor, setter: setSetor },
+            ].map((filter) => (
+              <label key={filter.label} className="block">
+                <p className="text-[10px] uppercase tracking-[0.28em] text-slate-500">{filter.label}</p>
+                <div className="mt-2 relative flex h-11 items-center rounded-[18px] border border-[#233754] bg-[#0A162A] px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] xl:px-4 2xl:px-5">
+                  <select
+                    aria-label={filter.label}
+                    value={filter.value}
+                    onChange={(event) => filter.setter(event.target.value)}
+                    className="w-full bg-transparent text-sm text-white outline-none"
+                  >
+                    {filterOptions.map((option) => (
+                      <option key={option} value={option}>{option}</option>
+                    ))}
+                  </select>
+                  <Search className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                </div>
+              </label>
             ))}
-          </section>
+          </div>
+        </section>
 
-          <section className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-12">
-            <div className="col-span-12 xl:col-span-5">
-              <CostSharePanel data={costShareData} total={"R$ 8.764.520,45"} visible={visibleCostShare} onToggle={handleToggleCostShare} />
+        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-12 2xl:gap-6">
+          {derivedTopKpis.map((item) => (
+            <div key={item.label} className="col-span-12 sm:col-span-6 xl:col-span-2">
+              <MetricCard item={item} onSelect={handleKpiSelect} active={activeMetric === item.label} />
             </div>
-            <div className="col-span-12 xl:col-span-5">
-              <EvolutionPanel data={monthlyEvolutionData} />
-            </div>
-            <div className="col-span-12 xl:col-span-2">
-              <TopExpensesPanel data={topExpenses} onSelect={handleExpenseSelect} active={activeExpense} />
-            </div>
-          </section>
+          ))}
+        </section>
 
-          <section className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-12">
-            <div className="col-span-12 xl:col-span-4">
-              <GaugePanel stats={gaugeStats} value={62450} />
+        <section className="grid grid-cols-1 gap-6 xl:grid-cols-5 2xl:gap-8">
+          {detailCards.map((item) => (
+            <div key={item.label} className="col-span-1">
+              <DetailCard item={item} />
             </div>
-            <div className="col-span-12 xl:col-span-4">
-              <IndicatorPanel data={indicatorCards} />
-            </div>
-            <div className="col-span-12 xl:col-span-4">
-              <RankingPanel data={rankingItems} />
-            </div>
-          </section>
+          ))}
+        </section>
 
-          <section className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-12">
-            <div className="col-span-12 xl:col-span-8">
-              <AlertPanel data={alertItems} />
-            </div>
-            <div className="col-span-12 xl:col-span-4">
-              <DashboardCard>
-                <div className="flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-[12px] uppercase tracking-[0.1667em] text-slate-400">Ações Rápidas</p>
-                    <h2 className="mt-2 text-xl font-semibold text-white">Ações Rápidas</h2>
-                  </div>
+        <section className="grid grid-cols-1 gap-6 xl:grid-cols-12 2xl:gap-10">
+          <div className="col-span-12 xl:col-span-5 2xl:col-span-4">
+            <CostSharePanel data={costShareData} total={"R$ 8.764.520,45"} visible={visibleCostShare} onToggle={handleToggleCostShare} />
+          </div>
+          <div className="col-span-12 xl:col-span-5 2xl:col-span-5">
+            <EvolutionPanel data={monthlyEvolutionData} />
+          </div>
+          <div className="col-span-12 xl:col-span-2 2xl:col-span-3">
+            <TopExpensesPanel data={topExpenses} onSelect={handleExpenseSelect} active={activeExpense} />
+          </div>
+        </section>
+
+        <section className="grid grid-cols-1 gap-6 xl:grid-cols-12 2xl:gap-10">
+          <div className="col-span-12 xl:col-span-4 2xl:col-span-3">
+            <GaugePanel stats={gaugeStats} value={62450} />
+          </div>
+          <div className="col-span-12 xl:col-span-4 2xl:col-span-5">
+            <IndicatorPanel data={indicatorCards} />
+          </div>
+          <div className="col-span-12 xl:col-span-4 2xl:col-span-4">
+            <RankingPanel data={rankingItems} />
+          </div>
+        </section>
+
+        <section className="grid grid-cols-1 gap-6 xl:grid-cols-12 2xl:gap-10">
+          <div className="col-span-12 xl:col-span-8 2xl:col-span-7">
+            <AlertPanel data={alertItems} />
+          </div>
+          <div className="col-span-12 xl:col-span-4 2xl:col-span-5">
+            <DashboardCard className="h-full">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <p className="text-[12px] uppercase tracking-[0.1667em] text-slate-400">Ações Rápidas</p>
+                  <h2 className="mt-2 text-xl font-semibold text-white">Ações Rápidas</h2>
                 </div>
-                  <div className="mt-6">
-                    <QuickActionsPanel data={quickActions} />
-                  </div>
-              </DashboardCard>
-            </div>
-          </section>
-        </main>
+              </div>
+              <div className="mt-6">
+                <QuickActionsPanel data={quickActions} />
+              </div>
+            </DashboardCard>
+          </div>
+        </section>
       </div>
-    </div>
+    </ExecutiveDashboardGrid>
   );
 }

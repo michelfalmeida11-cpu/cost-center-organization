@@ -9,8 +9,8 @@ export default function Sparkline({ data, color }: { data: number[]; color: stri
   return (
     <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.45 }}>
       <ResponsiveContainer width="100%" height={40}>
-        <LineChart data={sparkData}>
-          <Line type="monotone" dataKey="y" stroke={color} strokeWidth={2.5} dot={false} />
+        <LineChart data={sparkData} margin={{ top: 4, right: 0, left: 0, bottom: 4 }}>
+          <Line type="monotone" dataKey="y" stroke={color} strokeWidth={3} dot={false} strokeLinecap="round" />
         </LineChart>
       </ResponsiveContainer>
     </motion.div>
