@@ -19,7 +19,7 @@ export default function IndicatorPanel({ data }: { data: any[] }) {
             <div key={item.label} className="h-[72px] rounded-[14px] border border-[#233754] bg-[#091623] p-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
               <div className="flex items-center gap-3">
                 <div className="flex h-10 w-10 items-center justify-center rounded-[12px] bg-[#0A172A] text-white" style={{ color: item.color }}>
-                  <Icon className="h-4.5 w-4.5" />
+                  <Icon size={18} weight="regular" />
                 </div>
                 <div className="min-w-0">
                   <p className="text-[8px] uppercase tracking-[0.2em] text-slate-400 truncate">{item.label}</p>

@@ -21,30 +21,35 @@ import {
   Cell,
 } from "recharts";
 import {
+  BellSimple,
+  CalendarBlank,
+  CraneTower,
+  CurrencyDollar,
+  FilePdf,
+  GasPump,
+  Hammer,
+  MagnifyingGlass,
+  MicrosoftExcelLogo,
+  PlusCircle,
+  PresentationChart,
+  ShieldCheck,
+  Truck as PhosphorTruck,
+  UserCircle,
+} from "@phosphor-icons/react";
+import {
   Activity,
   BarChart3,
-  Bell,
   Bomb,
-  Calendar,
-  CircleUser,
   Clock,
   Download,
   Drill,
-  DollarSign,
-  FileSpreadsheet,
   FileText,
-  Fuel,
   Gauge,
-  HardDrive,
   LayoutDashboard,
-  Presentation,
-  Search,
   Settings,
   Target,
   Truck,
-  UserCircle,
   Zap,
-  BadgeCheck,
 } from "lucide-react";
 
 import DashboardCard from "../components/dashboard/DashboardCard";
@@ -65,15 +70,15 @@ const filterOptions = ["Todos", "Perfuração", "Desmonte", "Logística"];
 const sidebarItems = [
   { label: "Dashboard Executivo", icon: LayoutDashboard, href: "/" },
   { label: "Administração", icon: LayoutDashboard, href: "/administracao" },
-  { label: "Custos Operacionais", icon: DollarSign, href: "/" },
-  { label: "Equipamentos", icon: HardDrive, href: "/operacao" },
-  { label: "Diesel", icon: Fuel, href: "/suprimentos" },
-  { label: "Perfuração", icon: Drill, href: "/operacao" },
-  { label: "Desmonte", icon: Bomb, href: "/operacao" },
-  { label: "Logística", icon: Truck, href: "/operacao" },
+  { label: "Custos Operacionais", icon: CurrencyDollar, href: "/" },
+  { label: "Equipamentos", icon: CraneTower, href: "/operacao" },
+  { label: "Diesel", icon: GasPump, href: "/suprimentos" },
+  { label: "Perfuração", icon: Hammer, href: "/operacao" },
+  { label: "Desmonte", icon: Hammer, href: "/operacao" },
+  { label: "Logística", icon: PhosphorTruck, href: "/operacao" },
   { label: "Indicadores", icon: BarChart3, href: "/operacao" },
   { label: "Relatórios", icon: FileText, href: "/" },
-  { label: "Apresentação Executiva", icon: Presentation, href: "/suprimentos" },
+  { label: "Apresentação Executiva", icon: PresentationChart, href: "/suprimentos" },
   { label: "Configurações", icon: Settings, href: "/administracao" },
 ];
 
@@ -83,7 +88,7 @@ const topKpis = [
     value: "R$ 8.764.520,45",
     trend: "+8,62%",
     positive: true,
-    icon: DollarSign,
+    icon: CurrencyDollar,
     gradient: "linear-gradient(135deg, #3B82F6 0%, #0EA5E9 100%)",
     sparkline: [22, 29, 28, 32, 38, 45],
     color: "#3B82F6",
@@ -107,7 +112,7 @@ const topKpis = [
     value: "R$ 28,62/m",
     trend: "+6,12%",
     positive: true,
-    icon: Drill,
+    icon: Hammer,
     gradient: "linear-gradient(135deg, #22D3EE 0%, #0EA5E9 100%)",
     sparkline: [18, 20, 22, 24, 26, 28],
     color: "#22D3EE",
@@ -131,7 +136,7 @@ const topKpis = [
     value: "62.450 L",
     trend: "+5,21%",
     positive: true,
-    icon: Fuel,
+    icon: GasPump,
     gradient: "linear-gradient(135deg, #FACC15 0%, #F59E0B 100%)",
     sparkline: [51, 52, 54, 58, 61, 62],
     color: "#FACC15",
@@ -143,7 +148,7 @@ const topKpis = [
     value: "87,43%",
     trend: "+3,21%",
     positive: true,
-    icon: BadgeCheck,
+    icon: ShieldCheck,
     gradient: "linear-gradient(135deg, #A855F7 0%, #8B5CF6 100%)",
     sparkline: [80, 82, 84, 85, 86, 87],
     color: "#A855F7",
@@ -157,7 +162,7 @@ const detailCards = [
     label: "Equipamentos",
     value: "R$ 3.156.280,50",
     percent: "36,02%",
-    icon: HardDrive,
+    icon: CraneTower,
     color: "#3B82F6",
     series: [24, 28, 31, 29, 34, 36],
   },
@@ -165,7 +170,7 @@ const detailCards = [
     label: "Diesel",
     value: "R$ 1.872.450,00",
     percent: "21,37%",
-    icon: Fuel,
+    icon: GasPump,
     color: "#FACC15",
     series: [18, 20, 22, 20, 23, 25],
   },
@@ -173,7 +178,7 @@ const detailCards = [
     label: "Perfuração",
     value: "R$ 1.982.350,75",
     percent: "22,63%",
-    icon: Drill,
+    icon: Hammer,
     color: "#22D3EE",
     series: [21, 20, 23, 24, 29, 27],
   },
@@ -189,7 +194,7 @@ const detailCards = [
     label: "Logística",
     value: "R$ 619.189,00",
     percent: "7,06%",
-    icon: Truck,
+    icon: PhosphorTruck,
     color: "#4ADE80",
     series: [9, 11, 10, 12, 13, 14],
   },
@@ -221,19 +226,19 @@ const topExpenses = [
 ];
 
 const gaugeStats = [
-  { label: "Consumido", value: "62.450 L", icon: Fuel, color: "#FACC15" },
+  { label: "Consumido", value: "62.450 L", icon: GasPump, color: "#FACC15" },
   { label: "Meta", value: "100.000 L", icon: Gauge, color: "#3B82F6" },
-  { label: "Estoque", value: "37.550 L", icon: Truck, color: "#4ADE80" },
-  { label: "Custo Médio", value: "R$ 6,02/L", icon: DollarSign, color: "#94A3B8" },
+  { label: "Estoque", value: "37.550 L", icon: PhosphorTruck, color: "#4ADE80" },
+  { label: "Custo Médio", value: "R$ 6,02/L", icon: CurrencyDollar, color: "#94A3B8" },
 ];
 
 const indicatorCards = [
-  { label: "Metros Perfurados", value: "22.350 m", trend: "+7,82%", icon: Drill, color: "#3B82F6" },
+  { label: "Metros Perfurados", value: "22.350 m", trend: "+7,82%", icon: Hammer, color: "#3B82F6" },
   { label: "Quantidade de Furos", value: "172", trend: "+5,48%", icon: Target, color: "#94A3B8" },
-  { label: "Toneladas Produzidas", value: "696.000 t", trend: "+6,21%", icon: Truck, color: "#22D3EE" },
+  { label: "Toneladas Produzidas", value: "696.000 t", trend: "+6,21%", icon: PhosphorTruck, color: "#22D3EE" },
   { label: "Horas Trabalhadas", value: "8.325 h", trend: "+4,45%", icon: Clock, color: "#A855F7" },
-  { label: "Horas Improdutivas", value: "1.058 h", trend: "-2,21%", icon: Bell, color: "#F97316" },
-  { label: "Disponibilidade Física", value: "87,43%", trend: "+3,21%", icon: BadgeCheck, color: "#A855F7" },
+  { label: "Horas Improdutivas", value: "1.058 h", trend: "-2,21%", icon: BellSimple, color: "#F97316" },
+  { label: "Disponibilidade Física", value: "87,43%", trend: "+3,21%", icon: ShieldCheck, color: "#A855F7" },
   { label: "MTBF", value: "245 h", trend: "+4,12%", icon: Gauge, color: "#4ADE80" },
   { label: "MTTR", value: "8,45 h", trend: "-6,23%", icon: Bomb, color: "#F87171" },
   { label: "Produtividade", value: "83,6 t/h", trend: "+5,32%", icon: Activity, color: "#38BDF8" },
@@ -249,16 +254,16 @@ const rankingItems = [
 
 const alertItems = [
   { label: "CUSTO ACIMA DA META", description: "Equipamentos acima de 10% da meta mensal.", icon: Bomb, color: "#F87171", bg: "#5F1721" },
-  { label: "DIESEL ACIMA DO PREVISTO", description: "Consumo 8% acima do previsto para o período.", icon: Fuel, color: "#FACC15", bg: "#4D3C07" },
-  { label: "EQUIPAMENTO PARADO", description: "Perfuração ROC D65 parada há 6 horas.", icon: Bell, color: "#FB923C", bg: "#4B1F0C" },
-  { label: "DENTRO DA META", description: "Todos os indicadores dentro dos parâmetros.", icon: BadgeCheck, color: "#4ADE80", bg: "#0F2E18" },
+  { label: "DIESEL ACIMA DO PREVISTO", description: "Consumo 8% acima do previsto para o período.", icon: GasPump, color: "#FACC15", bg: "#4D3C07" },
+  { label: "EQUIPAMENTO PARADO", description: "Perfuração ROC D65 parada há 6 horas.", icon: BellSimple, color: "#FB923C", bg: "#4B1F0C" },
+  { label: "DENTRO DA META", description: "Todos os indicadores dentro dos parâmetros.", icon: ShieldCheck, color: "#4ADE80", bg: "#0F2E18" },
 ];
 
 const quickActions = [
-  { label: "Novo Registro", icon: CircleUser },
-  { label: "Relatório PDF", icon: FileText },
-  { label: "Exportar Excel", icon: FileSpreadsheet },
-  { label: "Apresentação", icon: Presentation },
+  { label: "Novo Registro", icon: PlusCircle },
+  { label: "Relatório PDF", icon: FilePdf },
+  { label: "Exportar Excel", icon: MicrosoftExcelLogo },
+  { label: "Apresentação", icon: PresentationChart },
 ];
 
 const itemVariants = {
@@ -276,8 +281,8 @@ function SidebarButton({ label, Icon, active, href, onClick }: { label: string; 
 
   const content = (
     <>
-      <span className={`flex h-5 w-5 items-center justify-center ${active ? 'text-[#7CCBFF]' : ''}`}>
-        <Icon className={`h-5 w-5 ${iconClass}`} strokeWidth={1.9} />
+      <span className={`flex h-5 w-5 flex-none items-center justify-center ${active ? 'text-[#7CCBFF]' : ''}`}>
+        <Icon size={20} weight="regular" className={iconClass} strokeWidth={1.9} />
       </span>
       <span className="truncate">{label}</span>
       {active ? <span className="absolute inset-y-1 left-0 w-0.5 rounded-r-full bg-[#2F80ED]" /> : null}
@@ -444,7 +449,7 @@ export default function DashboardPage() {
             </div>
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[220px_140px_140px_140px_auto] xl:items-center">
               <div className="flex h-11 items-center gap-3 rounded-[12px] border border-white/5 bg-[#0F1B2D] px-4">
-                <Calendar className="h-4 w-4 text-slate-300" />
+                <CalendarBlank size={18} weight="regular" className="text-slate-300" />
                 <span className="text-sm text-slate-200">{dateRange}</span>
               </div>
               {[
@@ -459,12 +464,12 @@ export default function DashboardPage() {
                         <option key={option} value={option}>{option}</option>
                       ))}
                     </select>
-                    <Search className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                    <MagnifyingGlass size={16} weight="regular" className="pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 text-slate-500" />
                   </div>
                 </label>
               ))}
               <div className="flex h-11 items-center justify-end gap-4 rounded-[12px] px-1">
-                <Bell className="h-5 w-5 text-slate-400" />
+                <BellSimple size={18} weight="regular" className="text-slate-400" />
                 <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#0F1B2D] text-[12px] font-medium text-slate-200">
                   MA
                 </div>

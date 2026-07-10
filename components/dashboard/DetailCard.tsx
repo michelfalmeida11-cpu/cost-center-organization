@@ -13,8 +13,8 @@ export default function DetailCard({ item }: { item: any }) {
           <p className="text-[12px] font-medium uppercase tracking-[0.1667em] text-slate-400">{item.label}</p>
           <p className="mt-2 text-[18px] font-semibold leading-tight text-white xl:text-[20px]">{item.value}</p>
         </div>
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#0F1B2D] text-white">
-          <Icon className="h-6 w-6" style={{ color: item.color }} />
+        <div className="flex h-12 w-12 flex-none items-center justify-center rounded-full bg-[#0F1B2D]">
+          <Icon size={24} weight="regular" style={{ color: item.color }} />
         </div>
       </div>
       <div className="mt-2 flex items-center justify-between gap-3">
