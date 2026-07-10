@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { supabase, loadCostCenters, saveCostCenters } from "@/lib/supabase";
+import { useAuth } from "@/context/AuthContext";
+import { useCostCenterData } from "@/context/CostCenterDataContext";
 
 import {
   ChevronDown,
@@ -34,7 +35,7 @@ import {
   Process, Group, SubGroup,
   formatBRL, getProcessBudgeted, getProcessRealized,
   getGroupBudgeted, getGroupRealized,
-  getVariancePct, PROCESSES,
+  getVariancePct,
 } from "@/lib/cost-centers";
 
 // ─────────────────────────────────────────────────────────────
@@ -1072,90 +1073,12 @@ function ProcessCard({
 }
 
 // ─────────────────────────────────────────────────────────────
-//  localStorage helpers — client-only
-// ─────────────────────────────────────────────────────────────
-// Fallback to localStorage; prefer Supabase
-const LS_KEY = "avg-cost-centers-v1-fallback";
-
-async function loadData(): Promise<Process[]> {
-  try {
-    const supabaseData = await loadCostCenters();
-    if (supabaseData) return supabaseData;
-  } catch (e) {
-    console.warn('Supabase load failed, using localStorage:', e);
-  }
-  // Fallback
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (raw) {
-      const parsed = JSON.parse(raw) as Process[];
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        const savedIds = new Set(parsed.map((p: Process) => p.id));
-        const missing = PROCESSES.filter(p => !savedIds.has(p.id));
-        return missing.length > 0 ? [...parsed, ...missing] : parsed;
-      }
-    }
-  } catch {}
-  return PROCESSES;
-}
-
-async function saveData(data: Process[]) {
-  try {
-    await saveCostCenters(data);
-  } catch (e) {
-    console.warn('Supabase save failed, using localStorage:', e);
-    try {
-      localStorage.setItem(LS_KEY, JSON.stringify(data));
-    } catch {}
-  }
-}
-
-// ─────────────────────────────────────────────────────────────
-//  Root panel — owns all state + localStorage persistence
+//  Root panel — uses shared CostCenterDataContext and AuthContext
 // ─────────────────────────────────────────────────────────────
 export function CostCenterPanel() {
-  const [processes, setProcesses] = useState<Process[]>(PROCESSES);
-  const [hydrated, setHydrated] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [showPasswordModal, setShowPasswordModal] = useState(false);
-
-  // Check admin on mount
-  useEffect(() => {
-    const adminFlag = localStorage.getItem('cost-center-admin');
-    if (adminFlag === 'true') {
-      setIsAdmin(true);
-    } else {
-      setShowPasswordModal(true);
-    }
-  }, []);
-
-  const handlePasswordSubmit = (password: string) => {
-    if (password === 'admin123') { // align with AuthContext password
-
-      localStorage.setItem('cost-center-admin', 'true');
-      setIsAdmin(true);
-      setShowPasswordModal(false);
-    } else {
-      alert('Senha incorreta. Apenas administradores podem editar.');
-    }
-  };
-
-  const canEdit = isAdmin && hydrated;
-
-  // Load from Supabase/localStorage
-  useEffect(() => {
-    loadData().then(saved => {
-      setProcesses(saved);
-      setHydrated(true);
-    });
-  }, []);
-
-// Persist to localStorage after every change — but ONLY after hydration
-  // to avoid overwriting saved data with the static default on first render
-  useEffect(() => {
-    if (!hydrated) return;
-    saveData(processes);
-  }, [processes, hydrated]);
+  const { processes, setProcesses, hydrated, saveNow } = useCostCenterData();
+  const { canEdit: authCanEdit } = useAuth();
+  const canEdit = authCanEdit && hydrated;
 
   // ── Process update ────────────────────────────────────────
   const updateProcess = useCallback(
@@ -1279,7 +1202,7 @@ export function CostCenterPanel() {
           return;
         }
         setProcesses(parsed);
-        saveData(parsed);
+        saveNow();
         alert("Dados importados com sucesso!");
       } catch {
         alert("Erro ao ler o arquivo. Verifique se é um JSON válido.");
@@ -1288,49 +1211,16 @@ export function CostCenterPanel() {
     reader.readAsText(file);
     // Reset input so the same file can be imported again if needed
     e.target.value = "";
-  }, []);
+  }, [saveNow, setProcesses]);
 
   const [saved, setSaved] = useState(false);
   const handleManualSave = useCallback(() => {
-    saveData(processes);
+    saveNow();
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
-  }, [processes]);
+  }, [saveNow]);
 
   // Password modal
-  if (showPasswordModal) {
-    return (
-      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-2xl p-8 max-w-sm w-full max-h-[90vh] overflow-auto shadow-2xl border border-gray-200" style={{ boxShadow: "0 25px 50px -12px hsl(0 0% 0% / 0.25)" }}>
-          <h2 className="text-2xl font-bold mb-4 text-gray-900 text-center">Acesso de Edição</h2>
-          <p className="text-sm text-gray-600 mb-6 text-center">Digite a senha de administrador para habilitar edições.</p>
-          <input
-            type="password"
-            placeholder="Senha"
-            onKeyDown={e => e.key === 'Enter' && handlePasswordSubmit(e.currentTarget.value)}
-            className="w-full p-3 rounded-xl border border-gray-300 focus:ring-4 focus:ring-blue-500 focus:border-blue-500 text-lg font-mono"
-            autoFocus
-          />
-          <div className="flex gap-3 mt-6">
-            <button
-              onClick={() => handlePasswordSubmit('')} // Empty to trigger alert
-              className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-900 font-semibold py-3 px-4 rounded-xl transition-all duration-200"
-            >
-              Entrar
-            </button>
-            <button
-              onClick={() => setShowPasswordModal(false)}
-              className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-600 font-semibold py-3 px-4 rounded-xl transition-all duration-200"
-            >
-              Cancelar
-            </button>
-          </div>
-          <p className="text-xs text-gray-500 mt-4 text-center">Contate o administrador para obter a senha.</p>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="flex flex-col gap-3">
 

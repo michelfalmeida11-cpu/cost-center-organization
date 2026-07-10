@@ -6,7 +6,7 @@ import {
   CheckCircle2, BarChart3, Pickaxe, ArrowLeftRight, X, Minus,
 } from "lucide-react";
 import {
-  formatBRL, getGrandTotals, PROCESSES,
+  formatBRL, getGrandTotals, Process,
   getProcessRealized, getProcessBudgeted,
 } from "@/lib/cost-centers";
 
@@ -19,32 +19,32 @@ function periodFactor(year: number, month: number | null): number {
   return 1;
 }
 
-function getKpiData(year: number, month: number | null) {
+function getKpiData(year: number, month: number | null, processes: Process[]) {
   const factor = periodFactor(year, month);
   // Scale budgeted proportionally too (monthly budget = annual/12)
   const budgetFactor = month !== null ? month / 12 : (year === 2026 ? 4 / 12 : 1);
 
-  const rawBudgeted = PROCESSES.reduce((a, p) => a + getProcessBudgeted(p), 0);
-  const rawRealized = PROCESSES.reduce((a, p) => a + getProcessRealized(p), 0);
+  const rawBudgeted = processes.reduce((a, p) => a + getProcessBudgeted(p), 0);
+  const rawRealized = processes.reduce((a, p) => a + getProcessRealized(p), 0);
   const budgeted = Math.round(rawBudgeted * budgetFactor);
   const realized = Math.round(rawRealized * factor);
   const variance = realized - budgeted;
   const variancePct = budgeted > 0 ? ((realized - budgeted) / budgeted) * 100 : 0;
   const executionPct = budgeted > 0 ? (realized / budgeted) * 100 : 0;
-  const overBudget = PROCESSES.filter(p =>
+  const overBudget = processes.filter(p =>
     Math.round(getProcessRealized(p) * factor) > Math.round(getProcessBudgeted(p) * budgetFactor)
   ).length;
   const saldo = budgeted - realized;
 
   const prodIds = ["LM", "BEN"];
-  const custoProdR = Math.round(PROCESSES.filter(p => prodIds.includes(p.id)).reduce((a, p) => a + getProcessRealized(p), 0) * factor);
-  const custoProdB = Math.round(PROCESSES.filter(p => prodIds.includes(p.id)).reduce((a, p) => a + getProcessBudgeted(p), 0) * budgetFactor);
+  const custoProdR = Math.round(processes.filter(p => prodIds.includes(p.id)).reduce((a, p) => a + getProcessRealized(p), 0) * factor);
+  const custoProdB = Math.round(processes.filter(p => prodIds.includes(p.id)).reduce((a, p) => a + getProcessBudgeted(p), 0) * budgetFactor);
   const custoProdPct = realized > 0 ? (custoProdR / realized) * 100 : 0;
   const custoProdVar = custoProdB > 0 ? ((custoProdR - custoProdB) / custoProdB) * 100 : 0;
 
   const movIds = ["LOG", "INS"];
-  const movR = Math.round(PROCESSES.filter(p => movIds.includes(p.id)).reduce((a, p) => a + getProcessRealized(p), 0) * factor);
-  const movB = Math.round(PROCESSES.filter(p => movIds.includes(p.id)).reduce((a, p) => a + getProcessBudgeted(p), 0) * budgetFactor);
+  const movR = Math.round(processes.filter(p => movIds.includes(p.id)).reduce((a, p) => a + getProcessRealized(p), 0) * factor);
+  const movB = Math.round(processes.filter(p => movIds.includes(p.id)).reduce((a, p) => a + getProcessBudgeted(p), 0) * budgetFactor);
   const movVar = movB > 0 ? ((movR - movB) / movB) * 100 : 0;
   const movExec = movB > 0 ? (movR / movB) * 100 : 0;
 
@@ -281,16 +281,16 @@ function KpiCard({ kpi, onClick }: { kpi: KpiCardData; onClick: () => void }) {
 }
 
 // ─── Main export ──────────────────────────────────────────────
-export function KpiSummary({ year = 2026, month = null }: { year?: number; month?: number | null }) {
+export function KpiSummary({ year = 2026, month = null, processes }: { year?: number; month?: number | null; processes: Process[] }) {
   const [activeModal, setActiveModal] = useState<string | null>(null);
-  const d = getKpiData(year, month);
+  const d = getKpiData(year, month, processes);
 
   const kpis: KpiCardData[] = [
     {
       id: "orcado",
       label: "Orçamento Total",
       value: formatBRL(d.budgeted),
-      meta: `${PROCESSES.length} processos · exercício ${year}`,
+      meta: `${processes.length} processos · exercício ${year}`,
       badge: "BASE",
       badgeOk: true,
       barPct: 100,
@@ -302,12 +302,12 @@ export function KpiSummary({ year = 2026, month = null }: { year?: number; month
         color: "oklch(0.75 0.20 185)",
         mainValue: formatBRL(d.budgeted),
         metrics: [
-          { label: "Processos Ativos", value: `${PROCESSES.length}` },
+          { label: "Processos Ativos", value: `${processes.length}` },
           { label: "Período", value: month !== null ? `Mês ${month}/${year}` : year === 2026 ? `Jan – Abr ${year}` : `Jan – Dez ${year}` },
           { label: "Saldo Disponível", value: formatBRL(d.saldo), highlight: true },
           { label: "% Executado", value: `${d.executionPct.toFixed(1)}%` },
         ],
-        breakdown: PROCESSES.map(p => ({ name: p.name, budgeted: Math.round(getProcessBudgeted(p) * d.budgetFactor), realized: Math.round(getProcessRealized(p) * d.factor) })),
+        breakdown: processes.map(p => ({ name: p.name, budgeted: Math.round(getProcessBudgeted(p) * d.budgetFactor), realized: Math.round(getProcessRealized(p) * d.factor) })),
       },
     },
     {
@@ -331,7 +331,7 @@ export function KpiSummary({ year = 2026, month = null }: { year?: number; month
           { label: "Saldo Disponível", value: formatBRL(d.saldo) },
           { label: "Status", value: d.executionPct > 100 ? "Acima do Orçamento" : "Dentro do Orçamento" },
         ],
-        breakdown: PROCESSES.map(p => ({ name: p.name, budgeted: Math.round(getProcessBudgeted(p) * d.budgetFactor), realized: Math.round(getProcessRealized(p) * d.factor) })),
+        breakdown: processes.map(p => ({ name: p.name, budgeted: Math.round(getProcessBudgeted(p) * d.budgetFactor), realized: Math.round(getProcessRealized(p) * d.factor) })),
       },
     },
     {
@@ -355,7 +355,7 @@ export function KpiSummary({ year = 2026, month = null }: { year?: number; month
           { label: "Total Realizado", value: formatBRL(d.realized) },
           { label: "Resultado", value: d.variance > 0 ? "Acima do Orçamento" : "Abaixo do Orçamento" },
         ],
-        breakdown: PROCESSES.map(p => {
+        breakdown: processes.map(p => {
           const b = getProcessBudgeted(p);
           const r = getProcessRealized(p);
           return { name: p.name, budgeted: b, realized: r };
@@ -365,11 +365,11 @@ export function KpiSummary({ year = 2026, month = null }: { year?: number; month
     {
       id: "alertas",
       label: "Alertas de Desvio",
-      value: `${d.overBudget} / ${PROCESSES.length}`,
+      value: `${d.overBudget} / ${processes.length}`,
       meta: d.overBudget > 0 ? `${d.overBudget} processo(s) com excesso` : "Todos os processos dentro do limite",
       badge: d.overBudget > 0 ? "ALERTA" : "NORMAL",
       badgeOk: d.overBudget === 0,
-      barPct: ((PROCESSES.length - d.overBudget) / PROCESSES.length) * 100,
+      barPct: processes.length > 0 ? ((processes.length - d.overBudget) / processes.length) * 100 : 0,
       color: d.overBudget > 0 ? "oklch(0.72 0.22 55)" : "oklch(0.65 0.20 145)",
       Icon: d.overBudget > 0 ? AlertTriangle : CheckCircle2,
       TrendIcon: d.overBudget > 0 ? TrendingUp : Minus,
@@ -379,11 +379,11 @@ export function KpiSummary({ year = 2026, month = null }: { year?: number; month
         mainValue: `${d.overBudget} processo(s) em desvio`,
         metrics: [
           { label: "Processos em Desvio", value: `${d.overBudget}`, highlight: d.overBudget > 0 },
-          { label: "Processos Conformes", value: `${PROCESSES.length - d.overBudget}` },
-          { label: "Taxa de Conformidade", value: `${(((PROCESSES.length - d.overBudget) / PROCESSES.length) * 100).toFixed(0)}%` },
-          { label: "Total de Processos", value: `${PROCESSES.length}` },
+          { label: "Processos Conformes", value: `${processes.length - d.overBudget}` },
+          { label: "Taxa de Conformidade", value: `${processes.length > 0 ? (((processes.length - d.overBudget) / processes.length) * 100).toFixed(0) : "0"}%` },
+          { label: "Total de Processos", value: `${processes.length}` },
         ],
-        breakdown: PROCESSES.filter(p => getProcessRealized(p) > getProcessBudgeted(p))
+        breakdown: processes.filter(p => getProcessRealized(p) > getProcessBudgeted(p))
           .map(p => ({ name: p.name, budgeted: getProcessBudgeted(p), realized: getProcessRealized(p) })),
       },
     },
@@ -408,7 +408,7 @@ export function KpiSummary({ year = 2026, month = null }: { year?: number; month
           { label: "Variação", value: `${d.custoProdVar > 0 ? "+" : ""}${d.custoProdVar.toFixed(2)}%` },
           { label: "% do Custo Total", value: `${d.custoProdPct.toFixed(1)}%` },
         ],
-        breakdown: PROCESSES.filter(p => ["LM", "BEN"].includes(p.id))
+        breakdown: processes.filter(p => ["LM", "BEN"].includes(p.id))
           .map(p => ({ name: p.name, budgeted: getProcessBudgeted(p), realized: getProcessRealized(p) })),
       },
     },
@@ -433,7 +433,7 @@ export function KpiSummary({ year = 2026, month = null }: { year?: number; month
           { label: "Variação %", value: `${d.movVar > 0 ? "+" : ""}${d.movVar.toFixed(2)}%` },
           { label: "% Execução", value: `${d.movExec.toFixed(1)}%` },
         ],
-        breakdown: PROCESSES.filter(p => ["LOG", "INS"].includes(p.id))
+        breakdown: processes.filter(p => ["LOG", "INS"].includes(p.id))
           .map(p => ({ name: p.name, budgeted: getProcessBudgeted(p), realized: getProcessRealized(p) })),
       },
     },

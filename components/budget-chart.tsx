@@ -4,7 +4,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, Cell, LabelList,
 } from "recharts";
-import { COST_CENTERS, getTotalBudgeted, getTotalRealized, formatBRL } from "@/lib/cost-centers";
+import { getProcessBudgeted, getProcessRealized, formatBRL, Process } from "@/lib/cost-centers";
 
 const COLORS: Record<string, string> = {
   LM:  "oklch(0.75 0.20 185)",
@@ -107,18 +107,18 @@ function getPeriodFactor(year: number, month: number | null): number {
   return 1;
 }
 
-export function BudgetChart({ year = 2026, month = null }: { year?: number; month?: number | null }) {
+export function BudgetChart({ year = 2026, month = null, processes }: { year?: number; month?: number | null; processes: Process[] }) {
   const factor = getPeriodFactor(year, month);
   const budgetFactor = month !== null ? month / 12 : (year === 2026 ? 4 / 12 : 1);
 
-  const data = COST_CENTERS.map(c => {
-    const orc  = Math.round(getTotalBudgeted(c) * budgetFactor);
-    const real = Math.round(getTotalRealized(c) * factor);
+  const data = processes.map((p) => {
+    const orc  = Math.round(getProcessBudgeted(p) * budgetFactor);
+    const real = Math.round(getProcessRealized(p) * factor);
     return {
-      name:      c.name,
+      name:      p.name,
       Orçado:    orc,
       Realizado: real,
-      color:     COLORS[c.id] ?? "oklch(0.60 0.08 240)",
+      color:     COLORS[p.id] ?? "oklch(0.60 0.08 240)",
       over:      real > orc,
       exec:      orc > 0 ? ((real / orc) * 100).toFixed(0) + "%" : "—",
     };

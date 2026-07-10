@@ -6,7 +6,8 @@ import { KpiSummary } from "@/components/kpi-summary";
 import { BudgetChart } from "@/components/budget-chart";
 import { DistributionChart } from "@/components/distribution-chart";
 import { CostCenterPanel } from "@/components/cost-center-panel";
-import { PROCESSES } from "@/lib/cost-centers"; // used in hero banner stats
+import { useAuth } from "@/context/AuthContext";
+import { useCostCenterData } from "@/context/CostCenterDataContext";
 import { Activity, Cpu, Database, Shield, Calendar, ChevronDown } from "lucide-react";
 import { ModeEditionButton } from "@/components/auth/ModeEditionButton";
 import { AuthModal } from "@/components/auth/AuthModal";
@@ -168,15 +169,17 @@ function SectionHeading({ label, sub, color = ACCENT }: { label: string; sub?: s
 export default function DashboardPage() {
   const [year, setYear] = useState(2026);
   const [month, setMonth] = useState<number | null>(null); // null = YTD
+  const { processes } = useCostCenterData();
+  const { canEdit } = useAuth();
 
-  const totalGroups = PROCESSES.reduce((a, p) => a + p.groups.length, 0);
-  const totalSubGroups = PROCESSES.reduce((a, p) => a + p.groups.reduce((b, g) => b + g.subGroups.length, 0), 0);
+  const totalGroups = processes.reduce((a, p) => a + p.groups.length, 0);
+  const totalSubGroups = processes.reduce((a, p) => a + p.groups.reduce((b, g) => b + g.subGroups.length, 0), 0);
 
   const periodLabel = month === null
     ? `YTD — Jan / ${year === 2026 ? "Abr" : "Dez"} ${year}`
     : `${MONTHS[month - 1].label} / ${year}`;
 
-  const topSpends = PROCESSES.flatMap((p) =>
+  const topSpends = processes.flatMap((p) =>
     p.groups.flatMap((g) =>
       g.subGroups.map((s) => ({
         id: s.id,
@@ -221,15 +224,15 @@ export default function DashboardPage() {
               </h1>
               <p className="text-[11px] font-mono mt-1.5" style={{ color: "oklch(0.45 0.03 220)" }}>
                 Processo &rsaquo; Grupo &rsaquo; Subgrupo &ensp;&bull;&ensp;
-                {PROCESSES.length} processos &bull; {totalGroups} grupos &bull; {totalSubGroups} subgrupos &ensp;&bull;&ensp;
+                {processes.length} processos &bull; {totalGroups} grupos &bull; {totalSubGroups} subgrupos &ensp;&bull;&ensp;
                 <span style={{ color: ACCENT }}>{periodLabel}</span>
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
               <StatusBadge label="Sistema" value="ONLINE" icon={Activity} color="oklch(0.65 0.20 145)" />
-              <StatusBadge label="Processos" value={String(PROCESSES.length)} icon={Database} color={ACCENT} />
+              <StatusBadge label="Processos" value={String(processes.length)} icon={Database} color={ACCENT} />
               <StatusBadge label="Subgrupos" value={String(totalSubGroups)} icon={Cpu} color="oklch(0.68 0.18 300)" />
-              <StatusBadge label="Edição" value="ATIVA" icon={Shield} color="oklch(0.70 0.22 55)" />
+              <StatusBadge label="Edição" value={canEdit ? "ATIVA" : "BLOQUEADA"} icon={Shield} color={canEdit ? "oklch(0.70 0.22 55)" : "oklch(0.45 0.03 220)"} />
             </div>
           </div>
         </div>
@@ -320,41 +323,22 @@ export default function DashboardPage() {
             sub={`Indicadores de desempenho — ${periodLabel}`}
             color={ACCENT}
           />
-          <KpiSummary year={year} month={month} />
+          <KpiSummary year={year} month={month} processes={processes} />
         </section>
 
         {/* ── Charts ──────────────────────────────────────── */}
         <section aria-label="Análise Orçamentária" className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           <div>
             <SectionHeading label="Orçado vs. Realizado" sub="Por processo — valores em R$" color="oklch(0.70 0.22 55)" />
-            <BudgetChart year={year} month={month} />
+            <BudgetChart year={year} month={month} processes={processes} />
           </div>
           <div>
             <SectionHeading label="Distribuição do Custo Realizado" sub="Participação percentual por processo" color="oklch(0.68 0.18 300)" />
-            <DistributionChart year={year} month={month} />
+            <DistributionChart year={year} month={month} processes={processes} />
           </div>
         </section>
 
         <section aria-label="Painel de Ações e Alertas" className="grid grid-cols-1 xl:grid-cols-[1.65fr_1fr] gap-4">
-          <div>
-            <div className="rounded-3xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
-                <div>
-                  <h2 className="text-lg font-bold font-mono" style={{ color: "oklch(0.94 0.018 195)" }}>
-                    Centro de Custo — Detalhamento
-                  </h2>
-                  <p className="text-[11px] font-mono mt-1" style={{ color: "oklch(0.45 0.03 220)" }}>
-                    Processos, grupos e subgrupos com edição online, alertas e comparativos.
-                  </p>
-                </div>
-                <div className="hidden md:block">
-                  <ModeEditionButton />
-                </div>
-              </div>
-              <AuthModal />
-              <CostCenterPanel />
-            </div>
-          </div>
 
           <div className="space-y-4">
             <div className="rounded-3xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>

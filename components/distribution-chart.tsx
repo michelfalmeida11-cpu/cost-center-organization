@@ -3,15 +3,15 @@
 import React, { useMemo, useState } from "react";
 
 import {
-  COST_CENTERS,
-  getTotalRealized,
-  getTotalBudgeted,
+  Process,
+  getProcessRealized,
+  getProcessBudgeted,
   formatBRL,
 } from "@/lib/cost-centers";
 
 import { TrendingDown, TrendingUp, Minus } from "lucide-react";
 
-type CenterId = (typeof COST_CENTERS)[number]["id"];
+type CenterId = Process["id"];
 
 type CenterNode = {
   id: CenterId;
@@ -125,34 +125,36 @@ function donutSlicePath(
 export function DistributionChart({
   year = 2026,
   month = null,
+  processes,
 }: {
   year?: number;
   month?: number | null;
+  processes: Process[];
 }) {
-  const [activeId, setActiveId] = useState<CenterId | null>(COST_CENTERS[0]?.id ?? "LM");
+  const [activeId, setActiveId] = useState<CenterId | null>(processes[0]?.id ?? "LM");
   const [sortKey, setSortKey] = useState<SortKey>("value");
 
   const factor = getPeriodFactor(year, month);
   const budgetFactor = month !== null ? month / 12 : year === 2026 ? 4 / 12 : 1;
 
   const { items, totalRealized, totalBudgeted } = useMemo(() => {
-    const totalR = COST_CENTERS.reduce((a, c) => a + getTotalRealized(c), 0) * factor;
-    const totalB = COST_CENTERS.reduce((a, c) => a + getTotalBudgeted(c), 0) * budgetFactor;
+    const totalR = processes.reduce((a, p) => a + getProcessRealized(p), 0) * factor;
+    const totalB = processes.reduce((a, p) => a + getProcessBudgeted(p), 0) * budgetFactor;
 
-    const raw: CenterNode[] = COST_CENTERS.map((c) => {
-      const realized = Math.round(getTotalRealized(c) * factor);
-      const budgeted = Math.round(getTotalBudgeted(c) * budgetFactor);
+    const raw: CenterNode[] = processes.map((p) => {
+      const realized = Math.round(getProcessRealized(p) * factor);
+      const budgeted = Math.round(getProcessBudgeted(p) * budgetFactor);
       const share = pct(realized, Math.round(totalR));
       const varPct = getVariancePct(budgeted, realized);
 
       return {
-        id: c.id as CenterId,
-        name: c.name ?? "Sem nome",
+        id: p.id,
+        name: p.name ?? "Sem nome",
         realized,
         budgeted,
         share,
         varPct,
-        fill: COLOR[c.id as CenterId] ?? "oklch(0.55 0.05 240)",
+        fill: COLOR[p.id] ?? "oklch(0.55 0.05 240)",
       };
     });
 
@@ -167,7 +169,7 @@ export function DistributionChart({
       totalRealized: Math.round(totalR),
       totalBudgeted: Math.round(totalB),
     };
-  }, [factor, budgetFactor, sortKey]);
+  }, [factor, budgetFactor, sortKey, processes]);
 
   const active = useMemo(() => {
     if (!activeId) return null;

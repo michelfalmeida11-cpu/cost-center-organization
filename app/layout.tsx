@@ -12,6 +12,7 @@ export const metadata = {
 }
 
 import { AuthProvider } from "@/context/AuthContext";
+import { CostCenterDataProvider } from "@/context/CostCenterDataContext";
 
 export default function RootLayout({
   children,
@@ -23,7 +24,9 @@ export default function RootLayout({
     <html lang="pt-BR" className="light">
       <body className={`${inter.className} antialiased`}>
         <AuthProvider>
-          {children}
+          <CostCenterDataProvider>
+            {children}
+          </CostCenterDataProvider>
         </AuthProvider>
         <Analytics />
       </body>
