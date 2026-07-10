@@ -176,6 +176,19 @@ export default function DashboardPage() {
     ? `YTD — Jan / ${year === 2026 ? "Abr" : "Dez"} ${year}`
     : `${MONTHS[month - 1].label} / ${year}`;
 
+  const topSpends = PROCESSES.flatMap((p) =>
+    p.groups.flatMap((g) =>
+      g.subGroups.map((s) => ({
+        id: s.id,
+        label: s.name,
+        group: p.name,
+        value: s.realized,
+      }))
+    )
+  )
+    .sort((a, b) => b.value - a.value)
+    .slice(0, 5);
+
   return (
     <div className="min-h-screen bg-background">
       <DashboardHeader />
@@ -224,6 +237,82 @@ export default function DashboardPage() {
         {/* ── Period filter ────────────────────────────────── */}
         <PeriodFilter year={year} setYear={setYear} month={month} setMonth={setMonth} />
 
+        <section aria-label="Resumo Executivo" className="grid grid-cols-1 xl:grid-cols-[1.5fr_1fr] gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="rounded-3xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+              <p className="text-[10px] font-mono uppercase tracking-[0.25em]" style={{ color: ACCENT }}>
+                Custo Operacional Total
+              </p>
+              <p className="mt-3 text-3xl font-bold font-mono" style={{ color: "oklch(0.94 0.018 195)" }}>
+                R$ 8.764.520,45
+              </p>
+              <p className="text-[10px] font-mono mt-3" style={{ color: "oklch(0.45 0.03 220)" }}>
+                Total do período atual com tendência positiva.
+              </p>
+              <div className="mt-4 inline-flex items-center gap-2 rounded-2xl px-3 py-2" style={{ background: "oklch(0.65 0.20 145 / 0.12)", color: "oklch(0.65 0.20 145)" }}>
+                +8,62% vs período anterior
+              </div>
+            </div>
+
+            <div className="rounded-3xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+              <p className="text-[10px] font-mono uppercase tracking-[0.25em]" style={{ color: ACCENT }}>
+                Custo por tonelada
+              </p>
+              <p className="mt-3 text-3xl font-bold font-mono" style={{ color: "oklch(0.94 0.018 195)" }}>
+                R$ 12,58/t
+              </p>
+              <div className="mt-4 inline-flex items-center gap-2 rounded-2xl px-3 py-2" style={{ background: "oklch(0.65 0.20 145 / 0.12)", color: "oklch(0.65 0.20 145)" }}>
+                -4,31% vs período anterior
+              </div>
+            </div>
+
+            <div className="rounded-3xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+              <p className="text-[10px] font-mono uppercase tracking-[0.25em]" style={{ color: ACCENT }}>
+                Consumo Diesel
+              </p>
+              <p className="mt-3 text-3xl font-bold font-mono" style={{ color: "oklch(0.94 0.018 195)" }}>
+                62.450 L
+              </p>
+              <p className="text-[10px] font-mono mt-3" style={{ color: "oklch(0.45 0.03 220)" }}>
+                Consumo 5,21% abaixo do previsto.
+              </p>
+            </div>
+
+            <div className="rounded-3xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+              <p className="text-[10px] font-mono uppercase tracking-[0.25em]" style={{ color: ACCENT }}>
+                Disponibilidade Física
+              </p>
+              <p className="mt-3 text-3xl font-bold font-mono" style={{ color: "oklch(0.94 0.018 195)" }}>
+                87,43%
+              </p>
+              <p className="text-[10px] font-mono mt-3" style={{ color: "oklch(0.45 0.03 220)" }}>
+                +3,21% vs período anterior.
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-3xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+            <p className="text-[10px] font-mono uppercase tracking-[0.25em]" style={{ color: ACCENT }}>
+              Destaques Operacionais
+            </p>
+            <div className="mt-4 grid gap-3">
+              {[
+                { label: "Equipamentos", value: "R$ 3.156.280,50", rate: "36,02% do total" },
+                { label: "Diesel", value: "R$ 1.872.450,00", rate: "21,37% do total" },
+                { label: "Perfuração", value: "R$ 1.982.350,75", rate: "22,63% do total" },
+                { label: "Desmonte", value: "R$ 1.134.250,20", rate: "12,94% do total" },
+                { label: "Logística", value: "R$ 619.189,00", rate: "7,06% do total" },
+              ].map((item) => (
+                <div key={item.label} className="rounded-3xl p-4" style={{ background: "oklch(0.105 0.017 240)", border: "1px solid oklch(0.20 0.02 240)" }}>
+                  <p className="text-[10px] font-mono uppercase tracking-[0.20em]" style={{ color: "oklch(0.42 0.03 220)" }}>{item.label}</p>
+                  <p className="mt-3 text-lg font-bold font-mono" style={{ color: "oklch(0.94 0.018 195)" }}>{item.value}</p>
+                  <p className="text-[9px] font-mono mt-2" style={{ color: "oklch(0.45 0.03 220)" }}>{item.rate}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
         {/* ── KPIs ────────────────────────────────────────── */}
         <section aria-label="KPIs Principais">
           <SectionHeading
@@ -243,6 +332,117 @@ export default function DashboardPage() {
           <div>
             <SectionHeading label="Distribuição do Custo Realizado" sub="Participação percentual por processo" color="oklch(0.68 0.18 300)" />
             <DistributionChart year={year} month={month} />
+          </div>
+        </section>
+
+        <section aria-label="Painel de Ações e Alertas" className="grid grid-cols-1 xl:grid-cols-[1.65fr_1fr] gap-4">
+          <div>
+            <div className="rounded-3xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
+                <div>
+                  <h2 className="text-lg font-bold font-mono" style={{ color: "oklch(0.94 0.018 195)" }}>
+                    Centro de Custo — Detalhamento
+                  </h2>
+                  <p className="text-[11px] font-mono mt-1" style={{ color: "oklch(0.45 0.03 220)" }}>
+                    Processos, grupos e subgrupos com edição online, alertas e comparativos.
+                  </p>
+                </div>
+                <div className="hidden md:block">
+                  <ModeEditionButton />
+                </div>
+              </div>
+              <AuthModal />
+              <CostCenterPanel />
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="rounded-3xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+              <div className="flex items-center justify-between gap-4 mb-4">
+                <div>
+                  <p className="text-[10px] font-mono uppercase tracking-[0.24em]" style={{ color: ACCENT }}>
+                    Top 5 Maiores Gastos
+                  </p>
+                  <h3 className="mt-2 text-xl font-bold font-mono" style={{ color: "oklch(0.94 0.018 195)" }}>
+                    Ranking de subgrupos
+                  </h3>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {topSpends.map((item, index) => (
+                  <div key={item.id} className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold font-mono truncate" style={{ color: "oklch(0.94 0.018 195)" }}>{item.label}</p>
+                      <p className="text-[10px] font-mono truncate" style={{ color: "oklch(0.45 0.03 220)" }}>{item.group}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm font-bold font-mono" style={{ color: ACCENT }}>
+                        {item.value.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}
+                      </p>
+                      <p className="text-[10px] font-mono" style={{ color: "oklch(0.45 0.03 220)" }}>#{index + 1}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded-3xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+              <div className="flex items-center justify-between gap-4 mb-4">
+                <div>
+                  <p className="text-[10px] font-mono uppercase tracking-[0.24em]" style={{ color: ACCENT }}>
+                    Alertas
+                  </p>
+                  <h3 className="mt-2 text-xl font-bold font-mono" style={{ color: "oklch(0.94 0.018 195)" }}>
+                    Principais riscos ativos
+                  </h3>
+                </div>
+              </div>
+              <div className="space-y-3">
+                <div className="rounded-2xl p-4" style={{ background: "oklch(0.68 0.22 55 / 0.12)", border: `1px solid oklch(0.68 0.22 55 / 0.25)` }}>
+                  <p className="text-[11px] font-bold font-mono" style={{ color: "oklch(0.68 0.22 55)" }}>CUSTO ACIMA DA META</p>
+                  <p className="text-[10px] font-mono mt-2" style={{ color: "oklch(0.45 0.03 220)" }}>
+                    Equipamentos acima de 10% da meta mensal.
+                  </p>
+                </div>
+                <div className="rounded-2xl p-4" style={{ background: "oklch(0.75 0.20 185 / 0.12)", border: `1px solid oklch(0.75 0.20 185 / 0.25)` }}>
+                  <p className="text-[11px] font-bold font-mono" style={{ color: ACCENT }}>DIESEL ACIMA DO PREVISTO</p>
+                  <p className="text-[10px] font-mono mt-2" style={{ color: "oklch(0.45 0.03 220)" }}>
+                    Consumo 8% acima do previsto para o período.
+                  </p>
+                </div>
+                <div className="rounded-2xl p-4" style={{ background: "oklch(0.65 0.20 145 / 0.12)", border: `1px solid oklch(0.65 0.20 145 / 0.25)` }}>
+                  <p className="text-[11px] font-bold font-mono" style={{ color: "oklch(0.65 0.20 145)" }}>EQUIPAMENTO PARADO</p>
+                  <p className="text-[10px] font-mono mt-2" style={{ color: "oklch(0.45 0.03 220)" }}>
+                    Perfuração ROC D65 parada há 6 horas.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-3xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+              <div className="flex items-center justify-between gap-4 mb-4">
+                <div>
+                  <p className="text-[10px] font-mono uppercase tracking-[0.24em]" style={{ color: ACCENT }}>
+                    Ações Rápidas
+                  </p>
+                  <h3 className="mt-2 text-xl font-bold font-mono" style={{ color: "oklch(0.94 0.018 195)" }}>
+                    Operações instantâneas
+                  </h3>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                {["Novo Registro", "Relatório PDF", "Exportar Excel", "Apresentação"].map((label) => (
+                  <button
+                    key={label}
+                    type="button"
+                    className="rounded-2xl border border-[oklch(0.75_0.20_185/0.3)] px-4 py-3 text-left font-mono text-sm font-semibold transition hover:bg-[oklch(0.75_0.20_185/0.08)]"
+                    style={{ color: "oklch(0.75 0.20 185)" }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
         </section>
 
