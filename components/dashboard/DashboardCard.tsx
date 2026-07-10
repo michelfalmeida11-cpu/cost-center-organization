@@ -10,7 +10,7 @@ interface DashboardCardProps extends React.HTMLAttributes<HTMLDivElement> {
 
 export default function DashboardCard({ children, className, ...props }: DashboardCardProps) {
   return (
-    <Card className={`h-full min-h-[240px] overflow-hidden rounded-[28px] border border-white/10 bg-[#081425] p-5 md:p-6 shadow-[0_28px_100px_rgba(0,0,0,0.26)] transition duration-200 ${className ?? ""}`} {...props}>
+    <Card className={`h-full overflow-hidden rounded-[18px] border border-white/5 bg-[#111C2E] p-5 shadow-[0_10px_30px_rgba(0,0,0,0.25)] transition duration-200 hover:-translate-y-0.5 ${className ?? ""}`} {...props}>
       {children}
     </Card>
   );

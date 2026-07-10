@@ -7,22 +7,21 @@ import Sparkline from "../dashboard/Sparkline";
 export default function DetailCard({ item }: { item: any }) {
   const Icon = item.icon;
   return (
-    <DashboardCard className="h-full min-h-[260px]">
+    <DashboardCard className="h-[130px] p-5">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.32em] text-slate-400">{item.label}</p>
-          <p className="mt-4 text-2xl font-semibold leading-tight text-white">{item.value}</p>
+          <p className="text-[12px] font-medium uppercase tracking-[0.1667em] text-slate-400">{item.label}</p>
+          <p className="mt-2 text-[18px] font-semibold leading-tight text-white xl:text-[20px]">{item.value}</p>
         </div>
-        <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-[#0E1B34] text-white shadow-[0_24px_70px_rgba(0,0,0,0.18)]">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#0F1B2D] text-white">
           <Icon className="h-6 w-6" style={{ color: item.color }} />
         </div>
       </div>
-      <div className="mt-6 flex items-center justify-between gap-3 rounded-[18px] bg-[#091623] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)]">
-        <p className="text-sm text-slate-400">Participação</p>
-        <span className="text-sm font-semibold" style={{ color: item.color }}>{item.percent}</span>
+      <div className="mt-2 flex items-center justify-between gap-3">
+        <p className="text-[13px] text-slate-400">{item.percent} do total</p>
       </div>
-      <div className="mt-6 rounded-[22px] bg-[#0B1830] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]">
-        <Sparkline data={item.series} color={item.color} />
+      <div className="mt-3 rounded-[14px] bg-[#0F1B2D] p-1.5">
+        <Sparkline data={item.series} color={item.color} height={26} />
       </div>
     </DashboardCard>
   );

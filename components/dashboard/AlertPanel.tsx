@@ -5,18 +5,18 @@ import DashboardCard from "./DashboardCard";
 
 export default function AlertPanel({ data }: { data: any[] }) {
   return (
-    <div className="grid gap-6 md:grid-cols-2">
+    <div className="grid auto-rows-fr gap-5 md:grid-cols-2">
       {data.map((item) => {
         const Icon = item.icon;
         return (
-          <DashboardCard key={item.label} className="!p-6" style={{ background: item.bg, borderColor: 'rgba(255,255,255,0.08)' }}>
+          <DashboardCard key={item.label} className="h-[86px] !rounded-[16px] !p-4" style={{ background: item.bg, borderColor: 'rgba(255,255,255,0.06)' }}>
             <div className="flex items-start gap-4 text-white">
-              <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-white/10 shadow-[0_20px_35px_rgba(0,0,0,0.16)]">
-                <Icon className="h-6 w-6" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-[14px] bg-white/10">
+                <Icon className="h-5 w-5" />
               </div>
               <div>
-                <p className="text-[11px] uppercase tracking-[0.32em] text-slate-200">{item.label}</p>
-                <p className="mt-3 text-sm leading-6 text-slate-100">{item.description}</p>
+                <p className="text-[11px] font-medium uppercase tracking-[0.1667em] text-slate-200">{item.label}</p>
+                <p className="mt-1.5 text-[13px] leading-5 text-slate-100">{item.description}</p>
               </div>
             </div>
           </DashboardCard>

@@ -271,16 +271,16 @@ const itemVariants = {
 // Panels extracted to components/dashboard; they are imported above and receive data via props.
 
 function SidebarButton({ label, Icon, active, href, onClick }: { label: string; Icon: ElementType; active?: boolean; href?: string; onClick?: () => void }) {
-  const baseClass = `group relative flex w-full items-center gap-4 rounded-[20px] border border-transparent px-4 py-4 text-left text-sm font-semibold transition duration-200 ${active ? 'bg-sky-500/10 text-sky-100 shadow-[0_22px_65px_rgba(56,189,248,0.16)] border-sky-500/15' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`;
-  const iconClass = active ? 'text-sky-300' : 'text-slate-400 group-hover:text-white';
+  const baseClass = `group relative flex h-12 w-full items-center gap-3 rounded-[12px] border border-transparent px-4 text-left text-[14px] font-medium transition duration-200 ${active ? 'border-[#2F80ED]/25 bg-[linear-gradient(90deg,rgba(47,128,237,0.28),rgba(37,213,242,0.08))] text-white shadow-[0_0_24px_rgba(47,128,237,0.22)]' : 'text-slate-400 hover:bg-white/5 hover:text-white'}`;
+  const iconClass = active ? 'text-[#7CCBFF]' : 'text-slate-400 group-hover:text-white';
 
   const content = (
     <>
-      <span className={`flex h-12 w-12 items-center justify-center rounded-3xl ${active ? 'bg-sky-500/10' : 'bg-[#0D1830]'}`}>
-        <Icon className={`h-5 w-5 ${iconClass}`} />
+      <span className={`flex h-5 w-5 items-center justify-center ${active ? 'text-[#7CCBFF]' : ''}`}>
+        <Icon className={`h-5 w-5 ${iconClass}`} strokeWidth={1.9} />
       </span>
       <span className="truncate">{label}</span>
-      {active ? <span className="absolute left-0 top-0 h-full w-1 rounded-r-full bg-sky-400" /> : null}
+      {active ? <span className="absolute inset-y-1 left-0 w-0.5 rounded-r-full bg-[#2F80ED]" /> : null}
     </>
   );
 
@@ -396,21 +396,20 @@ export default function DashboardPage() {
     <ExecutiveDashboardGrid
       aside={(
         <>
-          <div className="rounded-[28px] border border-white/10 bg-[#081429] p-6 shadow-[0_25px_80px_rgba(0,0,0,0.20)]">
-            <div className="flex items-center gap-4 mb-5">
-              <div className="flex h-14 w-14 items-center justify-center rounded-3xl border border-sky-500/20 bg-sky-500/10 text-sky-300 shadow-[0_20px_60px_rgba(56,189,248,0.14)]">
+          <div className="rounded-[18px] border border-white/5 bg-[#08111F] p-4">
+            <div className="mb-5 flex items-center gap-4">
+              <div className="flex h-12 w-12 items-center justify-center rounded-full border border-[#2F80ED]/20 bg-[#10233F] text-sky-300">
                 <span className="text-lg font-semibold">C</span>
               </div>
               <div>
-                <p className="text-[11px] uppercase tracking-[0.32em] text-slate-400">Centro de Custo</p>
-                <p className="mt-1 text-lg font-semibold text-white">Operacionais</p>
+                <p className="text-[11px] uppercase tracking-[0.32em] text-slate-500">Centro de</p>
+                <p className="text-[24px] font-bold leading-none text-white">CUSTOS OPERACIONAIS</p>
+                <p className="mt-1 text-xs uppercase tracking-[0.24em] text-slate-500">Mineração</p>
               </div>
             </div>
-            <div className="rounded-[24px] border border-[#233754] bg-[#091827] p-5">
-              <p className="text-[10px] uppercase tracking-[0.33em] text-slate-500">Mina do Brumado</p>
-              <p className="mt-3 text-sm font-semibold text-white">Dashboard Executivo</p>
-              <p className="mt-4 text-[10px] text-slate-500">Última atualização</p>
-              <p className="text-sm font-semibold text-slate-200">30/06/2025 18:45</p>
+            <div className="rounded-[12px] border border-white/5 bg-[#0B1627] p-4">
+              <p className="text-[10px] uppercase tracking-[0.24em] text-slate-500">Mina do Brumado</p>
+              <p className="mt-2 text-sm font-medium text-white">Dashboard Executivo</p>
             </div>
           </div>
 
@@ -426,10 +425,10 @@ export default function DashboardPage() {
             ))}
           </nav>
 
-          <div className="mt-auto rounded-[28px] border border-[#233754] bg-[#081428] p-5 text-[11px] text-slate-400 shadow-[0_20px_60px_rgba(0,0,0,0.12)]">
+          <div className="mt-auto rounded-[12px] border border-white/5 bg-[#0B1627] p-4 text-[11px] text-slate-400">
             <p className="mb-2 uppercase tracking-[0.24em] text-slate-500">Período Selecionado</p>
             <p className="font-semibold text-white">{dateRange}</p>
-            <div className="mt-4 border-t border-[#233754] pt-3 text-[10px] text-slate-500">
+            <div className="mt-4 border-t border-white/5 pt-3 text-[10px] text-slate-500">
               Última atualização:<br />30/06/2025 18:45:32
             </div>
           </div>
@@ -437,55 +436,44 @@ export default function DashboardPage() {
       )}
     >
       <div className="grid gap-6 2xl:gap-8">
-        <section className="rounded-[32px] border border-white/10 bg-[#081827] p-5 xl:p-5 2xl:p-6 shadow-[0_24px_80px_rgba(0,0,0,0.24)] backdrop-blur-xl">
-          <div className="flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+        <section className="rounded-[18px] border border-white/5 bg-[#08111F] p-6 shadow-[0_10px_30px_rgba(0,0,0,0.25)]">
+          <div className="flex min-h-[72px] flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div>
-              <p className="text-sm uppercase tracking-[0.35em] text-slate-400">{pageTitle}</p>
-              <h1 className="mt-2 text-[28px] font-semibold leading-tight text-white xl:text-[30px] 2xl:text-[34px]">Centro de Custos Operacionais</h1>
+              <p className="text-[12px] uppercase tracking-[0.333em] text-slate-500">Dashboard Executivo</p>
+              <h1 className="mt-1 text-5xl font-bold leading-none text-white">{pageTitle}</h1>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-center 2xl:gap-3">
-              <div className="flex h-11 items-center gap-3 rounded-3xl border border-[#233754] bg-[#0E1B34] px-4 shadow-[0_10px_40px_rgba(0,0,0,0.14)] xl:px-4 2xl:px-5">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-[220px_140px_140px_140px_auto] xl:items-center">
+              <div className="flex h-11 items-center gap-3 rounded-[12px] border border-white/5 bg-[#0F1B2D] px-4">
                 <Calendar className="h-4 w-4 text-slate-300" />
                 <span className="text-sm text-slate-200">{dateRange}</span>
               </div>
-              <div className="flex h-11 items-center justify-between gap-3 rounded-3xl border border-[#233754] bg-[#0E1B34] px-4 shadow-[0_10px_40px_rgba(0,0,0,0.14)] xl:px-4 2xl:px-5">
-                <div className="flex items-center gap-3">
-                  <Bell className="h-5 w-5 text-slate-300" />
-                  <span className="text-sm text-slate-200">Notificações</span>
-                </div>
-                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#0B1B34] text-slate-200 xl:h-11 xl:w-11">
-                  <UserCircle className="h-6 w-6 xl:h-[26px] xl:w-[26px]" />
+              {[
+                { label: "Equipamento", value: equipamento, setter: setEquipamento },
+                { label: "Centro de Custo", value: centro, setter: setCentro },
+                { label: "Setor", value: setor, setter: setSetor },
+              ].map((filter) => (
+                <label key={filter.label} className="block">
+                  <div className="relative flex h-11 items-center rounded-[12px] border border-white/5 bg-[#0F1B2D] px-4">
+                    <select aria-label={filter.label} value={filter.value} onChange={(event) => filter.setter(event.target.value)} className="w-full bg-transparent text-sm text-white outline-none">
+                      {filterOptions.map((option) => (
+                        <option key={option} value={option}>{option}</option>
+                      ))}
+                    </select>
+                    <Search className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                  </div>
+                </label>
+              ))}
+              <div className="flex h-11 items-center justify-end gap-4 rounded-[12px] px-1">
+                <Bell className="h-5 w-5 text-slate-400" />
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#0F1B2D] text-[12px] font-medium text-slate-200">
+                  MA
                 </div>
               </div>
             </div>
           </div>
-          <div className="mt-4 grid gap-4 xl:grid-cols-3 2xl:gap-6">
-            {[
-              { label: "Equipamento", value: equipamento, setter: setEquipamento },
-              { label: "Centro de Custo", value: centro, setter: setCentro },
-              { label: "Setor", value: setor, setter: setSetor },
-            ].map((filter) => (
-              <label key={filter.label} className="block">
-                <p className="text-[10px] uppercase tracking-[0.28em] text-slate-500">{filter.label}</p>
-                <div className="mt-2 relative flex h-11 items-center rounded-[18px] border border-[#233754] bg-[#0A162A] px-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] xl:px-4 2xl:px-5">
-                  <select
-                    aria-label={filter.label}
-                    value={filter.value}
-                    onChange={(event) => filter.setter(event.target.value)}
-                    className="w-full bg-transparent text-sm text-white outline-none"
-                  >
-                    {filterOptions.map((option) => (
-                      <option key={option} value={option}>{option}</option>
-                    ))}
-                  </select>
-                  <Search className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                </div>
-              </label>
-            ))}
-          </div>
         </section>
 
-        <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-12 2xl:gap-6">
+        <section className="grid auto-rows-fr grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-12">
           {derivedTopKpis.map((item) => (
             <div key={item.label} className="col-span-12 sm:col-span-6 xl:col-span-2">
               <MetricCard item={item} onSelect={handleKpiSelect} active={activeMetric === item.label} />
@@ -493,7 +481,7 @@ export default function DashboardPage() {
           ))}
         </section>
 
-        <section className="grid grid-cols-1 gap-6 xl:grid-cols-5 2xl:gap-8">
+        <section className="grid auto-rows-fr grid-cols-1 gap-5 xl:grid-cols-5">
           {detailCards.map((item) => (
             <div key={item.label} className="col-span-1">
               <DetailCard item={item} />
@@ -501,7 +489,7 @@ export default function DashboardPage() {
           ))}
         </section>
 
-        <section className="grid grid-cols-1 gap-6 xl:grid-cols-12 2xl:gap-10">
+        <section className="grid auto-rows-fr grid-cols-1 gap-5 xl:grid-cols-12">
           <div className="col-span-12 xl:col-span-5 2xl:col-span-4">
             <CostSharePanel data={costShareData} total={"R$ 8.764.520,45"} visible={visibleCostShare} onToggle={handleToggleCostShare} />
           </div>
@@ -513,7 +501,7 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        <section className="grid grid-cols-1 gap-6 xl:grid-cols-12 2xl:gap-10">
+        <section className="grid auto-rows-fr grid-cols-1 gap-5 xl:grid-cols-12">
           <div className="col-span-12 xl:col-span-4 2xl:col-span-3">
             <GaugePanel stats={gaugeStats} value={62450} />
           </div>
@@ -525,12 +513,12 @@ export default function DashboardPage() {
           </div>
         </section>
 
-        <section className="grid grid-cols-1 gap-6 xl:grid-cols-12 2xl:gap-10">
+        <section className="grid auto-rows-fr grid-cols-1 gap-5 xl:grid-cols-12">
           <div className="col-span-12 xl:col-span-8 2xl:col-span-7">
             <AlertPanel data={alertItems} />
           </div>
           <div className="col-span-12 xl:col-span-4 2xl:col-span-5">
-            <DashboardCard className="h-full">
+            <DashboardCard className="h-[191px]">
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <p className="text-[12px] uppercase tracking-[0.1667em] text-slate-400">Ações Rápidas</p>
