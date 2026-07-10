@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Presence } from "@/components/fiori/motion";
+import { Presence } from "@/components/fiori/motion.tsx";
 
 interface MotionPresenceProps {
   children: ReactNode;

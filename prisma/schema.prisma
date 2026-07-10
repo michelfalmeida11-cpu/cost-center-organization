@@ -1,0 +1,386 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserStatus {
+  ATIVO
+  INATIVO
+  BLOQUEADO
+  FERIAS
+  AFASTADO
+}
+
+enum LogLevel {
+  INFO
+  WARN
+  ERROR
+}
+
+enum BackupType {
+  MANUAL
+  AUTOMATICO
+}
+
+enum BackupStatus {
+  PENDENTE
+  SUCESSO
+  FALHA
+}
+
+model User {
+  id            String      @id @default(cuid())
+  firstName     String
+  lastName      String
+  cpf           String      @unique
+  email         String      @unique
+  phone         String?
+  roleTitle     String?
+  department    String?
+  costCenter    String?
+  project       String?
+  registration  String?     @unique
+  photoUrl      String?
+  passwordHash  String
+  status        UserStatus  @default(ATIVO)
+  lastLoginAt   DateTime?
+  notes         String?
+  profileId     String?
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  profile       Profile?    @relation(fields: [profileId], references: [id])
+  audits        AuditLog[]
+  logs          SystemLog[]
+
+  @@index([status])
+  @@index([profileId])
+}
+
+model Profile {
+  id            String              @id @default(cuid())
+  name          String              @unique
+  description   String?
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  users         User[]
+  permissions   ProfilePermission[]
+}
+
+model Permission {
+  id            String              @id @default(cuid())
+  moduleKey     String
+  moduleLabel   String
+  canView       Boolean             @default(false)
+  canCreate     Boolean             @default(false)
+  canEdit       Boolean             @default(false)
+  canDelete     Boolean             @default(false)
+  canExport     Boolean             @default(false)
+  canImport     Boolean             @default(false)
+  canConfigure  Boolean             @default(false)
+  canAudit      Boolean             @default(false)
+  canAdmin      Boolean             @default(false)
+  createdAt     DateTime            @default(now())
+  updatedAt     DateTime            @updatedAt
+
+  profiles      ProfilePermission[]
+
+  @@unique([moduleKey])
+}
+
+model ProfilePermission {
+  id            String      @id @default(cuid())
+  profileId     String
+  permissionId  String
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  profile       Profile     @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  permission    Permission  @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([profileId, permissionId])
+  @@index([profileId])
+  @@index([permissionId])
+}
+
+model AuditLog {
+  id            String      @id @default(cuid())
+  userId        String?
+  dateTime      DateTime    @default(now())
+  ipAddress     String?
+  device        String?
+  module        String
+  screen        String
+  action        String
+  oldValue      Json?
+  newValue      Json?
+  createdAt     DateTime    @default(now())
+
+  user          User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([dateTime])
+  @@index([module])
+  @@index([userId])
+}
+
+model SystemLog {
+  id            String      @id @default(cuid())
+  userId        String?
+  level         LogLevel    @default(INFO)
+  event         String
+  message       String
+  metadata      Json?
+  createdAt     DateTime    @default(now())
+
+  user          User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([level])
+  @@index([event])
+  @@index([createdAt])
+  @@index([userId])
+}
+
+model BackupJob {
+  id            String        @id @default(cuid())
+  type          BackupType
+  status        BackupStatus  @default(PENDENTE)
+  fileName      String?
+  fileUrl       String?
+  sizeBytes     BigInt?
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  errorMessage  String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model SystemSetting {
+  id               String    @id @default(cuid())
+  companyName      String?
+  systemName       String?
+  logoUrl          String?
+  theme            String?
+  language         String?
+  currency         String?
+  dateFormat       String?
+  smtpHost         String?
+  smtpPort         String?
+  smtpUser         String?
+  smtpPassword     String?
+  emailFrom        String?
+  databaseName     String?
+  integrations     Json?
+  alertsConfig     Json?
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+model Project {
+  id            String       @id @default(cuid())
+  code          String       @unique
+  name          String
+  description   String?
+  isActive      Boolean      @default(true)
+  startsAt      DateTime?
+  endsAt        DateTime?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  costCenters   CostCenter[]
+
+  @@index([name])
+  @@index([isActive])
+}
+
+model CostCenter {
+  id            String       @id @default(cuid())
+  code          String       @unique
+  name          String
+  description   String?
+  projectId     String
+  managerName   String?
+  isActive      Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  project       Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  equipments    Equipment[]
+  stockItems    StockItem[]
+
+  @@index([projectId])
+  @@index([name])
+  @@index([isActive])
+}
+
+model Equipment {
+  id            String       @id @default(cuid())
+  code          String       @unique
+  name          String
+  type          String?
+  model         String?
+  manufacturer  String?
+  costCenterId  String
+  isActive      Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  costCenter    CostCenter   @relation(fields: [costCenterId], references: [id], onDelete: Cascade)
+  costs         CostEntry[]
+
+  @@index([costCenterId])
+  @@index([name])
+  @@index([isActive])
+}
+
+model CostEntry {
+  id             String         @id @default(cuid())
+  equipmentId    String
+  referenceDate  DateTime
+  category       String
+  amount         Decimal        @db.Decimal(18, 2)
+  notes          String?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  equipment      Equipment      @relation(fields: [equipmentId], references: [id], onDelete: Cascade)
+  dieselEntries  DieselEntry[]
+
+  @@index([equipmentId])
+  @@index([referenceDate])
+  @@index([category])
+}
+
+model DieselEntry {
+  id              String         @id @default(cuid())
+  costEntryId     String
+  liters          Decimal        @db.Decimal(18, 3)
+  unitPrice       Decimal        @db.Decimal(18, 4)
+  totalCost       Decimal        @db.Decimal(18, 2)
+  supplyDate      DateTime
+  supplier        String?
+  notes           String?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  costEntry       CostEntry      @relation(fields: [costEntryId], references: [id], onDelete: Cascade)
+  drillingEntries DrillingEntry[]
+
+  @@index([costEntryId])
+  @@index([supplyDate])
+}
+
+model DrillingEntry {
+  id                String           @id @default(cuid())
+  dieselEntryId     String
+  drilledMeters     Decimal          @db.Decimal(18, 2)
+  holesCount        Int?
+  operationDate     DateTime
+  notes             String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  dieselEntry       DieselEntry      @relation(fields: [dieselEntryId], references: [id], onDelete: Cascade)
+  blastingEntries   BlastingEntry[]
+
+  @@index([dieselEntryId])
+  @@index([operationDate])
+}
+
+model BlastingEntry {
+  id                String           @id @default(cuid())
+  drillingEntryId   String
+  explosivesKg      Decimal          @db.Decimal(18, 2)
+  detonationDate    DateTime
+  area              String?
+  notes             String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  drillingEntry     DrillingEntry    @relation(fields: [drillingEntryId], references: [id], onDelete: Cascade)
+  logisticsEntries  LogisticsEntry[]
+
+  @@index([drillingEntryId])
+  @@index([detonationDate])
+}
+
+model LogisticsEntry {
+  id                String           @id @default(cuid())
+  blastingEntryId   String
+  hauledTons        Decimal          @db.Decimal(18, 2)
+  tripsCount        Int?
+  operationDate     DateTime
+  destination       String?
+  notes             String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  blastingEntry     BlastingEntry    @relation(fields: [blastingEntryId], references: [id], onDelete: Cascade)
+  indicators        IndicatorEntry[]
+
+  @@index([blastingEntryId])
+  @@index([operationDate])
+}
+
+model IndicatorEntry {
+  id                String           @id @default(cuid())
+  logisticsEntryId  String
+  name              String
+  value             Decimal          @db.Decimal(18, 4)
+  unit              String?
+  measuredAt        DateTime
+  notes             String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  logisticsEntry    LogisticsEntry   @relation(fields: [logisticsEntryId], references: [id], onDelete: Cascade)
+
+  @@index([logisticsEntryId])
+  @@index([name])
+  @@index([measuredAt])
+}
+
+model StockItem {
+  id             String            @id @default(cuid())
+  costCenterId   String
+  sku            String            @unique
+  name           String
+  unit           String
+  currentQty     Decimal           @db.Decimal(18, 3)
+  minQty         Decimal?          @db.Decimal(18, 3)
+  maxQty         Decimal?          @db.Decimal(18, 3)
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  costCenter     CostCenter        @relation(fields: [costCenterId], references: [id], onDelete: Cascade)
+  movements      StockMovement[]
+
+  @@index([costCenterId])
+  @@index([name])
+}
+
+model StockMovement {
+  id             String            @id @default(cuid())
+  stockItemId    String
+  movementType   String
+  quantity       Decimal           @db.Decimal(18, 3)
+  unitCost       Decimal?          @db.Decimal(18, 4)
+  totalCost      Decimal?          @db.Decimal(18, 2)
+  movementDate   DateTime
+  notes          String?
+  createdAt      DateTime          @default(now())
+
+  stockItem      StockItem         @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
+
+  @@index([stockItemId])
+  @@index([movementDate])
+  @@index([movementType])
+}

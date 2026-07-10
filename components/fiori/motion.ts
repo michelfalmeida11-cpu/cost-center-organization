@@ -1,3 +1,3 @@
 "use client";
 
-export * from "./motion.tsx";
+export * from "./motion";
