@@ -1,7 +1,8 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { AppState } from "@/lib/procurement/types";
 
 export type PersistenceDriver = "memory" | "supabase";
+type AnySupabaseClient = SupabaseClient<any, any, any, any, any>;
 
 function getSupabaseConfig() {
   const url =
@@ -18,12 +19,12 @@ function getSupabaseConfig() {
   return { url, key };
 }
 
-function getSupabaseClient() {
+function getSupabaseClient(): AnySupabaseClient | null {
   const { url, key } = getSupabaseConfig();
   if (!url || !key) return null;
   return createClient(url, key, {
     auth: { persistSession: false, autoRefreshToken: false },
-  });
+  }) as AnySupabaseClient;
 }
 
 export function isSupabaseAvailable() {
@@ -58,7 +59,7 @@ function toJsonArray(value: unknown) {
   return value;
 }
 
-async function loadStateFromRelationalTables(client: ReturnType<typeof createClient>): Promise<AppState | null> {
+async function loadStateFromRelationalTables(client: AnySupabaseClient): Promise<AppState | null> {
   const [setoresRes, fornecedoresRes, scRes, ocRes, auditRes] = await Promise.all([
     client.from("sectors").select("*"),
     client.from("suppliers").select("*"),
@@ -164,7 +165,7 @@ async function loadStateFromRelationalTables(client: ReturnType<typeof createCli
   return { setores, fornecedores, scs, ocs, auditoria };
 }
 
-async function saveStateToRelationalTables(client: ReturnType<typeof createClient>, state: AppState): Promise<boolean> {
+async function saveStateToRelationalTables(client: AnySupabaseClient, state: AppState): Promise<boolean> {
   const sectorsRows = state.setores.map((s) => ({
     id: s.id,
     nome: s.nome,

@@ -16,12 +16,12 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   return data;
 }
 
-function actorHeaders(user: CurrentUser | null) {
-  if (!user) return {};
-  return {
-    "x-user-name": user.nome,
-    "x-user-role": user.role,
-  };
+function actorHeaders(user: CurrentUser | null): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (!user) return headers;
+  headers["x-user-name"] = user.nome;
+  headers["x-user-role"] = user.role;
+  return headers;
 }
 
 export async function apiLogin(email: string, senha: string) {
