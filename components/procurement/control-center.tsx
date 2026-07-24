@@ -53,7 +53,6 @@ import {
   filterData,
   formatCurrency,
   monthlySeries,
-  sectorSeries,
   statusSeries,
   supplierRanking,
 } from "@/lib/procurement/data";
@@ -117,6 +116,15 @@ type UnifiedScOcRow = {
   sortDate: string;
 };
 
+type AiAnswerContext = {
+  delayedCount: number;
+  topSupplier: string;
+  topSector: string;
+  phaseSummary: string;
+  totalOcValue: string;
+  openOcCount: number;
+};
+
 function ocToPhase(status: OCStatus): OcPhase {
   if (status === "CANCELADA") return "REPROVADA";
   if (status === "CONFIRMADA" || status === "EM_PRODUCAO" || status === "EM_TRANSPORTE" || status === "ENTREGUE" || status === "ATRASADA") return "APROVADA";
@@ -171,6 +179,42 @@ function buildUnifiedRows(
   }));
 
   return [...ocRows, ...scRows].sort((a, b) => b.sortDate.localeCompare(a.sortDate));
+}
+
+function answerOperationalQuestion(question: string, context: AiAnswerContext) {
+  const normalized = question.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+  if (!normalized.trim()) {
+    return "Pergunte sobre atrasos, fornecedor lider, setor com mais OCs, valor total ou distribuicao de status.";
+  }
+
+  if (normalized.includes("atras") || normalized.includes("urgente") || normalized.includes("risco")) {
+    return context.delayedCount > 0
+      ? `Existem ${context.delayedCount} OCs atrasadas e elas devem ser tratadas primeiro.`
+      : "Nao existem OCs atrasadas no momento.";
+  }
+
+  if (normalized.includes("fornecedor") || normalized.includes("melhor fornecedor") || normalized.includes("lider")) {
+    return `O fornecedor com maior concentracao financeira na carteira atual e ${context.topSupplier}.`;
+  }
+
+  if (normalized.includes("setor") || normalized.includes("onde esta") || normalized.includes("maior demanda")) {
+    return `O setor com maior peso operacional de OCs no filtro atual e ${context.topSector}.`;
+  }
+
+  if (normalized.includes("status") || normalized.includes("fase") || normalized.includes("aprovad") || normalized.includes("analise")) {
+    return `Distribuicao atual das OCs: ${context.phaseSummary}.`;
+  }
+
+  if (normalized.includes("valor") || normalized.includes("financeiro") || normalized.includes("carteira")) {
+    return `O valor total da carteira de OCs filtrada e ${context.totalOcValue}.`;
+  }
+
+  if (normalized.includes("abertas") || normalized.includes("em curso") || normalized.includes("andamento")) {
+    return `Existem ${context.openOcCount} OCs em curso no filtro atual.`;
+  }
+
+  return `Resumo rapido: ${context.phaseSummary}. Setor lider: ${context.topSector}. Fornecedor lider: ${context.topSupplier}. Valor total: ${context.totalOcValue}.`;
 }
 
 function ModuleTitle({ title, subtitle }: { title: string; subtitle: string }) {
@@ -249,7 +293,6 @@ export function ProcurementControlCenter() {
   const dataset = useMemo(() => filterData(state, filters), [state, filters]);
   const kpis = useMemo(() => computeKpis(state, filters), [state, filters]);
   const monthly = useMemo(() => monthlySeries(state, filters), [state, filters]);
-  const bySector = useMemo(() => sectorSeries(state, filters), [state, filters]);
   const ranking = useMemo(() => supplierRanking(state, filters), [state, filters]);
   const statuses = useMemo(() => statusSeries(state, filters), [state, filters]);
   const unifiedRows = useMemo(() => buildUnifiedRows(dataset.scFiltered, dataset.ocFiltered as PurchaseOrder[], state.setores, state.fornecedores), [dataset.scFiltered, dataset.ocFiltered, state.setores, state.fornecedores]);
@@ -273,25 +316,18 @@ export function ProcurementControlCenter() {
     });
     return order.map((phase) => ({ status: OC_PHASE_LABEL[phase], total: map.get(phase) ?? 0 }));
   }, [dataset.ocFiltered]);
-  const portfolioByStatus = useMemo(() => {
-    const order: Array<SCStatus | OcPhase> = ["EM_ANALISE", "APROVADA", "LANCADA", "REPROVADA"];
-    const map = new Map<SCStatus | OcPhase, number>();
-    dataset.scFiltered.forEach((sc) => map.set(sc.status, (map.get(sc.status) ?? 0) + 1));
-    dataset.ocFiltered.forEach((oc) => {
-      const phase = ocToPhase(oc.status as OCStatus);
-      map.set(phase, (map.get(phase) ?? 0) + 1);
-    });
-    return order.map((status) => ({
-      status: status in OC_PHASE_LABEL ? OC_PHASE_LABEL[status as OcPhase] : SC_STATUS_LABEL[status as SCStatus],
-      total: map.get(status) ?? 0,
-    }));
-  }, [dataset.scFiltered, dataset.ocFiltered]);
-  const latestRows = useMemo(() => unifiedRows.slice(0, 6), [unifiedRows]);
+  const latestRows = useMemo(() => unifiedRows.slice(0, 8), [unifiedRows]);
   const openOcCount = useMemo(() => dataset.ocFiltered.filter((oc) => !["ENTREGUE", "CANCELADA"].includes(oc.status)).length, [dataset.ocFiltered]);
-  const avgOcTicket = useMemo(() => (dataset.ocFiltered.length ? dataset.ocFiltered.reduce((sum, oc) => sum + oc.valorOC, 0) / dataset.ocFiltered.length : 0), [dataset.ocFiltered]);
-  const topSuppliersChart = useMemo(() => ranking.slice(0, 5).map((item) => ({ fornecedor: item.fornecedor, valor: item.valorTotal })), [ranking]);
   const alerts = useMemo(() => buildAlerts(state, filters), [state, filters]);
-  const delayedOcs = useMemo(() => dataset.ocFiltered.filter((oc) => oc.status === "ATRASADA").slice(0, 6), [dataset.ocFiltered]);
+  const delayedOcs = useMemo(() => dataset.ocFiltered.filter((oc) => oc.status === "ATRASADA"), [dataset.ocFiltered]);
+  const aiContext = useMemo<AiAnswerContext>(() => ({
+    delayedCount: delayedOcs.length,
+    topSupplier: ranking[0]?.fornecedor ?? "Sem fornecedor dominante",
+    topSector: ocBySector[0]?.setor ?? "Sem setor dominante",
+    phaseSummary: ocByPhase.map((item) => `${item.status}: ${item.total}`).join(" | "),
+    totalOcValue: formatCurrency(kpis.valorTotalOC),
+    openOcCount,
+  }), [delayedOcs.length, ranking, ocBySector, ocByPhase, kpis.valorTotalOC, openOcCount]);
   const anosDisponiveis = useMemo(() => {
     const years = new Set<string>();
     state.scs.forEach((sc) => years.add(sc.dataCriacao.slice(0, 4)));
@@ -539,72 +575,18 @@ export function ProcurementControlCenter() {
           {module === "DASHBOARD" ? (
             <section>
               <ModuleTitle title="Dashboard Executivo" subtitle="Visao tatica em tempo real" />
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-                <KpiCard label="VALOR COMPROMETIDO" value={formatCompactCurrency(kpis.valorTotalOC)} note="Volume financeiro das OCs" color={GREEN} icon={BarChart3} />
-                <KpiCard label="OC EM CURSO" value={String(openOcCount)} note="Ordens abertas e em andamento" color={PURPLE} icon={Truck} />
-                <KpiCard label="PENDENTE APROVACAO" value={String(kpis.emAnalise)} note="Carteira aguardando decisao" color={AMBER} icon={Activity} />
-                <KpiCard label="SC LANCADAS" value={String(kpis.lancadas)} note="SCs prontas para conversao" color={BLUE} icon={ClipboardList} />
-                <KpiCard label="ATRASOS" value={String(kpis.entregasAtrasadas)} note="OCs com risco imediato" color={RED} icon={AlertTriangle} />
-                <KpiCard label="TICKET MEDIO OC" value={formatCompactCurrency(avgOcTicket)} note="Valor medio por ordem" color={CYAN} icon={Gauge} />
-              </div>
-
-              <div className="mt-4 grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
-                <Panel title="Carteira por Status">
-                  <ResponsiveContainer width="100%" height={260}>
-                    <PieChart>
-                      <Pie data={portfolioByStatus} dataKey="total" nameKey="status" outerRadius={92} innerRadius={48}>
-                        {portfolioByStatus.map((entry) => (
-                          <Cell key={entry.status} fill={entry.status === "Aprovada" ? GREEN : entry.status === "Em Analise" ? AMBER : entry.status === "Reprovada" ? RED : BLUE} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </Panel>
-
-                <Panel title="Valor OC por Setor">
-                  <ResponsiveContainer width="100%" height={260}>
-                    <PieChart>
-                      <Pie data={ocBySector} dataKey="valor" nameKey="setor" outerRadius={92} innerRadius={44}>
-                        {ocBySector.map((entry, index) => (
-                          <Cell key={entry.setor} fill={[BLUE, CYAN, GREEN, PURPLE, AMBER][index % 5]} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </Panel>
-
-                <Panel title="Valor OC por Mes">
-                  <ResponsiveContainer width="100%" height={260}>
-                    <BarChart data={monthly}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-                      <XAxis dataKey="mes" stroke="#94a3b8" />
-                      <YAxis stroke="#94a3b8" />
-                      <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                      <Bar dataKey="valorOC" fill={CYAN} radius={[6, 6, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </Panel>
-
-                <Panel title="Top Fornecedores">
-                  <ResponsiveContainer width="100%" height={260}>
-                    <BarChart data={topSuppliersChart}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-                      <XAxis dataKey="fornecedor" stroke="#94a3b8" interval={0} angle={-20} textAnchor="end" height={80} />
-                      <YAxis stroke="#94a3b8" />
-                      <Tooltip formatter={(value: number) => formatCurrency(value)} />
-                      <Bar dataKey="valor" fill={GREEN} radius={[6, 6, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </Panel>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <KpiCard label="VALOR TOTAL OCs" value={formatCompactCurrency(kpis.valorTotalOC)} note="Carteira financeira atual" color={GREEN} icon={BarChart3} />
+                <KpiCard label="OC EM CURSO" value={String(openOcCount)} note="Ordens abertas no filtro" color={PURPLE} icon={Truck} />
+                <KpiCard label="EM ANALISE" value={String(ocByPhase.find((item) => item.status === "Em Analise")?.total ?? 0)} note="OCs aguardando decisao" color={AMBER} icon={Activity} />
+                <KpiCard label="ATRASADAS" value={String(kpis.entregasAtrasadas)} note="Ordens com risco imediato" color={RED} icon={AlertTriangle} />
               </div>
 
               <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                <Panel title="Fase das OCs">
+                <Panel title="Status das OCs">
                   <ResponsiveContainer width="100%" height={260}>
                     <PieChart>
-                      <Pie data={ocByPhase} dataKey="total" nameKey="status" outerRadius={92} innerRadius={44}>
+                      <Pie data={ocByPhase} dataKey="total" nameKey="status" outerRadius={92} innerRadius={48}>
                         {ocByPhase.map((entry) => (
                           <Cell key={entry.status} fill={entry.status === "Aprovada" ? GREEN : entry.status === "Em Analise" ? AMBER : entry.status === "Reprovada" ? RED : BLUE} />
                         ))}
@@ -612,6 +594,25 @@ export function ProcurementControlCenter() {
                       <Tooltip />
                     </PieChart>
                   </ResponsiveContainer>
+                </Panel>
+
+                <Panel title="OCs por Setor">
+                  <ResponsiveContainer width="100%" height={260}>
+                    <PieChart>
+                      <Pie data={ocBySector} dataKey="total" nameKey="setor" outerRadius={92} innerRadius={44}>
+                        {ocBySector.map((entry, index) => (
+                          <Cell key={entry.setor} fill={[BLUE, CYAN, GREEN, PURPLE, AMBER][index % 5]} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </Panel>
+              </div>
+
+              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                <Panel title="Assistente IA Operacional">
+                  <OperationalAssistant context={aiContext} />
                 </Panel>
 
                 <Panel title="Ultimas Movimentacoes SC / OC">
@@ -648,7 +649,7 @@ export function ProcurementControlCenter() {
                 </Panel>
               </div>
 
-              <div className="mt-4 grid gap-4 lg:grid-cols-3">
+              <div className="mt-4 grid gap-4 lg:grid-cols-2">
                 <Panel title="Alertas Criticos">
                   <div className="space-y-2">
                     {alerts.slice(0, 4).map((alert) => (
@@ -668,18 +669,6 @@ export function ProcurementControlCenter() {
                     ))}
                     {alerts.length === 0 ? <p className="text-sm text-emerald-200">Sem alertas no momento.</p> : null}
                   </div>
-                </Panel>
-
-                <Panel title="OC por Setor (quantidade)">
-                  <ResponsiveContainer width="100%" height={260}>
-                    <BarChart data={ocBySector}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-                      <XAxis dataKey="setor" stroke="#94a3b8" interval={0} angle={-20} textAnchor="end" height={70} />
-                      <YAxis stroke="#94a3b8" />
-                      <Tooltip />
-                      <Bar dataKey="total" fill={BLUE} radius={[6, 6, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
                 </Panel>
 
                 <Panel title="OC com Atraso">
@@ -720,23 +709,7 @@ export function ProcurementControlCenter() {
                 </Panel>
               </div>
 
-              <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                <Panel title="Top Fornecedores">
-                  <div className="space-y-2 text-sm">
-                    {ranking.slice(0, 5).map((r) => (
-                      <div key={r.fornecedorId} className="rounded-lg border border-slate-800 bg-slate-900/60 p-2">
-                        <div className="flex items-center justify-between">
-                          <span>{r.fornecedor}</span>
-                          <span className="text-emerald-300">{r.taxaPrazo}%</span>
-                        </div>
-                        <div className="mt-1 h-1.5 rounded bg-slate-800">
-                          <div className="h-1.5 rounded bg-emerald-400" style={{ width: `${Math.max(4, Math.min(100, r.taxaPrazo))}%` }} />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </Panel>
-
+              <div className="mt-4">
                 <Panel title="Exportacao Excel">
                   <p className="mb-3 text-sm text-slate-300">Exporte dados e indicadores no layout corporativo.</p>
                   <button onClick={exportExcel} className="w-full rounded-lg border border-cyan-500/50 bg-cyan-500/10 px-4 py-2 text-cyan-100 transition hover:bg-cyan-500/20">
@@ -1031,7 +1004,6 @@ function UnifiedScOcModule({
   onDeleteOC: (id: string) => Promise<void>;
   onPickTimeline: (id: string) => void;
 }) {
-  const [entryMode, setEntryMode] = useState<"SC" | "OC">("SC");
   const [message, setMessage] = useState("");
   const rows = useMemo(() => buildUnifiedRows(scs, ocs, setores, fornecedores), [scs, ocs, setores, fornecedores]);
   const [newSC, setNewSC] = useState<{
@@ -1061,7 +1033,7 @@ function UnifiedScOcModule({
   });
   const [newOc, setNewOc] = useState({
     numeroOC: "",
-    scId: scs[0]?.id ?? "",
+    linkedNumeroSC: scs[0]?.numeroSC ?? "",
     fornecedorId: fornecedores[0]?.id ?? "",
     dataPrevistaEntrega: new Date().toISOString().slice(0, 10),
     valorOC: 0,
@@ -1077,158 +1049,122 @@ function UnifiedScOcModule({
 
       {canWrite ? (
         <Panel title="Criacao Integrada SC / OC">
-          <div className="mb-4 flex flex-wrap gap-2">
-            <button
-              className={`rounded-lg border px-4 py-2 text-sm ${entryMode === "SC" ? "border-cyan-300/70 bg-cyan-500/15 text-cyan-100" : "border-slate-700 bg-slate-900 text-slate-300"}`}
-              onClick={() => {
-                setEntryMode("SC");
-                setMessage("");
-              }}
-            >
-              Criar SC
-            </button>
-            <button
-              className={`rounded-lg border px-4 py-2 text-sm ${entryMode === "OC" ? "border-cyan-300/70 bg-cyan-500/15 text-cyan-100" : "border-slate-700 bg-slate-900 text-slate-300"}`}
-              onClick={() => {
-                setEntryMode("OC");
-                setMessage("");
-              }}
-            >
-              Criar OC
-            </button>
+          <div className="grid gap-2 md:grid-cols-4">
+            <input className="field" placeholder="Numero SC" value={newSC.numeroSC} onChange={(e) => setNewSC({ ...newSC, numeroSC: e.target.value })} />
+            <input className="field" placeholder="Numero OC" value={newOc.numeroOC} onChange={(e) => setNewOc({ ...newOc, numeroOC: e.target.value })} />
+            <select className="field" value={newSC.setorId} onChange={(e) => {
+              setNewSC({ ...newSC, setorId: e.target.value });
+              setNewOc({ ...newOc, setorId: e.target.value });
+            }}>
+              {setores.map((setor) => (
+                <option key={setor.id} value={setor.id}>{setor.nome}</option>
+              ))}
+            </select>
+            <select className="field" value={newOc.fornecedorId} onChange={(e) => {
+              setNewOc({ ...newOc, fornecedorId: e.target.value });
+              setNewSC({ ...newSC, fornecedorSugeridoId: e.target.value || null });
+            }}>
+              <option value="">Selecione o fornecedor</option>
+              {fornecedores.map((fornecedor) => (
+                <option key={fornecedor.id} value={fornecedor.id}>{fornecedor.nomeFantasia}</option>
+              ))}
+            </select>
+            <input className="field" placeholder="Solicitante" value={newSC.solicitante} onChange={(e) => setNewSC({ ...newSC, solicitante: e.target.value })} />
+            <input className="field" placeholder="Responsavel" value={newOc.responsavel} onChange={(e) => {
+              setNewOc({ ...newOc, responsavel: e.target.value });
+              setNewSC({ ...newSC, responsavel: e.target.value });
+            }} />
+            <input className="field md:col-span-2" placeholder="Descricao da SC" value={newSC.descricao} onChange={(e) => setNewSC({ ...newSC, descricao: e.target.value })} />
+            <input className="field" placeholder="Categoria" value={newSC.categoria} onChange={(e) => setNewSC({ ...newSC, categoria: e.target.value })} />
+            <input className="field" type="date" value={newOc.dataPrevistaEntrega} onChange={(e) => setNewOc({ ...newOc, dataPrevistaEntrega: e.target.value })} />
+            <input className="field" type="number" placeholder="Valor SC" value={newSC.valorEstimado} onChange={(e) => setNewSC({ ...newSC, valorEstimado: Number(e.target.value) })} />
+            <input className="field" type="number" placeholder="Valor OC" value={newOc.valorOC} onChange={(e) => setNewOc({ ...newOc, valorOC: Number(e.target.value) })} />
           </div>
 
-          {entryMode === "SC" ? (
-            <>
-              <div className="grid gap-2 md:grid-cols-4">
-                <input className="field" placeholder="SC" value={newSC.numeroSC} onChange={(e) => setNewSC({ ...newSC, numeroSC: e.target.value })} />
-                <input className="field" placeholder="Solicitante" value={newSC.solicitante} onChange={(e) => setNewSC({ ...newSC, solicitante: e.target.value })} />
-                <select className="field" value={newSC.setorId} onChange={(e) => setNewSC({ ...newSC, setorId: e.target.value })}>
-                  {setores.map((setor) => (
-                    <option key={setor.id} value={setor.id}>{setor.nome}</option>
-                  ))}
-                </select>
-                <select className="field" value={newSC.fornecedorSugeridoId ?? ""} onChange={(e) => setNewSC({ ...newSC, fornecedorSugeridoId: e.target.value || null })}>
-                  <option value="">Sem fornecedor</option>
-                  {fornecedores.map((fornecedor) => (
-                    <option key={fornecedor.id} value={fornecedor.id}>{fornecedor.nomeFantasia}</option>
-                  ))}
-                </select>
-                <input className="field md:col-span-2" placeholder="Descricao" value={newSC.descricao} onChange={(e) => setNewSC({ ...newSC, descricao: e.target.value })} />
-                <input className="field" placeholder="Categoria" value={newSC.categoria} onChange={(e) => setNewSC({ ...newSC, categoria: e.target.value })} />
-                <input className="field" type="number" placeholder="Valor" value={newSC.valorEstimado} onChange={(e) => setNewSC({ ...newSC, valorEstimado: Number(e.target.value) })} />
-                <input className="field" placeholder="Responsavel" value={newSC.responsavel} onChange={(e) => setNewSC({ ...newSC, responsavel: e.target.value })} />
-                <input className="field md:col-span-2" placeholder="Justificativa" value={newSC.justificativa} onChange={(e) => setNewSC({ ...newSC, justificativa: e.target.value })} />
-                <input className="field md:col-span-2" placeholder="Observacoes" value={newSC.observacoes} onChange={(e) => setNewSC({ ...newSC, observacoes: e.target.value })} />
-              </div>
-              <button
-                className="mt-3 rounded-lg border border-cyan-400/45 bg-cyan-500/10 px-4 py-2 text-sm text-cyan-100"
-                onClick={async () => {
-                  if (!newSC.numeroSC || !newSC.solicitante || !newSC.descricao) {
-                    setMessage("Preencha SC, Solicitante e Descricao.");
-                    return;
-                  }
+          <div className="mt-3 flex flex-wrap gap-2">
+            <button
+              className="rounded-lg border border-cyan-400/45 bg-cyan-500/10 px-4 py-2 text-sm text-cyan-100"
+              onClick={async () => {
+                if (!newSC.numeroSC || !newSC.solicitante || !newSC.descricao) {
+                  setMessage("Preencha Numero SC, Solicitante e Descricao da SC.");
+                  return;
+                }
 
-                  try {
-                    await onCreateSC({
-                      numeroSC: newSC.numeroSC,
-                      dataCriacao: new Date().toISOString().slice(0, 10),
-                      solicitante: newSC.solicitante,
-                      setorId: newSC.setorId,
-                      descricao: newSC.descricao,
-                      categoria: newSC.categoria,
-                      prioridade: newSC.prioridade,
-                      valorEstimado: newSC.valorEstimado,
-                      fornecedorSugeridoId: newSC.fornecedorSugeridoId,
-                      justificativa: newSC.justificativa,
-                      status: "EM_ANALISE",
-                      responsavel: newSC.responsavel,
-                      dataAprovacao: null,
-                      dataReprovacao: null,
-                      motivoReprovacao: null,
-                      dataLancamento: null,
-                      numeroOCRelacionada: null,
-                      observacoes: newSC.observacoes,
-                      anexos: [],
-                    });
-                    setNewSC({ ...newSC, numeroSC: "", solicitante: "", descricao: "", valorEstimado: 0, justificativa: "", observacoes: "" });
-                    setMessage("SC criada com sucesso.");
-                  } catch (error) {
-                    setMessage((error as Error).message || "Falha ao criar SC.");
-                  }
-                }}
-              >
-                Salvar SC
-              </button>
-            </>
-          ) : (
-            <>
-              <div className="grid gap-2 md:grid-cols-4">
-                <input className="field" placeholder="OC" value={newOc.numeroOC} onChange={(e) => setNewOc({ ...newOc, numeroOC: e.target.value })} />
-                <select className="field" value={newOc.scId} onChange={(e) => setNewOc({ ...newOc, scId: e.target.value })}>
-                  {scs.map((sc) => (
-                    <option key={sc.id} value={sc.id}>{sc.numeroSC}</option>
-                  ))}
-                </select>
-                <select className="field" value={newOc.setorId} onChange={(e) => setNewOc({ ...newOc, setorId: e.target.value })}>
-                  {setores.map((setor) => (
-                    <option key={setor.id} value={setor.id}>{setor.nome}</option>
-                  ))}
-                </select>
-                <select className="field" value={newOc.fornecedorId} onChange={(e) => setNewOc({ ...newOc, fornecedorId: e.target.value })}>
-                  {fornecedores.map((fornecedor) => (
-                    <option key={fornecedor.id} value={fornecedor.id}>{fornecedor.nomeFantasia}</option>
-                  ))}
-                </select>
-                <input className="field" type="number" placeholder="Valor" value={newOc.valorOC} onChange={(e) => setNewOc({ ...newOc, valorOC: Number(e.target.value) })} />
-                <input className="field" type="date" value={newOc.dataPrevistaEntrega} onChange={(e) => setNewOc({ ...newOc, dataPrevistaEntrega: e.target.value })} />
-                <input className="field" placeholder="Responsavel" value={newOc.responsavel} onChange={(e) => setNewOc({ ...newOc, responsavel: e.target.value })} />
-                <input className="field" placeholder="Condicao de Pagamento" value={newOc.condicaoPagamento} onChange={(e) => setNewOc({ ...newOc, condicaoPagamento: e.target.value })} />
-              </div>
-              <button
-                className="mt-3 rounded-lg border border-cyan-400/45 bg-cyan-500/10 px-4 py-2 text-sm text-cyan-100"
-                onClick={async () => {
-                  if (!newOc.numeroOC || !newOc.scId || !newOc.fornecedorId || !newOc.setorId) {
-                    setMessage("Preencha OC, SC, Setor e Fornecedor.");
-                    return;
-                  }
+                try {
+                  await onCreateSC({
+                    numeroSC: newSC.numeroSC,
+                    dataCriacao: new Date().toISOString().slice(0, 10),
+                    solicitante: newSC.solicitante,
+                    setorId: newSC.setorId,
+                    descricao: newSC.descricao,
+                    categoria: newSC.categoria,
+                    prioridade: newSC.prioridade,
+                    valorEstimado: newSC.valorEstimado,
+                    fornecedorSugeridoId: newSC.fornecedorSugeridoId,
+                    justificativa: newSC.justificativa,
+                    status: "EM_ANALISE",
+                    responsavel: newSC.responsavel,
+                    dataAprovacao: null,
+                    dataReprovacao: null,
+                    motivoReprovacao: null,
+                    dataLancamento: null,
+                    numeroOCRelacionada: newOc.numeroOC || null,
+                    observacoes: newSC.observacoes,
+                    anexos: [],
+                  });
+                  setNewSC({ ...newSC, numeroSC: "", solicitante: "", descricao: "", valorEstimado: 0, justificativa: "", observacoes: "" });
+                  setMessage("SC criada com sucesso.");
+                } catch (error) {
+                  setMessage((error as Error).message || "Falha ao criar SC.");
+                }
+              }}
+            >
+              Salvar SC
+            </button>
+            <button
+              className="rounded-lg border border-blue-400/45 bg-blue-500/10 px-4 py-2 text-sm text-blue-100"
+              onClick={async () => {
+                const linkedSc = scs.find((sc) => sc.numeroSC.trim().toLowerCase() === newSC.numeroSC.trim().toLowerCase()) ?? scs.find((sc) => sc.numeroSC === newOc.linkedNumeroSC);
+                if (!newOc.numeroOC || !linkedSc || !newOc.fornecedorId || !newOc.setorId) {
+                  setMessage("Para criar a OC informe Numero OC, Numero SC ja existente, Setor e Fornecedor.");
+                  return;
+                }
 
-                  const today = new Date().toISOString().slice(0, 10);
+                const today = new Date().toISOString().slice(0, 10);
 
-                  try {
-                    await onCreateOC({
-                      numeroOC: newOc.numeroOC,
-                      scId: newOc.scId,
-                      fornecedorId: newOc.fornecedorId,
-                      dataOC: today,
-                      dataEmissao: today,
-                      dataPrevistaEntrega: newOc.dataPrevistaEntrega,
-                      dataRealEntrega: null,
-                      valorOC: newOc.valorOC,
-                      setorId: newOc.setorId,
-                      responsavel: newOc.responsavel,
-                      status: "CRIADA",
-                      condicaoPagamento: newOc.condicaoPagamento,
-                      observacoes: newOc.observacoes,
-                      anexos: [],
-                    });
-                    setNewOc({ ...newOc, numeroOC: "", valorOC: 0, responsavel: "", observacoes: "" });
-                    setMessage("OC criada com sucesso.");
-                  } catch (error) {
-                    setMessage((error as Error).message || "Falha ao criar OC.");
-                  }
-                }}
-              >
-                Salvar OC
-              </button>
-            </>
-          )}
+                try {
+                  await onCreateOC({
+                    numeroOC: newOc.numeroOC,
+                    scId: linkedSc.id,
+                    fornecedorId: newOc.fornecedorId,
+                    dataOC: today,
+                    dataEmissao: today,
+                    dataPrevistaEntrega: newOc.dataPrevistaEntrega,
+                    dataRealEntrega: null,
+                    valorOC: newOc.valorOC,
+                    setorId: newOc.setorId,
+                    responsavel: newOc.responsavel,
+                    status: "CRIADA",
+                    condicaoPagamento: newOc.condicaoPagamento,
+                    observacoes: newOc.observacoes,
+                    anexos: [],
+                  });
+                  setNewOc({ ...newOc, numeroOC: "", valorOC: 0, observacoes: "" });
+                  setMessage("OC criada com sucesso.");
+                } catch (error) {
+                  setMessage((error as Error).message || "Falha ao criar OC.");
+                }
+              }}
+            >
+              Salvar OC
+            </button>
+          </div>
 
           {message ? <p className="mt-3 text-sm text-cyan-200">{message}</p> : null}
         </Panel>
       ) : null}
 
-      <Panel title="Lista Consolidada SC / OC">
+      <Panel title="Lista de Acompanhamento SC / OC">
         <div className="overflow-auto">
           <table className="min-w-[1080px] w-full text-sm">
             <thead className="text-left text-[11px] uppercase tracking-[0.14em] text-slate-500">
@@ -1253,54 +1189,51 @@ function UnifiedScOcModule({
                     <td className="pr-2 text-slate-200">{row.numeroOC}</td>
                     <td className="pr-2">{row.setor}</td>
                     <td>
-                      <div className="flex min-w-[240px] items-center gap-2 overflow-x-auto pb-1">
-                        <span className={`whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-medium ${businessStatusBadge(row.statusKey)}`}>{row.statusLabel}</span>
-                        {canWrite ? (
-                          row.entity === "SC" && scRecord ? (
-                            <select
-                              className="field min-w-[150px] text-xs"
-                              value={scRecord.status}
-                              onChange={async (e) => {
-                                const nextStatus = e.target.value as SCStatus;
-                                await onUpdateSC(scRecord.id, {
-                                  status: nextStatus,
-                                  dataAprovacao: nextStatus === "APROVADA" ? new Date().toISOString().slice(0, 10) : scRecord.dataAprovacao,
-                                  dataReprovacao: nextStatus === "REPROVADA" ? new Date().toISOString().slice(0, 10) : scRecord.dataReprovacao,
-                                  dataLancamento: nextStatus === "LANCADA" ? new Date().toISOString().slice(0, 10) : scRecord.dataLancamento,
-                                });
-                              }}
-                            >
-                              <option value="EM_ANALISE">Em Analise</option>
-                              <option value="APROVADA">Aprovada</option>
-                              <option value="REPROVADA">Reprovada</option>
-                              <option value="LANCADA">Lancada</option>
-                            </select>
-                          ) : row.entity === "OC" && ocRecord ? (
-                            <select
-                              className="field min-w-[150px] text-xs"
-                              value={ocToPhase(ocRecord.status as OCStatus)}
-                              onChange={async (e) => {
-                                const phase = e.target.value as OcPhase;
-                                await onUpdateOC(ocRecord.id, { status: phaseToOcStatus(phase, ocRecord.status as OCStatus) });
-                              }}
-                            >
-                              <option value="EM_ANALISE">Em Analise</option>
-                              <option value="APROVADA">Aprovada</option>
-                              <option value="REPROVADA">Reprovada</option>
-                              <option value="LANCADA">Lancada</option>
-                            </select>
-                          ) : null
-                        ) : null}
-                      </div>
+                      <span className={`whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-medium ${businessStatusBadge(row.statusKey)}`}>{row.statusLabel}</span>
                     </td>
                     <td className="pr-2">{row.fornecedor}</td>
                     <td className="pr-2 font-medium text-right text-emerald-300">{formatCurrency(row.valor)}</td>
                     <td>
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2">
                         {scRecord ? (
                           <button className="rounded border border-slate-700 px-2 py-1 text-xs" onClick={() => onPickTimeline(scRecord.id)}>
                             Timeline
                           </button>
+                        ) : null}
+                        {canWrite && row.entity === "SC" && scRecord ? (
+                          <select
+                            className="field max-w-[140px] text-xs"
+                            value={scRecord.status}
+                            onChange={async (e) => {
+                              const nextStatus = e.target.value as SCStatus;
+                              await onUpdateSC(scRecord.id, {
+                                status: nextStatus,
+                                dataAprovacao: nextStatus === "APROVADA" ? new Date().toISOString().slice(0, 10) : scRecord.dataAprovacao,
+                                dataReprovacao: nextStatus === "REPROVADA" ? new Date().toISOString().slice(0, 10) : scRecord.dataReprovacao,
+                                dataLancamento: nextStatus === "LANCADA" ? new Date().toISOString().slice(0, 10) : scRecord.dataLancamento,
+                              });
+                            }}
+                          >
+                            <option value="EM_ANALISE">Em Analise</option>
+                            <option value="APROVADA">Aprovada</option>
+                            <option value="REPROVADA">Reprovada</option>
+                            <option value="LANCADA">Lancada</option>
+                          </select>
+                        ) : null}
+                        {canWrite && row.entity === "OC" && ocRecord ? (
+                          <select
+                            className="field max-w-[140px] text-xs"
+                            value={ocToPhase(ocRecord.status as OCStatus)}
+                            onChange={async (e) => {
+                              const phase = e.target.value as OcPhase;
+                              await onUpdateOC(ocRecord.id, { status: phaseToOcStatus(phase, ocRecord.status as OCStatus) });
+                            }}
+                          >
+                            <option value="EM_ANALISE">Em Analise</option>
+                            <option value="APROVADA">Aprovada</option>
+                            <option value="REPROVADA">Reprovada</option>
+                            <option value="LANCADA">Lancada</option>
+                          </select>
                         ) : null}
                         {canWrite ? (
                           <button
@@ -1327,6 +1260,40 @@ function UnifiedScOcModule({
         </div>
       </Panel>
     </section>
+  );
+}
+
+function OperationalAssistant({ context }: { context: AiAnswerContext }) {
+  const [question, setQuestion] = useState("");
+  const [answer, setAnswer] = useState(answerOperationalQuestion("", context));
+
+  const ask = (value: string) => {
+    setQuestion(value);
+    setAnswer(answerOperationalQuestion(value, context));
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2">
+        {[
+          "Quais OCs estao atrasadas?",
+          "Qual setor tem mais OCs?",
+          "Quem e o fornecedor lider?",
+          "Como esta a distribuicao dos status?",
+        ].map((item) => (
+          <button key={item} className="rounded-full border border-cyan-500/35 bg-cyan-500/10 px-3 py-1 text-xs text-cyan-100" onClick={() => ask(item)}>
+            {item}
+          </button>
+        ))}
+      </div>
+      <div className="flex gap-2">
+        <input className="field" placeholder="Pergunte algo obvio sobre a operacao" value={question} onChange={(e) => setQuestion(e.target.value)} />
+        <button className="rounded-lg border border-cyan-400/45 bg-cyan-500/10 px-4 py-2 text-sm text-cyan-100" onClick={() => ask(question)}>
+          Analisar
+        </button>
+      </div>
+      <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-3 text-sm text-slate-200">{answer}</div>
+    </div>
   );
 }
 
