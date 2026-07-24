@@ -11,6 +11,7 @@ import {
   ChevronRight,
   ClipboardList,
   Download,
+  Eye,
   Factory,
   FileSpreadsheet,
   Filter,
@@ -158,6 +159,8 @@ export function ProcurementControlCenter() {
   const ranking = useMemo(() => supplierRanking(state, filters), [state, filters]);
   const statuses = useMemo(() => statusSeries(state, filters), [state, filters]);
   const alerts = useMemo(() => buildAlerts(state, filters), [state, filters]);
+  const latestScs = useMemo(() => dataset.scFiltered.slice(0, 6), [dataset.scFiltered]);
+  const delayedOcs = useMemo(() => dataset.ocFiltered.filter((oc) => oc.status === "ATRASADA").slice(0, 6), [dataset.ocFiltered]);
 
   const selectedScRecord = useMemo(() => dataset.scFiltered.find((x) => x.id === selectedSC) ?? dataset.scFiltered[0], [dataset.scFiltered, selectedSC]);
   const timeline = useMemo(() => (selectedScRecord ? buildScTimeline(selectedScRecord, state.ocs) : []), [selectedScRecord, state.ocs]);
@@ -362,20 +365,18 @@ export function ProcurementControlCenter() {
 
           {module === "DASHBOARD" ? (
             <section>
-              <ModuleTitle title="Dashboard Executivo" subtitle="Visao em tempo real" />
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-                <KpiCard label="SC TOTAL" value={String(kpis.totalSC)} color={CYAN} icon={ClipboardList} />
-                <KpiCard label="OC TOTAL" value={String(kpis.totalOC)} color={BLUE} icon={Truck} />
-                <KpiCard label="VALOR TOTAL" value={formatCurrency(kpis.valorTotalOC)} color={GREEN} icon={BarChart3} />
-                <KpiCard label="ENTREGAS ATRASADAS" value={String(kpis.entregasAtrasadas)} color={RED} icon={AlertTriangle} />
-                <KpiCard label="EM ANALISE" value={String(kpis.emAnalise)} color={AMBER} icon={Activity} />
-                <KpiCard label="APROVADAS" value={String(kpis.aprovadas)} color={GREEN} icon={Shield} />
-                <KpiCard label="REPROVADAS" value={String(kpis.reprovadas)} color={RED} icon={AlertTriangle} />
-                <KpiCard label="LANCADAS" value={String(kpis.lancadas)} color={PURPLE} icon={ClipboardList} />
+              <ModuleTitle title="Dashboard Executivo" subtitle="Visao tatica em tempo real" />
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+                <KpiCard label="SC TOTAL" value={String(kpis.totalSC)} note="Volume de solicitacoes" color={CYAN} icon={ClipboardList} />
+                <KpiCard label="OC TOTAL" value={String(kpis.totalOC)} note="Ordens emitidas" color={PURPLE} icon={Truck} />
+                <KpiCard label="VALOR TOTAL" value={formatCurrency(kpis.valorTotalOC)} note="Compromisso financeiro" color={GREEN} icon={BarChart3} />
+                <KpiCard label="EM ANALISE" value={String(kpis.emAnalise)} note="Aguardando aprovacao" color={AMBER} icon={Activity} />
+                <KpiCard label="APROVADAS" value={String(kpis.aprovadas)} note="Fluxo liberado" color={GREEN} icon={Shield} />
+                <KpiCard label="ATRASADAS" value={String(kpis.entregasAtrasadas)} note="Exigem acao imediata" color={RED} icon={AlertTriangle} />
               </div>
 
-              <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                <Panel title="SC x OC por Mes">
+              <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                <Panel title="Evolucao SC x OC">
                   <ResponsiveContainer width="100%" height={260}>
                     <LineChart data={monthly}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
@@ -387,17 +388,20 @@ export function ProcurementControlCenter() {
                     </LineChart>
                   </ResponsiveContainer>
                 </Panel>
-                <Panel title="Valor por Setor">
+
+                <Panel title="SC por Setor">
                   <ResponsiveContainer width="100%" height={260}>
-                    <BarChart data={bySector}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-                      <XAxis dataKey="setor" stroke="#94a3b8" />
-                      <YAxis stroke="#94a3b8" />
+                    <PieChart>
+                      <Pie data={bySector} dataKey="valorOC" nameKey="setor" outerRadius={92}>
+                        {bySector.map((entry, index) => (
+                          <Cell key={entry.setor} fill={[CYAN, PURPLE, GREEN, BLUE][index % 4]} />
+                        ))}
+                      </Pie>
                       <Tooltip />
-                      <Bar dataKey="valorOC" fill={BLUE} radius={[4, 4, 0, 0]} />
-                    </BarChart>
+                    </PieChart>
                   </ResponsiveContainer>
                 </Panel>
+
                 <Panel title="Status SC">
                   <ResponsiveContainer width="100%" height={240}>
                     <PieChart>
@@ -410,9 +414,79 @@ export function ProcurementControlCenter() {
                     </PieChart>
                   </ResponsiveContainer>
                 </Panel>
+              </div>
+
+              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                <Panel title="Ultimas SC">
+                  <div className="overflow-auto">
+                    <table className="w-full text-sm">
+                      <thead className="text-left text-slate-400">
+                        <tr>
+                          <th>SC</th>
+                          <th>Data</th>
+                          <th>Setor</th>
+                          <th>Solicitante</th>
+                          <th>Status</th>
+                          <th>Valor</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {latestScs.map((sc) => (
+                          <tr key={sc.id} className="border-t border-slate-800">
+                            <td className="py-2">{sc.numeroSC}</td>
+                            <td>{sc.dataCriacao}</td>
+                            <td>{state.setores.find((s) => s.id === sc.setorId)?.nome ?? "-"}</td>
+                            <td>{sc.solicitante}</td>
+                            <td>{SC_STATUS_LABEL[sc.status]}</td>
+                            <td>{formatCurrency(sc.valorEstimado)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Panel>
+
+                <Panel title="OC com Atraso">
+                  <div className="overflow-auto">
+                    <table className="w-full text-sm">
+                      <thead className="text-left text-slate-400">
+                        <tr>
+                          <th>OC</th>
+                          <th>Fornecedor</th>
+                          <th>Dias atraso</th>
+                          <th>Valor</th>
+                          <th>Acoes</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {delayedOcs.map((oc) => {
+                          const due = new Date(oc.dataPrevistaEntrega).getTime();
+                          const now = Date.now();
+                          const lateDays = Math.max(0, Math.floor((now - due) / (1000 * 60 * 60 * 24)));
+                          return (
+                            <tr key={oc.id} className="border-t border-slate-800">
+                              <td className="py-2">{oc.numeroOC}</td>
+                              <td>{state.fornecedores.find((f) => f.id === oc.fornecedorId)?.nomeFantasia ?? oc.fornecedorId}</td>
+                              <td className="text-rose-300">{lateDays}</td>
+                              <td>{formatCurrency(oc.valorOC)}</td>
+                              <td>
+                                <button className="rounded border border-cyan-500/40 px-2 py-1 text-xs text-cyan-100">
+                                  <Eye size={12} className="mr-1 inline" /> Ver
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </Panel>
+              </div>
+
+              <div className="mt-4 grid gap-4 lg:grid-cols-3">
                 <Panel title="Alertas Criticos">
                   <div className="space-y-2">
-                    {alerts.slice(0, 8).map((alert) => (
+                    {alerts.slice(0, 4).map((alert) => (
                       <div
                         key={alert.id}
                         className={`rounded-lg border p-2 text-sm ${
@@ -429,6 +503,32 @@ export function ProcurementControlCenter() {
                     ))}
                     {alerts.length === 0 ? <p className="text-sm text-emerald-200">Sem alertas no momento.</p> : null}
                   </div>
+                </Panel>
+
+                <Panel title="Top Fornecedores">
+                  <div className="space-y-2 text-sm">
+                    {ranking.slice(0, 5).map((r) => (
+                      <div key={r.fornecedorId} className="rounded-lg border border-slate-800 bg-slate-900/60 p-2">
+                        <div className="flex items-center justify-between">
+                          <span>{r.fornecedor}</span>
+                          <span className="text-emerald-300">{r.taxaPrazo}%</span>
+                        </div>
+                        <div className="mt-1 h-1.5 rounded bg-slate-800">
+                          <div className="h-1.5 rounded bg-emerald-400" style={{ width: `${Math.max(4, Math.min(100, r.taxaPrazo))}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </Panel>
+
+                <Panel title="Exportacao Excel">
+                  <p className="mb-3 text-sm text-slate-300">Exporte dados e indicadores no layout corporativo.</p>
+                  <button onClick={exportExcel} className="w-full rounded-lg border border-cyan-500/50 bg-cyan-500/10 px-4 py-2 text-cyan-100">
+                    Exportar Tudo
+                  </button>
+                  <button onClick={() => setModule("EXCEL")} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-slate-200">
+                    Abrir modulo Excel
+                  </button>
                 </Panel>
               </div>
             </section>
@@ -624,7 +724,19 @@ function Panel({ title, children, className = "" }: { title: string; children: R
   );
 }
 
-function KpiCard({ label, value, color, icon: Icon }: { label: string; value: string; color: string; icon: React.ElementType }) {
+function KpiCard({
+  label,
+  value,
+  color,
+  note,
+  icon: Icon,
+}: {
+  label: string;
+  value: string;
+  color: string;
+  note?: string;
+  icon: React.ElementType;
+}) {
   return (
     <div className="rounded-xl border bg-slate-950/70 p-4" style={{ borderColor: `${color}66`, boxShadow: `0 0 30px ${color}22` }}>
       <div className="flex items-start justify-between gap-2">
@@ -634,6 +746,7 @@ function KpiCard({ label, value, color, icon: Icon }: { label: string; value: st
       <p className="mt-2 text-2xl font-bold" style={{ color }}>
         {value}
       </p>
+      {note ? <p className="mt-1 text-[11px] text-slate-500">{note}</p> : null}
     </div>
   );
 }
