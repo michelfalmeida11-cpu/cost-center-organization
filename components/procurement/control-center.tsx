@@ -146,6 +146,13 @@ function formatCompactCurrency(value: number) {
   return formatCurrency(value);
 }
 
+function phaseColor(label: string) {
+  if (label === "Aprovada") return GREEN;
+  if (label === "Em Analise") return AMBER;
+  if (label === "Reprovada") return RED;
+  return BLUE;
+}
+
 function buildUnifiedRows(
   scs: PurchaseRequest[],
   ocs: PurchaseOrder[],
@@ -315,6 +322,67 @@ export function ProcurementControlCenter() {
       map.set(phase, (map.get(phase) ?? 0) + 1);
     });
     return order.map((phase) => ({ status: OC_PHASE_LABEL[phase], total: map.get(phase) ?? 0 }));
+  }, [dataset.ocFiltered]);
+  const ocStatusCards = useMemo(() => {
+    const counts = {
+      aprovada: 0,
+      emAnalise: 0,
+      reprovada: 0,
+      lancada: 0,
+      atrasada: 0,
+    };
+
+    dataset.ocFiltered.forEach((oc) => {
+      if (oc.status === "ATRASADA") {
+        counts.atrasada += 1;
+        return;
+      }
+      if (oc.status === "CANCELADA") {
+        counts.reprovada += 1;
+        return;
+      }
+      if (oc.status === "ENVIADA_FORNECEDOR") {
+        counts.lancada += 1;
+        return;
+      }
+      if (oc.status === "CRIADA") {
+        counts.emAnalise += 1;
+        return;
+      }
+      counts.aprovada += 1;
+    });
+
+    return counts;
+  }, [dataset.ocFiltered]);
+  const ocStatusPie = useMemo(
+    () => [
+      { status: "Aprovada", total: ocStatusCards.aprovada },
+      { status: "Em Analise", total: ocStatusCards.emAnalise },
+      { status: "Reprovada", total: ocStatusCards.reprovada },
+      { status: "Lancada", total: ocStatusCards.lancada },
+    ],
+    [ocStatusCards],
+  );
+  const ocStatusEvolution = useMemo(() => {
+    const map = new Map<string, { mes: string; aprovada: number; emAnalise: number; reprovada: number; lancada: number }>();
+
+    dataset.ocFiltered.forEach((oc) => {
+      const key = oc.dataOC.slice(0, 7);
+      if (!map.has(key)) map.set(key, { mes: key, aprovada: 0, emAnalise: 0, reprovada: 0, lancada: 0 });
+      const bucket = map.get(key)!;
+
+      if (oc.status === "CANCELADA") {
+        bucket.reprovada += 1;
+      } else if (oc.status === "ENVIADA_FORNECEDOR") {
+        bucket.lancada += 1;
+      } else if (oc.status === "CRIADA") {
+        bucket.emAnalise += 1;
+      } else if (oc.status !== "ATRASADA") {
+        bucket.aprovada += 1;
+      }
+    });
+
+    return Array.from(map.values()).sort((a, b) => a.mes.localeCompare(b.mes));
   }, [dataset.ocFiltered]);
   const latestRows = useMemo(() => unifiedRows.slice(0, 8), [unifiedRows]);
   const openOcCount = useMemo(() => dataset.ocFiltered.filter((oc) => !["ENTREGUE", "CANCELADA"].includes(oc.status)).length, [dataset.ocFiltered]);
@@ -575,38 +643,66 @@ export function ProcurementControlCenter() {
           {module === "DASHBOARD" ? (
             <section>
               <ModuleTitle title="Dashboard Executivo" subtitle="Visao tatica em tempo real" />
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
                 <KpiCard label="VALOR TOTAL OCs" value={formatCompactCurrency(kpis.valorTotalOC)} note="Carteira financeira atual" color={GREEN} icon={BarChart3} />
-                <KpiCard label="OC EM CURSO" value={String(openOcCount)} note="Ordens abertas no filtro" color={PURPLE} icon={Truck} />
-                <KpiCard label="EM ANALISE" value={String(ocByPhase.find((item) => item.status === "Em Analise")?.total ?? 0)} note="OCs aguardando decisao" color={AMBER} icon={Activity} />
-                <KpiCard label="ATRASADAS" value={String(kpis.entregasAtrasadas)} note="Ordens com risco imediato" color={RED} icon={AlertTriangle} />
+                <KpiCard label="APROVADAS" value={String(ocStatusCards.aprovada)} note="OCs aprovadas" color={GREEN} icon={Shield} />
+                <KpiCard label="EM ANALISE" value={String(ocStatusCards.emAnalise)} note="Aguardando decisao" color={AMBER} icon={Activity} />
+                <KpiCard label="REPROVADAS" value={String(ocStatusCards.reprovada)} note="Canceladas ou recusadas" color={RED} icon={AlertTriangle} />
+                <KpiCard label="LANCADAS" value={String(ocStatusCards.lancada)} note="Enviadas ao fornecedor" color={BLUE} icon={ClipboardList} />
+                <KpiCard label="ATRASADAS" value={String(ocStatusCards.atrasada)} note="Exigem acao imediata" color={RED} icon={Truck} />
               </div>
 
               <div className="mt-4 grid gap-4 lg:grid-cols-2">
                 <Panel title="Status das OCs">
-                  <ResponsiveContainer width="100%" height={260}>
-                    <PieChart>
-                      <Pie data={ocByPhase} dataKey="total" nameKey="status" outerRadius={92} innerRadius={48}>
-                        {ocByPhase.map((entry) => (
-                          <Cell key={entry.status} fill={entry.status === "Aprovada" ? GREEN : entry.status === "Em Analise" ? AMBER : entry.status === "Reprovada" ? RED : BLUE} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  <div className="grid gap-3 md:grid-cols-[1.2fr_.8fr]">
+                    <ResponsiveContainer width="100%" height={260}>
+                      <PieChart>
+                        <Pie data={ocStatusPie} dataKey="total" nameKey="status" outerRadius={92} innerRadius={48}>
+                          {ocStatusPie.map((entry) => (
+                            <Cell key={entry.status} fill={phaseColor(entry.status)} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="space-y-2 text-sm">
+                      {ocStatusPie.map((entry) => (
+                        <div key={`legend-status-${entry.status}`} className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: phaseColor(entry.status) }} />
+                            <span>{entry.status}</span>
+                          </div>
+                          <span className="font-semibold text-cyan-200">{entry.total}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </Panel>
 
                 <Panel title="OCs por Setor">
-                  <ResponsiveContainer width="100%" height={260}>
-                    <PieChart>
-                      <Pie data={ocBySector} dataKey="total" nameKey="setor" outerRadius={92} innerRadius={44}>
-                        {ocBySector.map((entry, index) => (
-                          <Cell key={entry.setor} fill={[BLUE, CYAN, GREEN, PURPLE, AMBER][index % 5]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
+                  <div className="grid gap-3 md:grid-cols-[1.2fr_.8fr]">
+                    <ResponsiveContainer width="100%" height={260}>
+                      <PieChart>
+                        <Pie data={ocBySector} dataKey="total" nameKey="setor" outerRadius={92} innerRadius={44}>
+                          {ocBySector.map((entry, index) => (
+                            <Cell key={entry.setor} fill={[GREEN, AMBER, RED, BLUE][index % 4]} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div className="space-y-2 text-sm">
+                      {ocBySector.map((entry, index) => (
+                        <div key={`legend-setor-${entry.setor}`} className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2">
+                          <div className="flex items-center gap-2">
+                            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: [GREEN, AMBER, RED, BLUE][index % 4] }} />
+                            <span className="truncate">{entry.setor}</span>
+                          </div>
+                          <span className="font-semibold text-cyan-200">{entry.total}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
                 </Panel>
               </div>
 
@@ -615,6 +711,23 @@ export function ProcurementControlCenter() {
                   <OperationalAssistant context={aiContext} />
                 </Panel>
 
+                <Panel title="Evolucao de Status OC">
+                  <ResponsiveContainer width="100%" height={260}>
+                    <LineChart data={ocStatusEvolution}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                      <XAxis dataKey="mes" stroke="#94a3b8" />
+                      <YAxis stroke="#94a3b8" />
+                      <Tooltip />
+                      <Line type="monotone" dataKey="aprovada" stroke={GREEN} strokeWidth={2} />
+                      <Line type="monotone" dataKey="emAnalise" stroke={AMBER} strokeWidth={2} />
+                      <Line type="monotone" dataKey="reprovada" stroke={RED} strokeWidth={2} />
+                      <Line type="monotone" dataKey="lancada" stroke={BLUE} strokeWidth={2} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </Panel>
+              </div>
+
+              <div className="mt-4">
                 <Panel title="Ultimas Movimentacoes SC / OC">
                   <div className="overflow-auto">
                     <table className="w-full table-fixed text-sm">
@@ -643,66 +756,6 @@ export function ProcurementControlCenter() {
                             <td className="text-right">{formatCurrency(row.valor)}</td>
                           </tr>
                         ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </Panel>
-              </div>
-
-              <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                <Panel title="Alertas Criticos">
-                  <div className="space-y-2">
-                    {alerts.slice(0, 4).map((alert) => (
-                      <div
-                        key={alert.id}
-                        className={`rounded-lg border p-2 text-sm ${
-                          alert.nivel === "CRITICO"
-                            ? "border-rose-500/40 bg-rose-500/10"
-                            : alert.nivel === "ATENCAO"
-                              ? "border-amber-500/40 bg-amber-500/10"
-                              : "border-cyan-500/40 bg-cyan-500/10"
-                        }`}
-                      >
-                        <p className="font-semibold uppercase tracking-wide">{alert.tipo}</p>
-                        <p className="text-slate-300">{alert.mensagem}</p>
-                      </div>
-                    ))}
-                    {alerts.length === 0 ? <p className="text-sm text-emerald-200">Sem alertas no momento.</p> : null}
-                  </div>
-                </Panel>
-
-                <Panel title="OC com Atraso">
-                  <div className="overflow-auto">
-                    <table className="w-full text-sm">
-                      <thead className="text-left text-[11px] uppercase tracking-[0.14em] text-slate-500">
-                        <tr>
-                          <th>OC</th>
-                          <th>Fornecedor</th>
-                          <th>Dias atraso</th>
-                          <th>Valor</th>
-                          <th>Acoes</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {delayedOcs.map((oc) => {
-                          const due = new Date(oc.dataPrevistaEntrega).getTime();
-                          const now = Date.now();
-                          const lateDays = Math.max(0, Math.floor((now - due) / (1000 * 60 * 60 * 24)));
-                          return (
-                            <tr key={oc.id} className="border-t border-slate-800/90 transition hover:bg-slate-900/60">
-                              <td className="py-2">{oc.numeroOC}</td>
-                              <td>{state.fornecedores.find((f) => f.id === oc.fornecedorId)?.nomeFantasia ?? oc.fornecedorId}</td>
-                              <td className="text-rose-300">{lateDays}</td>
-                              <td>{formatCurrency(oc.valorOC)}</td>
-                              <td>
-                                <span className={`mr-2 rounded-md border px-2 py-0.5 text-[11px] font-medium ${ocStatusBadge(oc.status as OCStatus)}`}>{OC_STATUS_LABEL[oc.status as OCStatus]}</span>
-                                <button className="rounded border border-cyan-500/40 px-2 py-1 text-xs text-cyan-100 hover:bg-cyan-500/10">
-                                  <Eye size={12} className="mr-1 inline" /> Ver
-                                </button>
-                              </td>
-                            </tr>
-                          );
-                        })}
                       </tbody>
                     </table>
                   </div>
