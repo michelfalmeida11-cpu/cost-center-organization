@@ -5,19 +5,23 @@ import {
   Activity,
   AlertTriangle,
   BarChart3,
+  Bell,
   Building2,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
+  Download,
   Factory,
   FileSpreadsheet,
   Filter,
   Gauge,
   LayoutDashboard,
   ListChecks,
+  Search,
   Settings,
   Shield,
   Truck,
+  UserCircle2,
   Users,
 } from "lucide-react";
 import {
@@ -261,8 +265,8 @@ export function ProcurementControlCenter() {
           <div className="mb-6 flex items-center justify-between rounded-lg border border-cyan-400/30 bg-slate-900/60 px-3 py-2">
             {!collapsedSidebar ? (
               <div>
-                <p className="font-orbitron text-sm tracking-widest text-cyan-300">PCC CORE</p>
-                <p className="text-[10px] text-slate-500">Cyberpunk Enterprise</p>
+                <p className="font-orbitron text-sm tracking-widest text-cyan-300">PROCUREMENT</p>
+                <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Control Center</p>
               </div>
             ) : null}
             <button onClick={() => setCollapsedSidebar(!collapsedSidebar)} className="rounded-md border border-slate-700 p-1 hover:border-cyan-400/70">
@@ -295,6 +299,16 @@ export function ProcurementControlCenter() {
             <div className="mt-6 rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-xs text-slate-400">
               <p className="text-cyan-300">Usuario: {currentUser.nome}</p>
               <p>Perfil: {currentUser.role}</p>
+              <div className="mt-3 space-y-2">
+                <button onClick={exportExcel} className="w-full rounded-md border border-cyan-500/35 bg-cyan-500/10 py-1.5 text-cyan-100">
+                  <Download size={12} className="mr-1 inline" /> Exportar Snapshot
+                </button>
+              </div>
+              <div className="mt-3 rounded-lg border border-cyan-500/25 bg-slate-950/70 p-2 text-[11px] leading-relaxed text-slate-400">
+                <p className="text-cyan-200">Desenvolvido por Michel Almeida</p>
+                <p>Empresa: Mina do Brumado</p>
+                <p>Grupo AVG</p>
+              </div>
               <button onClick={logout} className="mt-3 w-full rounded-md border border-rose-500/40 bg-rose-500/10 py-2 text-rose-200">Sair</button>
             </div>
           ) : null}
@@ -302,6 +316,28 @@ export function ProcurementControlCenter() {
 
         <main className="flex-1 p-6">
           <header className="mb-4 rounded-2xl border border-cyan-400/25 bg-slate-950/75 p-5 shadow-[0_0_40px_rgba(53,243,255,0.09)] backdrop-blur-sm">
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                <p className="text-xs uppercase tracking-[0.25em] text-emerald-300">Sistema Online</p>
+                <span className="text-xs text-slate-500">v2.0.1</span>
+              </div>
+              <p className="text-xs uppercase tracking-[0.3em] text-cyan-300/85">Controle • Supervisao • Resultados</p>
+              <div className="flex items-center gap-2">
+                <div className="hidden items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-1.5 text-xs text-slate-400 md:flex">
+                  <Search size={13} />
+                  <span>Buscar SC, OC, Fornecedor...</span>
+                </div>
+                <button className="rounded-lg border border-slate-700 bg-slate-900/80 p-2 text-slate-300">
+                  <Bell size={13} />
+                </button>
+                <div className="rounded-lg border border-cyan-500/35 bg-slate-900/80 px-2 py-1.5 text-xs text-slate-300">
+                  <UserCircle2 size={14} className="mr-1 inline text-cyan-300" />
+                  {currentUser.nome}
+                </div>
+              </div>
+            </div>
+
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <p className="text-xs uppercase tracking-[0.32em] text-cyan-300">PROCUREMENT CONTROL CENTER</p>
