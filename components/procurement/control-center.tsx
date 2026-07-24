@@ -431,7 +431,7 @@ export function ProcurementControlCenter() {
                 <p className="text-xs uppercase tracking-[0.25em] text-emerald-300">Sistema Online</p>
                 <span className="text-xs text-slate-500">v2.0.1</span>
               </div>
-              <p className="text-xs uppercase tracking-[0.3em] text-cyan-300/85">Controle • Supervisao • Resultados</p>
+              <p className="border-y border-cyan-500/25 px-3 py-1 text-[11px] uppercase tracking-[0.34em] text-cyan-300/90">Controle • Supervisao • Resultados</p>
               <div className="flex items-center gap-2">
                 <div className="hidden items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-1.5 text-xs text-slate-400 md:flex">
                   <Search size={13} />
@@ -472,7 +472,7 @@ export function ProcurementControlCenter() {
           {module === "DASHBOARD" ? (
             <section>
               <ModuleTitle title="Dashboard Executivo" subtitle="Visao tatica em tempo real" />
-              <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+              <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 xl:gap-1.5">
                 <KpiCard label="SC TOTAL" value={String(kpis.totalSC)} note="Volume de solicitacoes" color={CYAN} icon={ClipboardList} />
                 <KpiCard label="OC TOTAL" value={String(kpis.totalOC)} note="Ordens emitidas" color={PURPLE} icon={Truck} />
                 <KpiCard label="VALOR TOTAL" value={formatCurrency(kpis.valorTotalOC)} note="Compromisso financeiro" color={GREEN} icon={BarChart3} />
@@ -890,15 +890,15 @@ function KpiCard({
   icon: React.ElementType;
 }) {
   return (
-    <div className="rounded-xl border bg-slate-950/80 p-3" style={{ borderColor: `${color}66`, boxShadow: `0 0 20px ${color}18` }}>
+    <div className="h-[102px] rounded-xl border bg-slate-950/80 p-2.5 xl:p-2" style={{ borderColor: `${color}66`, boxShadow: `0 0 18px ${color}16` }}>
       <div className="flex items-start justify-between gap-2">
-        <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">{label}</p>
-        <Icon size={16} style={{ color }} />
+        <p className="text-[10px] uppercase tracking-[0.16em] text-slate-400">{label}</p>
+        <Icon size={14} style={{ color }} />
       </div>
-      <p className="mt-1 text-[34px] font-bold leading-none" style={{ color }}>
+      <p className="mt-1 text-[30px] font-bold leading-none xl:text-[26px]" style={{ color }}>
         {value}
       </p>
-      {note ? <p className="mt-1 text-[10px] text-slate-500">{note}</p> : null}
+      {note ? <p className="mt-1 line-clamp-1 text-[9px] text-slate-500 xl:text-[8px]">{note}</p> : null}
     </div>
   );
 }
