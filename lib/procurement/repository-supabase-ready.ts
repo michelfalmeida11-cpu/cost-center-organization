@@ -4,6 +4,15 @@ import { AppState } from "@/lib/procurement/types";
 export type PersistenceDriver = "memory" | "supabase";
 type AnySupabaseClient = SupabaseClient<any, any, any, any, any>;
 
+function isValidHttpUrl(value: string) {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 function getSupabaseConfig() {
   const url =
     process.env.SUPABASE_URL ||
@@ -22,9 +31,19 @@ function getSupabaseConfig() {
 function getSupabaseClient(): AnySupabaseClient | null {
   const { url, key } = getSupabaseConfig();
   if (!url || !key) return null;
-  return createClient(url, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  }) as AnySupabaseClient;
+  if (!isValidHttpUrl(url)) {
+    console.warn("Invalid SUPABASE_URL/NEXT_PUBLIC_SUPABASE_URL. Falling back to memory persistence.");
+    return null;
+  }
+
+  try {
+    return createClient(url, key, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    }) as AnySupabaseClient;
+  } catch {
+    console.warn("Failed to initialize Supabase client. Falling back to memory persistence.");
+    return null;
+  }
 }
 
 export function isSupabaseAvailable() {

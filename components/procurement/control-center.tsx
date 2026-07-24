@@ -303,8 +303,15 @@ export function ProcurementControlCenter() {
   const ranking = useMemo(() => supplierRanking(state, filters), [state, filters]);
   const statuses = useMemo(() => statusSeries(state, filters), [state, filters]);
   const unifiedRows = useMemo(() => buildUnifiedRows(dataset.scFiltered, dataset.ocFiltered as PurchaseOrder[], state.setores, state.fornecedores), [dataset.scFiltered, dataset.ocFiltered, state.setores, state.fornecedores]);
-  const ocBySector = useMemo(() => {
+  const scOcBySector = useMemo(() => {
     const map = new Map<string, { setor: string; total: number; valor: number }>();
+    dataset.scFiltered.forEach((sc) => {
+      const setorNome = state.setores.find((s) => s.id === sc.setorId)?.nome ?? "Sem setor";
+      const current = map.get(setorNome) ?? { setor: setorNome, total: 0, valor: 0 };
+      current.total += 1;
+      current.valor += sc.valorEstimado;
+      map.set(setorNome, current);
+    });
     dataset.ocFiltered.forEach((oc) => {
       const setorNome = state.setores.find((s) => s.id === oc.setorId)?.nome ?? "Sem setor";
       const current = map.get(setorNome) ?? { setor: setorNome, total: 0, valor: 0 };
@@ -313,7 +320,7 @@ export function ProcurementControlCenter() {
       map.set(setorNome, current);
     });
     return Array.from(map.values()).sort((a, b) => b.total - a.total);
-  }, [dataset.ocFiltered, state.setores]);
+  }, [dataset.scFiltered, dataset.ocFiltered, state.setores]);
   const ocByPhase = useMemo(() => {
     const order: OcPhase[] = ["EM_ANALISE", "APROVADA", "LANCADA", "REPROVADA"];
     const map = new Map<OcPhase, number>();
@@ -323,7 +330,7 @@ export function ProcurementControlCenter() {
     });
     return order.map((phase) => ({ status: OC_PHASE_LABEL[phase], total: map.get(phase) ?? 0 }));
   }, [dataset.ocFiltered]);
-  const ocStatusCards = useMemo(() => {
+  const unifiedStatusCards = useMemo(() => {
     const counts = {
       aprovada: 0,
       emAnalise: 0,
@@ -332,58 +339,92 @@ export function ProcurementControlCenter() {
       atrasada: 0,
     };
 
+    dataset.scFiltered.forEach((sc) => {
+      if (sc.status === "APROVADA") {
+        counts.aprovada += 1;
+        return;
+      }
+      if (sc.status === "EM_ANALISE") {
+        counts.emAnalise += 1;
+        return;
+      }
+      if (sc.status === "REPROVADA") {
+        counts.reprovada += 1;
+        return;
+      }
+      counts.lancada += 1;
+    });
+
     dataset.ocFiltered.forEach((oc) => {
       if (oc.status === "ATRASADA") {
         counts.atrasada += 1;
         return;
       }
-      if (oc.status === "CANCELADA") {
+      const phase = ocToPhase(oc.status as OCStatus);
+      if (phase === "REPROVADA") {
         counts.reprovada += 1;
-        return;
-      }
-      if (oc.status === "ENVIADA_FORNECEDOR") {
+      } else if (phase === "LANCADA") {
         counts.lancada += 1;
-        return;
-      }
-      if (oc.status === "CRIADA") {
+      } else if (phase === "EM_ANALISE") {
         counts.emAnalise += 1;
-        return;
+      } else {
+        counts.aprovada += 1;
       }
-      counts.aprovada += 1;
     });
 
     return counts;
-  }, [dataset.ocFiltered]);
-  const ocStatusPie = useMemo(
+  }, [dataset.scFiltered, dataset.ocFiltered]);
+  const unifiedStatusPie = useMemo(
     () => [
-      { status: "Aprovada", total: ocStatusCards.aprovada },
-      { status: "Em Analise", total: ocStatusCards.emAnalise },
-      { status: "Reprovada", total: ocStatusCards.reprovada },
-      { status: "Lancada", total: ocStatusCards.lancada },
+      { status: "Aprovada", total: unifiedStatusCards.aprovada },
+      { status: "Em Analise", total: unifiedStatusCards.emAnalise },
+      { status: "Reprovada", total: unifiedStatusCards.reprovada },
+      { status: "Lancada", total: unifiedStatusCards.lancada },
     ],
-    [ocStatusCards],
+    [unifiedStatusCards],
   );
-  const ocStatusEvolution = useMemo(() => {
+  const unifiedStatusEvolution = useMemo(() => {
     const map = new Map<string, { mes: string; aprovada: number; emAnalise: number; reprovada: number; lancada: number }>();
+
+    dataset.scFiltered.forEach((sc) => {
+      const key = sc.dataCriacao.slice(0, 7);
+      if (!map.has(key)) map.set(key, { mes: key, aprovada: 0, emAnalise: 0, reprovada: 0, lancada: 0 });
+      const bucket = map.get(key)!;
+
+      if (sc.status === "REPROVADA") {
+        bucket.reprovada += 1;
+      } else if (sc.status === "LANCADA") {
+        bucket.lancada += 1;
+      } else if (sc.status === "EM_ANALISE") {
+        bucket.emAnalise += 1;
+      } else {
+        bucket.aprovada += 1;
+      }
+    });
 
     dataset.ocFiltered.forEach((oc) => {
       const key = oc.dataOC.slice(0, 7);
       if (!map.has(key)) map.set(key, { mes: key, aprovada: 0, emAnalise: 0, reprovada: 0, lancada: 0 });
       const bucket = map.get(key)!;
 
-      if (oc.status === "CANCELADA") {
+      if (oc.status === "ATRASADA") {
+        return;
+      }
+
+      const phase = ocToPhase(oc.status as OCStatus);
+      if (phase === "REPROVADA") {
         bucket.reprovada += 1;
-      } else if (oc.status === "ENVIADA_FORNECEDOR") {
+      } else if (phase === "LANCADA") {
         bucket.lancada += 1;
-      } else if (oc.status === "CRIADA") {
+      } else if (phase === "EM_ANALISE") {
         bucket.emAnalise += 1;
-      } else if (oc.status !== "ATRASADA") {
+      } else {
         bucket.aprovada += 1;
       }
     });
 
     return Array.from(map.values()).sort((a, b) => a.mes.localeCompare(b.mes));
-  }, [dataset.ocFiltered]);
+  }, [dataset.scFiltered, dataset.ocFiltered]);
   const latestRows = useMemo(() => unifiedRows.slice(0, 8), [unifiedRows]);
   const openOcCount = useMemo(() => dataset.ocFiltered.filter((oc) => !["ENTREGUE", "CANCELADA"].includes(oc.status)).length, [dataset.ocFiltered]);
   const alerts = useMemo(() => buildAlerts(state, filters), [state, filters]);
@@ -391,11 +432,11 @@ export function ProcurementControlCenter() {
   const aiContext = useMemo<AiAnswerContext>(() => ({
     delayedCount: delayedOcs.length,
     topSupplier: ranking[0]?.fornecedor ?? "Sem fornecedor dominante",
-    topSector: ocBySector[0]?.setor ?? "Sem setor dominante",
+    topSector: scOcBySector[0]?.setor ?? "Sem setor dominante",
     phaseSummary: ocByPhase.map((item) => `${item.status}: ${item.total}`).join(" | "),
     totalOcValue: formatCurrency(kpis.valorTotalOC),
     openOcCount,
-  }), [delayedOcs.length, ranking, ocBySector, ocByPhase, kpis.valorTotalOC, openOcCount]);
+  }), [delayedOcs.length, ranking, scOcBySector, ocByPhase, kpis.valorTotalOC, openOcCount]);
   const anosDisponiveis = useMemo(() => {
     const years = new Set<string>();
     state.scs.forEach((sc) => years.add(sc.dataCriacao.slice(0, 4)));
@@ -644,21 +685,21 @@ export function ProcurementControlCenter() {
             <section>
               <ModuleTitle title="Dashboard Executivo" subtitle="Visao tatica em tempo real" />
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-                <KpiCard label="VALOR TOTAL OCs" value={formatCompactCurrency(kpis.valorTotalOC)} note="Carteira financeira atual" color={GREEN} icon={BarChart3} />
-                <KpiCard label="APROVADAS" value={String(ocStatusCards.aprovada)} note="OCs aprovadas" color={GREEN} icon={Shield} />
-                <KpiCard label="EM ANALISE" value={String(ocStatusCards.emAnalise)} note="Aguardando decisao" color={AMBER} icon={Activity} />
-                <KpiCard label="REPROVADAS" value={String(ocStatusCards.reprovada)} note="Canceladas ou recusadas" color={RED} icon={AlertTriangle} />
-                <KpiCard label="LANCADAS" value={String(ocStatusCards.lancada)} note="Enviadas ao fornecedor" color={BLUE} icon={ClipboardList} />
-                <KpiCard label="ATRASADAS" value={String(ocStatusCards.atrasada)} note="Exigem acao imediata" color={RED} icon={Truck} />
+                <KpiCard label="VALOR TOTAL SC + OC" value={formatCompactCurrency(kpis.valorTotalSC + kpis.valorTotalOC)} note="Carteira financeira consolidada" color={GREEN} icon={BarChart3} />
+                <KpiCard label="APROVADAS" value={String(unifiedStatusCards.aprovada)} note="SC/OC aprovadas" color={GREEN} icon={Shield} />
+                <KpiCard label="EM ANALISE" value={String(unifiedStatusCards.emAnalise)} note="SC/OC aguardando decisao" color={AMBER} icon={Activity} />
+                <KpiCard label="REPROVADAS" value={String(unifiedStatusCards.reprovada)} note="SC/OC canceladas ou recusadas" color={RED} icon={AlertTriangle} />
+                <KpiCard label="LANCADAS" value={String(unifiedStatusCards.lancada)} note="SC/OC lancadas" color={BLUE} icon={ClipboardList} />
+                <KpiCard label="ATRASADAS" value={String(unifiedStatusCards.atrasada)} note="OCs com atraso" color={RED} icon={Truck} />
               </div>
 
               <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                <Panel title="Status das OCs">
+                <Panel title="Status SC + OC">
                   <div className="grid gap-3 md:grid-cols-[1.2fr_.8fr]">
                     <ResponsiveContainer width="100%" height={260}>
                       <PieChart>
-                        <Pie data={ocStatusPie} dataKey="total" nameKey="status" outerRadius={92} innerRadius={48}>
-                          {ocStatusPie.map((entry) => (
+                        <Pie data={unifiedStatusPie} dataKey="total" nameKey="status" outerRadius={92} innerRadius={48}>
+                          {unifiedStatusPie.map((entry) => (
                             <Cell key={entry.status} fill={phaseColor(entry.status)} />
                           ))}
                         </Pie>
@@ -666,7 +707,7 @@ export function ProcurementControlCenter() {
                       </PieChart>
                     </ResponsiveContainer>
                     <div className="space-y-2 text-sm">
-                      {ocStatusPie.map((entry) => (
+                      {unifiedStatusPie.map((entry) => (
                         <div key={`legend-status-${entry.status}`} className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2">
                           <div className="flex items-center gap-2">
                             <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: phaseColor(entry.status) }} />
@@ -679,12 +720,12 @@ export function ProcurementControlCenter() {
                   </div>
                 </Panel>
 
-                <Panel title="OCs por Setor">
+                <Panel title="SC + OC por Setor">
                   <div className="grid gap-3 md:grid-cols-[1.2fr_.8fr]">
                     <ResponsiveContainer width="100%" height={260}>
                       <PieChart>
-                        <Pie data={ocBySector} dataKey="total" nameKey="setor" outerRadius={92} innerRadius={44}>
-                          {ocBySector.map((entry, index) => (
+                        <Pie data={scOcBySector} dataKey="total" nameKey="setor" outerRadius={92} innerRadius={44}>
+                          {scOcBySector.map((entry, index) => (
                             <Cell key={entry.setor} fill={[GREEN, AMBER, RED, BLUE][index % 4]} />
                           ))}
                         </Pie>
@@ -692,7 +733,7 @@ export function ProcurementControlCenter() {
                       </PieChart>
                     </ResponsiveContainer>
                     <div className="space-y-2 text-sm">
-                      {ocBySector.map((entry, index) => (
+                      {scOcBySector.map((entry, index) => (
                         <div key={`legend-setor-${entry.setor}`} className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2">
                           <div className="flex items-center gap-2">
                             <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: [GREEN, AMBER, RED, BLUE][index % 4] }} />
@@ -711,9 +752,9 @@ export function ProcurementControlCenter() {
                   <OperationalAssistant context={aiContext} />
                 </Panel>
 
-                <Panel title="Evolucao de Status OC">
+                <Panel title="Evolucao de Status SC + OC">
                   <ResponsiveContainer width="100%" height={260}>
-                    <LineChart data={ocStatusEvolution}>
+                    <LineChart data={unifiedStatusEvolution}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
                       <XAxis dataKey="mes" stroke="#94a3b8" />
                       <YAxis stroke="#94a3b8" />
@@ -1121,8 +1162,11 @@ function UnifiedScOcModule({
               onChange={(e) => {
                 const nome = e.target.value;
                 setNewOc({ ...newOc, fornecedorNome: nome });
-                const matched = fornecedores.find((fornecedor) => fornecedor.nomeFantasia.toLowerCase() === nome.trim().toLowerCase());
-                if (matched) setNewSC({ ...newSC, fornecedorSugeridoId: matched.id });
+                const termo = nome.trim().toLowerCase();
+                const matched =
+                  fornecedores.find((fornecedor) => fornecedor.nomeFantasia.toLowerCase() === termo) ??
+                  fornecedores.find((fornecedor) => fornecedor.nomeFantasia.toLowerCase().includes(termo));
+                setNewSC((prev) => ({ ...prev, fornecedorSugeridoId: matched?.id ?? null }));
               }}
             />
             <datalist id="fornecedores-oc-central">
@@ -1151,6 +1195,12 @@ function UnifiedScOcModule({
                   return;
                 }
 
+                const fornecedorInformado = newOc.fornecedorNome.trim().toLowerCase();
+                const matchedSupplier =
+                  fornecedores.find((fornecedor) => fornecedor.nomeFantasia.toLowerCase() === fornecedorInformado) ??
+                  fornecedores.find((fornecedor) => fornecedor.nomeFantasia.toLowerCase().includes(fornecedorInformado));
+                const fornecedorSugeridoId = matchedSupplier?.id ?? newSC.fornecedorSugeridoId;
+
                 try {
                   await onCreateSC({
                     numeroSC: newSC.numeroSC,
@@ -1161,7 +1211,7 @@ function UnifiedScOcModule({
                     categoria: newSC.categoria,
                     prioridade: newSC.prioridade,
                     valorEstimado: newSC.valorEstimado,
-                    fornecedorSugeridoId: newSC.fornecedorSugeridoId,
+                    fornecedorSugeridoId,
                     justificativa: newSC.justificativa,
                     status: "EM_ANALISE",
                     responsavel: newSC.responsavel,

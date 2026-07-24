@@ -1,8 +1,10 @@
 import { AppState, CurrentUser, GlobalFilters, OCStatus, PurchaseOrder, PurchaseRequest, SCStatus, Sector, Supplier } from "@/lib/procurement/types";
 
 async function request<T>(url: string, init?: RequestInit): Promise<T> {
+  const method = (init?.method ?? "GET").toUpperCase();
   const res = await fetch(url, {
     ...init,
+    cache: method === "GET" ? "no-store" : init?.cache,
     headers: {
       "Content-Type": "application/json",
       ...(init?.headers ?? {}),
