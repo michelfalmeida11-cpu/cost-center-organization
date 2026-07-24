@@ -18,12 +18,14 @@ import {
   Gauge,
   LayoutDashboard,
   ListChecks,
+  Menu,
   Search,
   Settings,
   Shield,
   Truck,
   UserCircle2,
   Users,
+  X,
 } from "lucide-react";
 import {
   Bar,
@@ -68,6 +70,14 @@ const NAV: Array<{ id: AppModule; label: string; icon: React.ElementType }> = [
   { id: "RELATORIOS", label: "Relatorios", icon: BarChart3 },
   { id: "EXCEL", label: "Exportacao Excel", icon: FileSpreadsheet },
   { id: "CONFIGURACOES", label: "Configuracoes", icon: Settings },
+];
+
+const MOBILE_NAV: Array<{ id: AppModule; label: string; icon: React.ElementType }> = [
+  { id: "DASHBOARD", label: "Dashboard", icon: LayoutDashboard },
+  { id: "SC", label: "SC / OC", icon: ClipboardList },
+  { id: "ACOMPANHAMENTO", label: "Kanban", icon: ListChecks },
+  { id: "FORNECEDORES", label: "Fornec.", icon: Building2 },
+  { id: "RELATORIOS", label: "Alertas", icon: Bell },
 ];
 
 const CYAN = "#35f3ff";
@@ -320,6 +330,7 @@ export function ProcurementControlCenter() {
   const [statusChartMode, setStatusChartMode] = useState<StatusChartMode>("PIE");
   const [sectorChartMode, setSectorChartMode] = useState<SectorChartMode>("PIE");
   const [showAssistant, setShowAssistant] = useState(true);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const dataset = useMemo(() => filterData(state, filters), [state, filters]);
   const kpis = useMemo(() => computeKpis(state, filters), [state, filters]);
@@ -575,8 +586,8 @@ export function ProcurementControlCenter() {
 
   return (
     <div className="min-h-screen bg-[radial-gradient(circle_at_15%_10%,rgba(53,243,255,.12),transparent_25%),radial-gradient(circle_at_85%_0%,rgba(159,122,255,.10),transparent_30%),#04060b] text-slate-200">
-      <div className="flex">
-        <aside className={`${collapsedSidebar ? "w-[84px]" : "w-[290px]"} sticky top-0 h-screen border-r border-cyan-400/20 bg-slate-950/90 px-3 py-4 transition-all`}>
+      <div className="flex min-h-screen">
+        <aside className={`${collapsedSidebar ? "w-[84px]" : "w-[290px]"} sticky top-0 hidden h-screen border-r border-cyan-400/20 bg-slate-950/90 px-3 py-4 transition-all md:block`}>
           <div className="mb-6 flex items-center justify-between rounded-lg border border-cyan-400/30 bg-slate-900/60 px-3 py-2">
             {!collapsedSidebar ? (
               <div>
@@ -629,15 +640,76 @@ export function ProcurementControlCenter() {
           ) : null}
         </aside>
 
-        <main className="flex-1 p-6">
-          <header className="mb-4 rounded-2xl border border-cyan-400/25 bg-slate-950/75 p-5 shadow-[0_0_40px_rgba(53,243,255,0.09)] backdrop-blur-sm">
+        {mobileMenuOpen ? <div className="fixed inset-0 z-40 bg-slate-950/70 md:hidden" onClick={() => setMobileMenuOpen(false)} /> : null}
+
+        <aside
+          className={`fixed inset-y-0 left-0 z-50 w-[84%] max-w-[340px] border-r border-cyan-400/20 bg-slate-950/95 px-3 py-4 shadow-[0_0_40px_rgba(0,0,0,0.45)] transition-transform duration-200 md:hidden ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`}
+        >
+          <div className="mb-6 flex items-center justify-between rounded-lg border border-cyan-400/30 bg-slate-900/60 px-3 py-2">
+            <div>
+              <p className="font-orbitron text-sm tracking-widest text-cyan-300">GRUPO AVG EMESA</p>
+              <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Control Center</p>
+            </div>
+            <button onClick={() => setMobileMenuOpen(false)} className="rounded-md border border-slate-700 p-1 text-slate-300">
+              <X size={16} />
+            </button>
+          </div>
+
+          <nav className="space-y-1">
+            {NAV.map((item) => {
+              const Icon = item.icon;
+              const active = module === item.id;
+              return (
+                <button
+                  key={`mobile-${item.id}`}
+                  onClick={() => {
+                    setModule(item.id);
+                    setMobileMenuOpen(false);
+                  }}
+                  className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition ${
+                    active
+                      ? "border-cyan-300/70 bg-cyan-400/15 text-cyan-200"
+                      : "border-transparent bg-slate-900/40 text-slate-300 hover:border-slate-700 hover:bg-slate-900"
+                  }`}
+                >
+                  <Icon size={16} />
+                  <span className="text-sm">{item.label}</span>
+                </button>
+              );
+            })}
+          </nav>
+
+          <div className="mt-6 rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-xs text-slate-400">
+            <p className="text-cyan-300">Usuario: {currentUser.nome}</p>
+            <p>Perfil: {currentUser.role}</p>
+            <div className="mt-3 space-y-2">
+              <button onClick={exportExcel} className="w-full rounded-md border border-cyan-500/35 bg-cyan-500/10 py-1.5 text-cyan-100">
+                <Download size={12} className="mr-1 inline" /> Exportar Snapshot
+              </button>
+            </div>
+            <button onClick={logout} className="mt-3 w-full rounded-md border border-rose-500/40 bg-rose-500/10 py-2 text-rose-200">Sair</button>
+          </div>
+        </aside>
+
+        <main className="flex-1 px-3 pb-24 pt-3 md:p-6 md:pb-6">
+          <header className="mb-4 rounded-2xl border border-cyan-400/25 bg-slate-950/75 p-3 shadow-[0_0_40px_rgba(53,243,255,0.09)] backdrop-blur-sm md:p-5">
+            <div className="mb-3 flex items-center justify-between gap-2 md:hidden">
+              <button onClick={() => setMobileMenuOpen(true)} className="rounded-lg border border-slate-700 bg-slate-900/80 p-2 text-slate-200">
+                <Menu size={16} />
+              </button>
+              <p className="truncate px-2 text-sm font-semibold text-cyan-100">{NAV.find((item) => item.id === module)?.label ?? "Dashboard"}</p>
+              <button onClick={exportExcel} className="rounded-lg border border-cyan-500/35 bg-cyan-500/10 p-2 text-cyan-200">
+                <Download size={15} />
+              </button>
+            </div>
+
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <span className="h-2 w-2 rounded-full bg-emerald-400" />
                 <p className="text-xs uppercase tracking-[0.25em] text-emerald-300">Sistema Online</p>
                 <span className="text-xs text-slate-500">v2.0.1</span>
               </div>
-              <p className="border-y border-cyan-500/25 px-3 py-1 text-[11px] uppercase tracking-[0.34em] text-cyan-300/90">Controle • Supervisao • Resultados</p>
+              <p className="hidden border-y border-cyan-500/25 px-3 py-1 text-[11px] uppercase tracking-[0.34em] text-cyan-300/90 md:block">Controle • Supervisao • Resultados</p>
               <div className="flex items-center gap-2">
                 <div className="hidden items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-1.5 text-xs text-slate-400 md:flex">
                   <Search size={13} />
@@ -656,7 +728,7 @@ export function ProcurementControlCenter() {
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <p className="text-xs uppercase tracking-[0.32em] text-cyan-300">GRUPO AVG EMESA</p>
-                <h1 className="font-orbitron text-3xl text-white">SC / OC Enterprise Command</h1>
+                <h1 className="font-orbitron text-2xl text-white md:text-3xl">SC / OC Enterprise Command</h1>
               </div>
               <div className="flex items-center gap-2 text-xs">
                 <span className={`rounded-full border px-3 py-1 ${canWrite ? "border-emerald-400/45 bg-emerald-500/10 text-emerald-200" : "border-amber-400/45 bg-amber-500/10 text-amber-200"}`}>
@@ -664,7 +736,7 @@ export function ProcurementControlCenter() {
                 </span>
               </div>
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-7">
+            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-7">
               <FilterSelect
                 label="Ano"
                 value={filters.ano}
@@ -710,6 +782,17 @@ export function ProcurementControlCenter() {
               </button>
             </div>
           </header>
+
+          <div className="mb-4 grid grid-cols-2 gap-2 md:hidden">
+            <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2">
+              <p className="text-[10px] uppercase tracking-[0.16em] text-emerald-200/90">SC + OC</p>
+              <p className="text-lg font-bold text-emerald-200">{formatCompactCurrency(kpis.valorTotalSC + kpis.valorTotalOC)}</p>
+            </div>
+            <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-2">
+              <p className="text-[10px] uppercase tracking-[0.16em] text-rose-200/90">Atrasadas</p>
+              <p className="text-lg font-bold text-rose-200">{unifiedStatusCards.atrasada}</p>
+            </div>
+          </div>
 
           {module === "DASHBOARD" ? (
             <section>
@@ -1118,11 +1201,30 @@ export function ProcurementControlCenter() {
               </Panel>
             </section>
           ) : null}
-          <footer className="mt-6 rounded-lg border border-cyan-500/20 bg-slate-950/70 px-4 py-2 text-center text-[11px] uppercase tracking-[0.24em] text-cyan-300/80">
+          <footer className="mt-6 rounded-lg border border-cyan-500/20 bg-slate-950/70 px-4 py-2 text-center text-[10px] uppercase tracking-[0.18em] text-cyan-300/80 md:text-[11px] md:tracking-[0.24em]">
             Dados hoje • Decisoes melhores • Resultados amanha
           </footer>
         </main>
       </div>
+
+      <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-cyan-500/20 bg-slate-950/95 px-2 py-2 backdrop-blur md:hidden">
+        <div className="grid grid-cols-5 gap-1">
+          {MOBILE_NAV.map((item) => {
+            const Icon = item.icon;
+            const active = module === item.id;
+            return (
+              <button
+                key={`quick-${item.id}`}
+                onClick={() => setModule(item.id)}
+                className={`flex flex-col items-center justify-center rounded-lg px-1 py-1 text-[10px] ${active ? "bg-cyan-500/15 text-cyan-200" : "text-slate-400"}`}
+              >
+                <Icon size={14} />
+                <span className="mt-0.5">{item.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </nav>
     </div>
   );
 }
