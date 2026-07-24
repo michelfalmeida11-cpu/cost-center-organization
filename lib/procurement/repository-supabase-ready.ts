@@ -52,7 +52,12 @@ export function isSupabaseAvailable() {
 }
 
 export function getConfiguredDriver(): PersistenceDriver {
-  if (process.env.PROCUREMENT_PERSISTENCE_DRIVER !== "supabase") return "memory";
+  const rawMode = (process.env.PROCUREMENT_PERSISTENCE_DRIVER ?? "").trim().toLowerCase();
+
+  if (rawMode === "memory") return "memory";
+  if (rawMode === "supabase") return isSupabaseAvailable() ? "supabase" : "memory";
+
+  // Auto-detect mode when the env var is missing.
   return isSupabaseAvailable() ? "supabase" : "memory";
 }
 

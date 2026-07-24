@@ -55,7 +55,7 @@ Por padrao, o sistema roda com persistencia em memoria. Para garantir que tudo f
 2. No SQL Editor do Supabase, aplique as migrations da pasta `supabase/migrations`, incluindo:
 	- `004_procurement_persistence_core.sql`
 3. Configure variaveis de ambiente:
-	- `PROCUREMENT_PERSISTENCE_DRIVER=supabase`
+	- `PROCUREMENT_PERSISTENCE_DRIVER=supabase` (opcional; se nao definir, o sistema tenta detectar Supabase automaticamente)
 	- `SUPABASE_URL=<url-do-projeto>`
 	- `SUPABASE_SERVICE_ROLE_KEY=<service-role-key>`
 4. Em producao (Vercel), adicione as mesmas variaveis em Project Settings > Environment Variables.
