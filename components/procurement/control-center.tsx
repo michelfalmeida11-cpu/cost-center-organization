@@ -61,8 +61,7 @@ import { AppState, OCStatus, PurchaseOrder, PurchaseRequest, SCStatus } from "@/
 
 const NAV: Array<{ id: AppModule; label: string; icon: React.ElementType }> = [
   { id: "DASHBOARD", label: "Dashboard", icon: LayoutDashboard },
-  { id: "SC", label: "SC - Solicitacoes", icon: ClipboardList },
-  { id: "OC", label: "OC - Ordens", icon: Truck },
+  { id: "SC", label: "Central SC / OC", icon: ClipboardList },
   { id: "FORNECEDORES", label: "Fornecedores", icon: Building2 },
   { id: "SETORES", label: "Setores", icon: Factory },
   { id: "ACOMPANHAMENTO", label: "Acompanhamento", icon: ListChecks },
@@ -188,6 +187,32 @@ export function ProcurementControlCenter() {
   const bySector = useMemo(() => sectorSeries(state, filters), [state, filters]);
   const ranking = useMemo(() => supplierRanking(state, filters), [state, filters]);
   const statuses = useMemo(() => statusSeries(state, filters), [state, filters]);
+  const ocBySector = useMemo(() => {
+    const map = new Map<string, { setor: string; total: number; valor: number }>();
+    dataset.ocFiltered.forEach((oc) => {
+      const setorNome = state.setores.find((s) => s.id === oc.setorId)?.nome ?? "Sem setor";
+      const current = map.get(setorNome) ?? { setor: setorNome, total: 0, valor: 0 };
+      current.total += 1;
+      current.valor += oc.valorOC;
+      map.set(setorNome, current);
+    });
+    return Array.from(map.values()).sort((a, b) => b.total - a.total);
+  }, [dataset.ocFiltered, state.setores]);
+  const ocByPhase = useMemo(() => {
+    const order: OcPhase[] = ["EM_ANALISE", "APROVADA", "LANCADA", "REPROVADA"];
+    const labels: Record<OcPhase, string> = {
+      EM_ANALISE: "Em Analise",
+      APROVADA: "Aprovada",
+      LANCADA: "Lancada",
+      REPROVADA: "Reprovada",
+    };
+    const map = new Map<OcPhase, number>();
+    dataset.ocFiltered.forEach((oc) => {
+      const phase = ocToPhase(oc.status as OCStatus);
+      map.set(phase, (map.get(phase) ?? 0) + 1);
+    });
+    return order.map((phase) => ({ status: labels[phase], total: map.get(phase) ?? 0 }));
+  }, [dataset.ocFiltered]);
   const alerts = useMemo(() => buildAlerts(state, filters), [state, filters]);
   const latestScs = useMemo(() => dataset.scFiltered.slice(0, 6), [dataset.scFiltered]);
   const delayedOcs = useMemo(() => dataset.ocFiltered.filter((oc) => oc.status === "ATRASADA").slice(0, 6), [dataset.ocFiltered]);
@@ -462,24 +487,23 @@ export function ProcurementControlCenter() {
                   </ResponsiveContainer>
                 </Panel>
 
-                <Panel title="SC por Setor">
+                <Panel title="OC por Setor (quantidade)">
                   <ResponsiveContainer width="100%" height={260}>
-                    <PieChart>
-                      <Pie data={bySector} dataKey="valorOC" nameKey="setor" outerRadius={92}>
-                        {bySector.map((entry, index) => (
-                          <Cell key={entry.setor} fill={[CYAN, PURPLE, GREEN, BLUE][index % 4]} />
-                        ))}
-                      </Pie>
+                    <BarChart data={ocBySector}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                      <XAxis dataKey="setor" stroke="#94a3b8" interval={0} angle={-20} textAnchor="end" height={70} />
+                      <YAxis stroke="#94a3b8" />
                       <Tooltip />
-                    </PieChart>
+                      <Bar dataKey="total" fill={BLUE} />
+                    </BarChart>
                   </ResponsiveContainer>
                 </Panel>
 
-                <Panel title="Status SC">
+                <Panel title="Fase das OCs">
                   <ResponsiveContainer width="100%" height={240}>
                     <PieChart>
-                      <Pie data={statuses.scByStatus} dataKey="total" nameKey="status" outerRadius={90}>
-                        {statuses.scByStatus.map((entry, index) => (
+                      <Pie data={ocByPhase} dataKey="total" nameKey="status" outerRadius={90}>
+                        {ocByPhase.map((entry, index) => (
                           <Cell key={entry.status} fill={[CYAN, GREEN, RED, PURPLE][index % 4]} />
                         ))}
                       </Pie>
@@ -492,7 +516,7 @@ export function ProcurementControlCenter() {
               <div className="mt-4 grid gap-4 lg:grid-cols-2">
                 <Panel title="Ultimas SC">
                   <div className="overflow-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full table-fixed text-sm">
                       <thead className="text-left text-[11px] uppercase tracking-[0.14em] text-slate-500">
                         <tr>
                           <th>SC</th>
@@ -506,14 +530,14 @@ export function ProcurementControlCenter() {
                       <tbody>
                         {latestScs.map((sc) => (
                           <tr key={sc.id} className="border-t border-slate-800/90 transition hover:bg-slate-900/60">
-                            <td className="py-2">{sc.numeroSC}</td>
-                            <td>{sc.dataCriacao}</td>
-                            <td>{state.setores.find((s) => s.id === sc.setorId)?.nome ?? "-"}</td>
-                            <td>{sc.solicitante}</td>
+                            <td className="py-2 pr-2 font-medium text-cyan-100">{sc.numeroSC}</td>
+                            <td className="pr-2">{sc.dataCriacao}</td>
+                            <td className="pr-2 truncate">{state.setores.find((s) => s.id === sc.setorId)?.nome ?? "-"}</td>
+                            <td className="pr-2 truncate">{sc.solicitante}</td>
                             <td>
                               <span className={`rounded-md border px-2 py-0.5 text-[11px] font-medium ${scStatusBadge(sc.status)}`}>{SC_STATUS_LABEL[sc.status]}</span>
                             </td>
-                            <td>{formatCurrency(sc.valorEstimado)}</td>
+                            <td className="text-right">{formatCurrency(sc.valorEstimado)}</td>
                           </tr>
                         ))}
                       </tbody>
@@ -610,7 +634,7 @@ export function ProcurementControlCenter() {
             </section>
           ) : null}
 
-          {module === "SC" || module === "OC" ? (
+          {module === "SC" ? (
             <section className="space-y-4">
               <ModuleTitle title="Central SC / OC" subtitle="Solicitacao e ordem em fluxo unico" />
               <ScModule
