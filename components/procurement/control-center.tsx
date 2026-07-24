@@ -123,6 +123,12 @@ type AiAnswerContext = {
   phaseSummary: string;
   totalOcValue: string;
   openOcCount: number;
+  totalSc: number;
+  totalOc: number;
+  totalScOcValue: string;
+  pendingSc: number;
+  activeSuppliers: number;
+  alertsCount: number;
 };
 
 function ocToPhase(status: OCStatus): OcPhase {
@@ -192,36 +198,45 @@ function answerOperationalQuestion(question: string, context: AiAnswerContext) {
   const normalized = question.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 
   if (!normalized.trim()) {
-    return "Pergunte sobre atrasos, fornecedor lider, setor com mais OCs, valor total ou distribuicao de status.";
+    return "Pergunte sobre status, backlog SC/OC, riscos, fornecedores, setores, volume financeiro, produtividade, entregas ou prioridades.";
   }
 
   if (normalized.includes("atras") || normalized.includes("urgente") || normalized.includes("risco")) {
-    return context.delayedCount > 0
-      ? `Existem ${context.delayedCount} OCs atrasadas e elas devem ser tratadas primeiro.`
-      : "Nao existem OCs atrasadas no momento.";
+    if (context.delayedCount > 0) {
+      return `Existem ${context.delayedCount} OCs atrasadas. Priorize tratativas com fornecedores e revisao de prazos imediatamente.`;
+    }
+    return "Nao existem OCs atrasadas no momento. O risco operacional imediato esta controlado.";
   }
 
-  if (normalized.includes("fornecedor") || normalized.includes("melhor fornecedor") || normalized.includes("lider")) {
-    return `O fornecedor com maior concentracao financeira na carteira atual e ${context.topSupplier}.`;
+  if (normalized.includes("fornecedor") || normalized.includes("melhor fornecedor") || normalized.includes("lider") || normalized.includes("parceiro")) {
+    return `Fornecedor lider: ${context.topSupplier}. Fornecedores ativos no filtro: ${context.activeSuppliers}.`;
   }
 
-  if (normalized.includes("setor") || normalized.includes("onde esta") || normalized.includes("maior demanda")) {
-    return `O setor com maior peso operacional de OCs no filtro atual e ${context.topSector}.`;
+  if (normalized.includes("setor") || normalized.includes("onde esta") || normalized.includes("maior demanda") || normalized.includes("gargalo")) {
+    return `Setor com maior peso operacional: ${context.topSector}. Use isso para direcionar capacidade e aprovacoes.`;
   }
 
-  if (normalized.includes("status") || normalized.includes("fase") || normalized.includes("aprovad") || normalized.includes("analise")) {
-    return `Distribuicao atual das OCs: ${context.phaseSummary}.`;
+  if (normalized.includes("status") || normalized.includes("fase") || normalized.includes("aprovad") || normalized.includes("analise") || normalized.includes("distribuicao")) {
+    return `Distribuicao consolidada de status (SC/OC): ${context.phaseSummary}.`;
   }
 
-  if (normalized.includes("valor") || normalized.includes("financeiro") || normalized.includes("carteira")) {
-    return `O valor total da carteira de OCs filtrada e ${context.totalOcValue}.`;
+  if (normalized.includes("valor") || normalized.includes("financeiro") || normalized.includes("carteira") || normalized.includes("orcamento") || normalized.includes("gasto")) {
+    return `Carteira consolidada SC+OC: ${context.totalScOcValue}. Apenas OCs: ${context.totalOcValue}.`;
   }
 
-  if (normalized.includes("abertas") || normalized.includes("em curso") || normalized.includes("andamento")) {
-    return `Existem ${context.openOcCount} OCs em curso no filtro atual.`;
+  if (normalized.includes("abertas") || normalized.includes("em curso") || normalized.includes("andamento") || normalized.includes("backlog") || normalized.includes("fila")) {
+    return `Backlog atual: ${context.pendingSc} SCs em analise e ${context.openOcCount} OCs em curso.`;
   }
 
-  return `Resumo rapido: ${context.phaseSummary}. Setor lider: ${context.topSector}. Fornecedor lider: ${context.topSupplier}. Valor total: ${context.totalOcValue}.`;
+  if (normalized.includes("volume") || normalized.includes("quantidade") || normalized.includes("totais") || normalized.includes("resumo")) {
+    return `Volumes atuais: ${context.totalSc} SCs e ${context.totalOc} OCs.`;
+  }
+
+  if (normalized.includes("alerta") || normalized.includes("critic") || normalized.includes("incidente")) {
+    return `Alertas operacionais ativos no filtro: ${context.alertsCount}.`;
+  }
+
+  return `Resumo executivo: ${context.totalSc} SCs, ${context.totalOc} OCs, ${context.pendingSc} SCs em analise, ${context.openOcCount} OCs em curso, ${context.delayedCount} atrasadas. Setor lider: ${context.topSector}. Fornecedor lider: ${context.topSupplier}. Carteira SC+OC: ${context.totalScOcValue}.`;
 }
 
 function ModuleTitle({ title, subtitle }: { title: string; subtitle: string }) {
@@ -284,6 +299,7 @@ export function ProcurementControlCenter() {
     updateOC,
     deleteOC,
     createSupplier,
+    createSupplierWithResult,
     updateSupplier,
     deleteSupplier,
     createSector,
@@ -436,7 +452,13 @@ export function ProcurementControlCenter() {
     phaseSummary: ocByPhase.map((item) => `${item.status}: ${item.total}`).join(" | "),
     totalOcValue: formatCurrency(kpis.valorTotalOC),
     openOcCount,
-  }), [delayedOcs.length, ranking, scOcBySector, ocByPhase, kpis.valorTotalOC, openOcCount]);
+    totalSc: kpis.totalSC,
+    totalOc: kpis.totalOC,
+    totalScOcValue: formatCurrency(kpis.valorTotalSC + kpis.valorTotalOC),
+    pendingSc: dataset.scFiltered.filter((sc) => sc.status === "EM_ANALISE").length,
+    activeSuppliers: dataset.fornecedoresAtivos.length,
+    alertsCount: alerts.length,
+  }), [delayedOcs.length, ranking, scOcBySector, ocByPhase, kpis.valorTotalOC, kpis.totalSC, kpis.totalOC, kpis.valorTotalSC, openOcCount, dataset.scFiltered, dataset.fornecedoresAtivos.length, alerts.length]);
   const anosDisponiveis = useMemo(() => {
     const years = new Set<string>();
     state.scs.forEach((sc) => years.add(sc.dataCriacao.slice(0, 4)));
@@ -830,6 +852,7 @@ export function ProcurementControlCenter() {
               onCreateOC={createOC}
               onUpdateOC={updateOC}
               onDeleteOC={deleteOC}
+              onCreateSupplierWithResult={createSupplierWithResult}
               onPickTimeline={(id) => {
                 setSelectedSC(id);
                 setModule("ACOMPANHAMENTO");
@@ -1083,6 +1106,7 @@ function UnifiedScOcModule({
   onCreateOC,
   onUpdateOC,
   onDeleteOC,
+  onCreateSupplierWithResult,
   onPickTimeline,
 }: {
   scs: PurchaseRequest[];
@@ -1096,6 +1120,7 @@ function UnifiedScOcModule({
   onCreateOC: (payload: Omit<PurchaseOrder, "id" | "createdAt" | "updatedAt" | "deletedAt">) => Promise<void>;
   onUpdateOC: (id: string, payload: Partial<PurchaseOrder>) => Promise<void>;
   onDeleteOC: (id: string) => Promise<void>;
+  onCreateSupplierWithResult: (payload: Omit<AppState["fornecedores"][number], "id" | "createdAt" | "updatedAt" | "deletedAt">) => Promise<AppState["fornecedores"][number]>;
   onPickTimeline: (id: string) => void;
 }) {
   const [message, setMessage] = useState("");
@@ -1236,18 +1261,37 @@ function UnifiedScOcModule({
               className="rounded-lg border border-blue-400/45 bg-blue-500/10 px-4 py-2 text-sm text-blue-100"
               onClick={async () => {
                 const fornecedorInformado = newOc.fornecedorNome.trim();
-                const matchedSupplier =
+                let matchedSupplier =
                   fornecedores.find((fornecedor) => fornecedor.nomeFantasia.toLowerCase() === fornecedorInformado.toLowerCase()) ??
                   fornecedores.find((fornecedor) => fornecedor.nomeFantasia.toLowerCase().includes(fornecedorInformado.toLowerCase()));
                 const linkedSc = scs.find((sc) => sc.numeroSC.trim().toLowerCase() === newSC.numeroSC.trim().toLowerCase()) ?? scs.find((sc) => sc.numeroSC === newOc.linkedNumeroSC);
-                if (!newOc.numeroOC || !linkedSc || !matchedSupplier || !newOc.setorId) {
-                  setMessage("Para criar a OC informe Numero OC, Numero SC ja existente, Setor e Fornecedor por nome valido.");
+                if (!newOc.numeroOC || !linkedSc || !newOc.setorId || !fornecedorInformado) {
+                  setMessage("Para criar a OC informe Numero OC, Numero SC ja existente, Setor e Fornecedor por nome.");
                   return;
                 }
 
                 const today = new Date().toISOString().slice(0, 10);
 
                 try {
+                  if (!matchedSupplier) {
+                    const digits = Date.now().toString();
+                    const cnpjSeed = digits.padStart(14, "0").slice(-14);
+                    matchedSupplier = await onCreateSupplierWithResult({
+                      codigo: `AUTO-${digits.slice(-6)}`,
+                      razaoSocial: fornecedorInformado,
+                      nomeFantasia: fornecedorInformado,
+                      cnpj: cnpjSeed,
+                      contato: newOc.responsavel || "Cadastro rapido",
+                      telefone: "",
+                      email: "",
+                      cidade: "",
+                      estado: "",
+                      categoria: "Cadastro Rapido",
+                      status: "ATIVO",
+                      observacoes: "Fornecedor criado automaticamente na Central SC/OC.",
+                    });
+                  }
+
                   await onCreateOC({
                     numeroOC: newOc.numeroOC,
                     scId: linkedSc.id,
@@ -1264,6 +1308,7 @@ function UnifiedScOcModule({
                     observacoes: newOc.observacoes,
                     anexos: [],
                   });
+                  setNewSC((prev) => ({ ...prev, fornecedorSugeridoId: matchedSupplier?.id ?? prev.fornecedorSugeridoId }));
                   setNewOc({ ...newOc, numeroOC: "", valorOC: 0, observacoes: "" });
                   setMessage("OC criada com sucesso.");
                 } catch (error) {
@@ -1392,9 +1437,11 @@ function OperationalAssistant({ context }: { context: AiAnswerContext }) {
       <div className="flex flex-wrap gap-2">
         {[
           "Quais OCs estao atrasadas?",
-          "Qual setor tem mais OCs?",
+          "Qual setor tem mais demanda?",
           "Quem e o fornecedor lider?",
           "Como esta a distribuicao dos status?",
+          "Qual o valor total SC + OC?",
+          "Qual e o backlog atual?",
         ].map((item) => (
           <button key={item} className="rounded-full border border-cyan-500/35 bg-cyan-500/10 px-3 py-1 text-xs text-cyan-100" onClick={() => ask(item)}>
             {item}
@@ -1402,7 +1449,7 @@ function OperationalAssistant({ context }: { context: AiAnswerContext }) {
         ))}
       </div>
       <div className="flex gap-2">
-        <input className="field" placeholder="Pergunte algo obvio sobre a operacao" value={question} onChange={(e) => setQuestion(e.target.value)} />
+        <input className="field" placeholder="Pergunte qualquer coisa sobre SC, OC, fornecedores, setor, riscos e carteira" value={question} onChange={(e) => setQuestion(e.target.value)} />
         <button className="rounded-lg border border-cyan-400/45 bg-cyan-500/10 px-4 py-2 text-sm text-cyan-100" onClick={() => ask(question)}>
           Analisar
         </button>

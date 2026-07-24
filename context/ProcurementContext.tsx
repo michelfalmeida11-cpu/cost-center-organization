@@ -55,6 +55,7 @@ interface ProcurementContextValue {
   updateSector: (id: string, payload: Partial<Sector>) => Promise<void>;
   deleteSector: (id: string) => Promise<void>;
   createSupplier: (payload: Omit<Supplier, "id" | "createdAt" | "updatedAt" | "deletedAt">) => Promise<void>;
+  createSupplierWithResult: (payload: Omit<Supplier, "id" | "createdAt" | "updatedAt" | "deletedAt">) => Promise<Supplier>;
   updateSupplier: (id: string, payload: Partial<Supplier>) => Promise<void>;
   deleteSupplier: (id: string) => Promise<void>;
   createSC: (payload: Omit<PurchaseRequest, "id" | "createdAt" | "updatedAt" | "deletedAt">) => Promise<void>;
@@ -152,10 +153,15 @@ export function ProcurementProvider({ children }: { children: React.ReactNode })
     await refreshState();
   }, [currentUser, refreshState]);
 
-  const createSupplier = useCallback(async (payload: Omit<Supplier, "id" | "createdAt" | "updatedAt" | "deletedAt">) => {
-    await apiCreateSupplier(payload, currentUser);
+  const createSupplierWithResult = useCallback(async (payload: Omit<Supplier, "id" | "createdAt" | "updatedAt" | "deletedAt">) => {
+    const data = await apiCreateSupplier(payload, currentUser);
     await refreshState();
+    return data.item;
   }, [currentUser, refreshState]);
+
+  const createSupplier = useCallback(async (payload: Omit<Supplier, "id" | "createdAt" | "updatedAt" | "deletedAt">) => {
+    await createSupplierWithResult(payload);
+  }, [createSupplierWithResult]);
 
   const updateSupplier = useCallback(async (id: string, payload: Partial<Supplier>) => {
     await apiUpdateSupplier(id, payload, currentUser);
@@ -230,6 +236,7 @@ export function ProcurementProvider({ children }: { children: React.ReactNode })
       updateSector,
       deleteSector,
       createSupplier,
+      createSupplierWithResult,
       updateSupplier,
       deleteSupplier,
       createSC,
@@ -258,6 +265,7 @@ export function ProcurementProvider({ children }: { children: React.ReactNode })
       updateSector,
       deleteSector,
       createSupplier,
+      createSupplierWithResult,
       updateSupplier,
       deleteSupplier,
       createSC,

@@ -185,79 +185,84 @@ async function loadStateFromRelationalTables(client: AnySupabaseClient): Promise
 }
 
 async function saveStateToRelationalTables(client: AnySupabaseClient, state: AppState): Promise<boolean> {
+  const safeNumber = (value: unknown) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
   const sectorsRows = state.setores.map((s) => ({
     id: s.id,
-    nome: s.nome,
-    descricao: s.descricao,
+    nome: s.nome ?? "",
+    descricao: s.descricao ?? "",
     ativo: s.ativo,
-    created_at: s.createdAt,
-    updated_at: s.updatedAt,
+    created_at: s.createdAt ?? "",
+    updated_at: s.updatedAt ?? "",
     deleted_at: s.deletedAt,
   }));
 
   const suppliersRows = state.fornecedores.map((s) => ({
     id: s.id,
-    codigo: s.codigo,
-    razao_social: s.razaoSocial,
-    nome_fantasia: s.nomeFantasia,
-    cnpj: s.cnpj,
-    contato: s.contato,
-    telefone: s.telefone,
-    email: s.email,
-    cidade: s.cidade,
-    estado: s.estado,
-    categoria: s.categoria,
-    status: s.status,
-    observacoes: s.observacoes,
-    created_at: s.createdAt,
-    updated_at: s.updatedAt,
+    codigo: s.codigo ?? "",
+    razao_social: s.razaoSocial ?? "",
+    nome_fantasia: s.nomeFantasia ?? "",
+    cnpj: s.cnpj ?? "",
+    contato: s.contato ?? "",
+    telefone: s.telefone ?? "",
+    email: s.email ?? "",
+    cidade: s.cidade ?? "",
+    estado: s.estado ?? "",
+    categoria: s.categoria ?? "",
+    status: s.status ?? "ATIVO",
+    observacoes: s.observacoes ?? "",
+    created_at: s.createdAt ?? "",
+    updated_at: s.updatedAt ?? "",
     deleted_at: s.deletedAt,
   }));
 
   const scRows = state.scs.map((s) => ({
     id: s.id,
-    numero_sc: s.numeroSC,
-    data_criacao: s.dataCriacao,
-    solicitante: s.solicitante,
-    setor_id: s.setorId,
-    descricao: s.descricao,
-    categoria: s.categoria,
-    prioridade: s.prioridade,
-    valor_estimado: s.valorEstimado,
+    numero_sc: s.numeroSC ?? "",
+    data_criacao: s.dataCriacao ?? "",
+    solicitante: s.solicitante ?? "",
+    setor_id: s.setorId ?? "",
+    descricao: s.descricao ?? "",
+    categoria: s.categoria ?? "",
+    prioridade: s.prioridade ?? "MEDIA",
+    valor_estimado: safeNumber(s.valorEstimado),
     fornecedor_sugerido_id: s.fornecedorSugeridoId,
-    justificativa: s.justificativa,
-    status: s.status,
-    responsavel: s.responsavel,
+    justificativa: s.justificativa ?? "",
+    status: s.status ?? "EM_ANALISE",
+    responsavel: s.responsavel ?? "",
     data_aprovacao: s.dataAprovacao,
     data_reprovacao: s.dataReprovacao,
     motivo_reprovacao: s.motivoReprovacao,
     data_lancamento: s.dataLancamento,
     numero_oc_relacionada: s.numeroOCRelacionada,
-    observacoes: s.observacoes,
+    observacoes: s.observacoes ?? "",
     anexos: s.anexos,
-    created_at: s.createdAt,
-    updated_at: s.updatedAt,
+    created_at: s.createdAt ?? "",
+    updated_at: s.updatedAt ?? "",
     deleted_at: s.deletedAt,
   }));
 
   const ocRows = state.ocs.map((o) => ({
     id: o.id,
-    numero_oc: o.numeroOC,
-    sc_id: o.scId,
-    fornecedor_id: o.fornecedorId,
-    data_oc: o.dataOC,
-    data_emissao: o.dataEmissao,
-    data_prevista_entrega: o.dataPrevistaEntrega,
+    numero_oc: o.numeroOC ?? "",
+    sc_id: o.scId ?? "",
+    fornecedor_id: o.fornecedorId ?? "",
+    data_oc: o.dataOC ?? "",
+    data_emissao: o.dataEmissao ?? "",
+    data_prevista_entrega: o.dataPrevistaEntrega ?? "",
     data_real_entrega: o.dataRealEntrega,
-    valor_oc: o.valorOC,
-    setor_id: o.setorId,
-    responsavel: o.responsavel,
-    status: o.status,
-    condicao_pagamento: o.condicaoPagamento,
-    observacoes: o.observacoes,
+    valor_oc: safeNumber(o.valorOC),
+    setor_id: o.setorId ?? "",
+    responsavel: o.responsavel ?? "",
+    status: o.status ?? "CRIADA",
+    condicao_pagamento: o.condicaoPagamento ?? "",
+    observacoes: o.observacoes ?? "",
     anexos: o.anexos,
-    created_at: o.createdAt,
-    updated_at: o.updatedAt,
+    created_at: o.createdAt ?? "",
+    updated_at: o.updatedAt ?? "",
     deleted_at: o.deletedAt,
   }));
 
@@ -283,5 +288,19 @@ async function saveStateToRelationalTables(client: AnySupabaseClient, state: App
     client.from("audit_logs").upsert(auditRows, { onConflict: "id" }),
   ]);
 
-  return !r1.error && !r2.error && !r3.error && !r4.error && !r5.error;
+  if (r1.error || r2.error || r3.error || r4.error) {
+    console.error("Supabase persistence failed", {
+      sectorsError: r1.error?.message,
+      suppliersError: r2.error?.message,
+      scError: r3.error?.message,
+      ocError: r4.error?.message,
+    });
+    return false;
+  }
+
+  if (r5.error) {
+    console.warn("Supabase audit upsert failed (non-blocking):", r5.error.message);
+  }
+
+  return true;
 }
