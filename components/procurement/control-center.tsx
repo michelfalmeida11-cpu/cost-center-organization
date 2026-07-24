@@ -175,7 +175,16 @@ function buildUnifiedRows(
   setores: AppState["setores"],
   fornecedores: AppState["fornecedores"],
 ): UnifiedScOcRow[] {
+  const supplierNameById = new Map(fornecedores.map((fornecedor) => [fornecedor.id, fornecedor.nomeFantasia]));
+
   const scRows: UnifiedScOcRow[] = scs.map((sc) => ({
+    fornecedor:
+      (sc.fornecedorSugeridoId ? supplierNameById.get(sc.fornecedorSugeridoId) : undefined) ??
+      (() => {
+        const linkedOc = ocs.find((oc) => oc.scId === sc.id || oc.numeroOC === sc.numeroOCRelacionada);
+        return linkedOc?.fornecedorId ? supplierNameById.get(linkedOc.fornecedorId) : undefined;
+      })() ??
+      "-",
     id: sc.id,
     entity: "SC",
     numeroSC: sc.numeroSC,
@@ -183,7 +192,6 @@ function buildUnifiedRows(
     setor: setores.find((setor) => setor.id === sc.setorId)?.nome ?? "-",
     statusKey: sc.status,
     statusLabel: SC_STATUS_LABEL[sc.status],
-    fornecedor: fornecedores.find((fornecedor) => fornecedor.id === sc.fornecedorSugeridoId)?.nomeFantasia ?? "-",
     valor: sc.valorEstimado,
     sortDate: sc.dataCriacao,
   }));
@@ -1308,10 +1316,35 @@ function UnifiedScOcModule({
                   return;
                 }
 
-                const fornecedorInformado = newOc.fornecedorNome.trim().toLowerCase();
-                const matchedSupplier =
-                  fornecedores.find((fornecedor) => fornecedor.nomeFantasia.toLowerCase() === fornecedorInformado) ??
-                  fornecedores.find((fornecedor) => fornecedor.nomeFantasia.toLowerCase().includes(fornecedorInformado));
+                const fornecedorInformado = newOc.fornecedorNome.trim();
+                let matchedSupplier =
+                  fornecedores.find((fornecedor) => fornecedor.nomeFantasia.toLowerCase() === fornecedorInformado.toLowerCase()) ??
+                  fornecedores.find((fornecedor) => fornecedor.nomeFantasia.toLowerCase().includes(fornecedorInformado.toLowerCase()));
+
+                try {
+                  if (!matchedSupplier && fornecedorInformado) {
+                    const digits = Date.now().toString();
+                    const cnpjSeed = digits.padStart(14, "0").slice(-14);
+                    matchedSupplier = await onCreateSupplierWithResult({
+                      codigo: `AUTO-${digits.slice(-6)}`,
+                      razaoSocial: fornecedorInformado,
+                      nomeFantasia: fornecedorInformado,
+                      cnpj: cnpjSeed,
+                      contato: newSC.solicitante || "Cadastro rapido",
+                      telefone: "",
+                      email: "",
+                      cidade: "",
+                      estado: "",
+                      categoria: "Cadastro Rapido",
+                      status: "ATIVO",
+                      observacoes: "Fornecedor criado automaticamente na criacao da SC.",
+                    });
+                  }
+                } catch {
+                  setMessage("Nao foi possivel criar fornecedor automaticamente para a SC.");
+                  return;
+                }
+
                 const fornecedorSugeridoId = matchedSupplier?.id ?? newSC.fornecedorSugeridoId;
 
                 try {
@@ -1336,7 +1369,7 @@ function UnifiedScOcModule({
                     observacoes: newSC.observacoes,
                     anexos: [],
                   });
-                  setNewSC({ ...newSC, numeroSC: "", solicitante: "", descricao: "", valorEstimado: 0, justificativa: "", observacoes: "" });
+                  setNewSC({ ...newSC, numeroSC: "", solicitante: "", descricao: "", valorEstimado: 0, justificativa: "", observacoes: "", fornecedorSugeridoId: matchedSupplier?.id ?? null });
                   setMessage("SC criada com sucesso.");
                 } catch (error) {
                   setMessage((error as Error).message || "Falha ao criar SC.");
