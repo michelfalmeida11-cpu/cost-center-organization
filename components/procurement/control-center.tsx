@@ -1087,7 +1087,7 @@ function UnifiedScOcModule({
   const [newOc, setNewOc] = useState({
     numeroOC: "",
     linkedNumeroSC: scs[0]?.numeroSC ?? "",
-    fornecedorId: fornecedores[0]?.id ?? "",
+    fornecedorNome: fornecedores[0]?.nomeFantasia ?? "",
     dataPrevistaEntrega: new Date().toISOString().slice(0, 10),
     valorOC: 0,
     setorId: setores[0]?.id ?? "",
@@ -1113,15 +1113,23 @@ function UnifiedScOcModule({
                 <option key={setor.id} value={setor.id}>{setor.nome}</option>
               ))}
             </select>
-            <select className="field" value={newOc.fornecedorId} onChange={(e) => {
-              setNewOc({ ...newOc, fornecedorId: e.target.value });
-              setNewSC({ ...newSC, fornecedorSugeridoId: e.target.value || null });
-            }}>
-              <option value="">Selecione o fornecedor</option>
+            <input
+              className="field"
+              list="fornecedores-oc-central"
+              placeholder="Fornecedor (nome)"
+              value={newOc.fornecedorNome}
+              onChange={(e) => {
+                const nome = e.target.value;
+                setNewOc({ ...newOc, fornecedorNome: nome });
+                const matched = fornecedores.find((fornecedor) => fornecedor.nomeFantasia.toLowerCase() === nome.trim().toLowerCase());
+                if (matched) setNewSC({ ...newSC, fornecedorSugeridoId: matched.id });
+              }}
+            />
+            <datalist id="fornecedores-oc-central">
               {fornecedores.map((fornecedor) => (
-                <option key={fornecedor.id} value={fornecedor.id}>{fornecedor.nomeFantasia}</option>
+                <option key={fornecedor.id} value={fornecedor.nomeFantasia} />
               ))}
-            </select>
+            </datalist>
             <input className="field" placeholder="Solicitante" value={newSC.solicitante} onChange={(e) => setNewSC({ ...newSC, solicitante: e.target.value })} />
             <input className="field" placeholder="Responsavel" value={newOc.responsavel} onChange={(e) => {
               setNewOc({ ...newOc, responsavel: e.target.value });
@@ -1177,9 +1185,13 @@ function UnifiedScOcModule({
             <button
               className="rounded-lg border border-blue-400/45 bg-blue-500/10 px-4 py-2 text-sm text-blue-100"
               onClick={async () => {
+                const fornecedorInformado = newOc.fornecedorNome.trim();
+                const matchedSupplier =
+                  fornecedores.find((fornecedor) => fornecedor.nomeFantasia.toLowerCase() === fornecedorInformado.toLowerCase()) ??
+                  fornecedores.find((fornecedor) => fornecedor.nomeFantasia.toLowerCase().includes(fornecedorInformado.toLowerCase()));
                 const linkedSc = scs.find((sc) => sc.numeroSC.trim().toLowerCase() === newSC.numeroSC.trim().toLowerCase()) ?? scs.find((sc) => sc.numeroSC === newOc.linkedNumeroSC);
-                if (!newOc.numeroOC || !linkedSc || !newOc.fornecedorId || !newOc.setorId) {
-                  setMessage("Para criar a OC informe Numero OC, Numero SC ja existente, Setor e Fornecedor.");
+                if (!newOc.numeroOC || !linkedSc || !matchedSupplier || !newOc.setorId) {
+                  setMessage("Para criar a OC informe Numero OC, Numero SC ja existente, Setor e Fornecedor por nome valido.");
                   return;
                 }
 
@@ -1189,7 +1201,7 @@ function UnifiedScOcModule({
                   await onCreateOC({
                     numeroOC: newOc.numeroOC,
                     scId: linkedSc.id,
-                    fornecedorId: newOc.fornecedorId,
+                    fornecedorId: matchedSupplier.id,
                     dataOC: today,
                     dataEmissao: today,
                     dataPrevistaEntrega: newOc.dataPrevistaEntrega,
