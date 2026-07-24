@@ -16,7 +16,9 @@ export async function POST(req: NextRequest) {
   if (!item) return fail("Item nao encontrado.", 404);
 
   const persisted = await persistNow();
-  if (!persisted) return fail("Falha ao persistir dados.", 500);
+  if (!persisted) {
+    return ok({ item, persisted: false, warning: "Dados atualizados em memoria. Persistencia Supabase indisponivel no momento." }, 202);
+  }
 
   return ok({ item });
 }

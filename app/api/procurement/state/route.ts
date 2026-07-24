@@ -26,7 +26,9 @@ export async function POST(req: NextRequest) {
   const state = replaceState(body.state, actor);
 
   const persisted = await persistNow();
-  if (!persisted) return fail("Falha ao persistir dados.", 500);
+  if (!persisted) {
+    return ok({ state, persisted: false, warning: "Dados atualizados em memoria. Persistencia Supabase indisponivel no momento." }, 202);
+  }
 
   return ok({ state });
 }

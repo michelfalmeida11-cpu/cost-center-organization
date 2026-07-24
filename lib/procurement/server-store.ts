@@ -178,7 +178,6 @@ export function createSetor(payload: Omit<Sector, "id" | "createdAt" | "updatedA
   };
   getStore().state.setores = [item, ...getStore().state.setores];
   audit(actor.role, actor.nome, "SETOR", item.id, "CREATE", null, item);
-  persistAsync();
   return item;
 }
 
@@ -189,7 +188,6 @@ export function updateSetor(id: string, payload: Partial<Sector>, actor: { nome:
   const after = { ...before, ...payload, updatedAt: nowDate() };
   state.setores = state.setores.map((x) => (x.id === id ? after : x));
   audit(actor.role, actor.nome, "SETOR", id, "UPDATE", before, after);
-  persistAsync();
   return after;
 }
 
@@ -221,7 +219,6 @@ export function createFornecedor(payload: Omit<Supplier, "id" | "createdAt" | "u
   };
   getStore().state.fornecedores = [item, ...getStore().state.fornecedores];
   audit(actor.role, actor.nome, "FORNECEDOR", item.id, "CREATE", null, item);
-  persistAsync();
   return item;
 }
 
@@ -232,7 +229,6 @@ export function updateFornecedor(id: string, payload: Partial<Supplier>, actor: 
   const after = { ...before, ...payload, updatedAt: nowDate() };
   state.fornecedores = state.fornecedores.map((x) => (x.id === id ? after : x));
   audit(actor.role, actor.nome, "FORNECEDOR", id, "UPDATE", before, after);
-  persistAsync();
   return after;
 }
 
@@ -268,7 +264,6 @@ export function createSC(payload: Omit<PurchaseRequest, "id" | "createdAt" | "up
   };
   getStore().state.scs = [item, ...getStore().state.scs];
   audit(actor.role, actor.nome, "SC", item.id, "CREATE", null, item);
-  persistAsync();
   return item;
 }
 
@@ -279,7 +274,6 @@ export function updateSC(id: string, payload: Partial<PurchaseRequest>, actor: {
   const after = { ...before, ...payload, updatedAt: nowDate() };
   state.scs = state.scs.map((x) => (x.id === id ? after : x));
   audit(actor.role, actor.nome, "SC", id, "UPDATE", before, after);
-  persistAsync();
   return after;
 }
 
@@ -300,7 +294,6 @@ export function changeSCStatus(id: string, status: SCStatus, actor: { nome: stri
   if (status === "LANCADA") after.dataLancamento = nowDate();
   state.scs = state.scs.map((x) => (x.id === id ? after : x));
   audit(actor.role, actor.nome, "SC", id, "STATUS_CHANGE", before, after);
-  persistAsync();
   return after;
 }
 
@@ -334,7 +327,6 @@ export function createOC(payload: Omit<PurchaseOrder, "id" | "createdAt" | "upda
   });
   getStore().state.ocs = [item, ...getStore().state.ocs].map(applyAutomaticOcStatus);
   audit(actor.role, actor.nome, "OC", item.id, "CREATE", null, item);
-  persistAsync();
   return item;
 }
 
@@ -345,7 +337,6 @@ export function updateOC(id: string, payload: Partial<PurchaseOrder>, actor: { n
   const after = applyAutomaticOcStatus({ ...before, ...payload, updatedAt: nowDate() });
   state.ocs = state.ocs.map((x) => (x.id === id ? after : x)).map(applyAutomaticOcStatus);
   audit(actor.role, actor.nome, "OC", id, "UPDATE", before, after);
-  persistAsync();
   return after;
 }
 
@@ -377,7 +368,6 @@ export function replaceState(payload: AppState, actor: { nome: string; role: Rol
     ocs: payload.ocs.map(applyAutomaticOcStatus),
   };
   audit(actor.role, actor.nome, "SC", "bulk", "IMPORT", before, getStore().state);
-  persistAsync();
   return getStore().state;
 }
 

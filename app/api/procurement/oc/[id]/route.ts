@@ -14,7 +14,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   if (!item) return fail("OC nao encontrada.", 404);
 
   const persisted = await persistNow();
-  if (!persisted) return fail("Falha ao persistir dados.", 500);
+  if (!persisted) {
+    return ok({ item, persisted: false, warning: "Dados atualizados em memoria. Persistencia Supabase indisponivel no momento." }, 202);
+  }
 
   return ok({ item });
 }
@@ -30,7 +32,9 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   if (!item) return fail("OC nao encontrada.", 404);
 
   const persisted = await persistNow();
-  if (!persisted) return fail("Falha ao persistir dados.", 500);
+  if (!persisted) {
+    return ok({ item, persisted: false, warning: "Dados atualizados em memoria. Persistencia Supabase indisponivel no momento." }, 202);
+  }
 
   return ok({ item });
 }
