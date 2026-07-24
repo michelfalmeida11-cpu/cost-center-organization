@@ -3,6 +3,8 @@ import { fail, ok, canWrite, requireActor } from "@/lib/procurement/api-helpers"
 import { AppState } from "@/lib/procurement/types";
 import { NextRequest } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: NextRequest) {
   await ensureStoreHydrated();
   return ok({

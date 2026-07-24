@@ -2,6 +2,8 @@ import { canWrite, fail, ok, requireActor } from "@/lib/procurement/api-helpers"
 import { createSC, ensureStoreHydrated, listSC, persistNow } from "@/lib/procurement/server-store";
 import { NextRequest } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: NextRequest) {
   await ensureStoreHydrated();
   const params = req.nextUrl.searchParams;

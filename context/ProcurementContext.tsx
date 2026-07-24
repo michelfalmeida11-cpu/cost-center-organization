@@ -139,23 +139,43 @@ export function ProcurementProvider({ children }: { children: React.ReactNode })
   const canEdit = canEditByRole(currentUser?.role);
 
   const createSector = useCallback(async (payload: Omit<Sector, "id" | "createdAt" | "updatedAt" | "deletedAt">) => {
-    await apiCreateSector(payload, currentUser);
-    await refreshState();
+    const data = await apiCreateSector(payload, currentUser);
+    setState((prev) => ({
+      ...prev,
+      setores: prev.setores.some((item) => item.id === data.item.id)
+        ? prev.setores.map((item) => (item.id === data.item.id ? data.item : item))
+        : [...prev.setores, data.item],
+    }));
+    void refreshState();
   }, [currentUser, refreshState]);
 
   const updateSector = useCallback(async (id: string, payload: Partial<Sector>) => {
-    await apiUpdateSector(id, payload, currentUser);
-    await refreshState();
+    const data = await apiUpdateSector(id, payload, currentUser);
+    setState((prev) => ({
+      ...prev,
+      setores: prev.setores.map((item) => (item.id === id ? data.item : item)),
+    }));
+    void refreshState();
   }, [currentUser, refreshState]);
 
   const deleteSector = useCallback(async (id: string) => {
     await apiDeleteSector(id, currentUser);
-    await refreshState();
+    setState((prev) => ({
+      ...prev,
+      setores: prev.setores.filter((item) => item.id !== id),
+    }));
+    void refreshState();
   }, [currentUser, refreshState]);
 
   const createSupplierWithResult = useCallback(async (payload: Omit<Supplier, "id" | "createdAt" | "updatedAt" | "deletedAt">) => {
     const data = await apiCreateSupplier(payload, currentUser);
-    await refreshState();
+    setState((prev) => ({
+      ...prev,
+      fornecedores: prev.fornecedores.some((item) => item.id === data.item.id)
+        ? prev.fornecedores.map((item) => (item.id === data.item.id ? data.item : item))
+        : [...prev.fornecedores, data.item],
+    }));
+    void refreshState();
     return data.item;
   }, [currentUser, refreshState]);
 
@@ -164,58 +184,115 @@ export function ProcurementProvider({ children }: { children: React.ReactNode })
   }, [createSupplierWithResult]);
 
   const updateSupplier = useCallback(async (id: string, payload: Partial<Supplier>) => {
-    await apiUpdateSupplier(id, payload, currentUser);
-    await refreshState();
+    const data = await apiUpdateSupplier(id, payload, currentUser);
+    setState((prev) => ({
+      ...prev,
+      fornecedores: prev.fornecedores.map((item) => (item.id === id ? data.item : item)),
+    }));
+    void refreshState();
   }, [currentUser, refreshState]);
 
   const deleteSupplier = useCallback(async (id: string) => {
     await apiDeleteSupplier(id, currentUser);
-    await refreshState();
+    setState((prev) => ({
+      ...prev,
+      fornecedores: prev.fornecedores.filter((item) => item.id !== id),
+    }));
+    void refreshState();
   }, [currentUser, refreshState]);
 
   const createSC = useCallback(async (payload: Omit<PurchaseRequest, "id" | "createdAt" | "updatedAt" | "deletedAt">) => {
-    await apiCreateSC(payload, currentUser);
-    await refreshState();
+    const data = await apiCreateSC(payload, currentUser);
+    setState((prev) => ({
+      ...prev,
+      scs: prev.scs.some((item) => item.id === data.item.id)
+        ? prev.scs.map((item) => (item.id === data.item.id ? data.item : item))
+        : [...prev.scs, data.item],
+    }));
+    void refreshState();
   }, [currentUser, refreshState]);
 
   const updateSC = useCallback(async (id: string, payload: Partial<PurchaseRequest>) => {
-    await apiUpdateSC(id, payload, currentUser);
-    await refreshState();
+    const data = await apiUpdateSC(id, payload, currentUser);
+    setState((prev) => ({
+      ...prev,
+      scs: prev.scs.map((item) => (item.id === id ? data.item : item)),
+    }));
+    void refreshState();
   }, [currentUser, refreshState]);
 
   const deleteSC = useCallback(async (id: string) => {
     await apiDeleteSC(id, currentUser);
-    await refreshState();
+    setState((prev) => ({
+      ...prev,
+      scs: prev.scs.filter((item) => item.id !== id),
+      ocs: prev.ocs.filter((item) => item.scId !== id),
+    }));
+    void refreshState();
   }, [currentUser, refreshState]);
 
   const createOC = useCallback(async (payload: Omit<PurchaseOrder, "id" | "createdAt" | "updatedAt" | "deletedAt">) => {
-    await apiCreateOC(payload, currentUser);
-    await refreshState();
+    const data = await apiCreateOC(payload, currentUser);
+    setState((prev) => ({
+      ...prev,
+      ocs: prev.ocs.some((item) => item.id === data.item.id)
+        ? prev.ocs.map((item) => (item.id === data.item.id ? data.item : item))
+        : [...prev.ocs, data.item],
+      scs: prev.scs.map((item) => (item.id === data.item.scId ? { ...item, numeroOCRelacionada: data.item.numeroOC } : item)),
+    }));
+    void refreshState();
   }, [currentUser, refreshState]);
 
   const updateOC = useCallback(async (id: string, payload: Partial<PurchaseOrder>) => {
-    await apiUpdateOC(id, payload, currentUser);
-    await refreshState();
+    const data = await apiUpdateOC(id, payload, currentUser);
+    setState((prev) => ({
+      ...prev,
+      ocs: prev.ocs.map((item) => (item.id === id ? data.item : item)),
+    }));
+    void refreshState();
   }, [currentUser, refreshState]);
 
   const deleteOC = useCallback(async (id: string) => {
-    await apiDeleteOC(id, currentUser);
-    await refreshState();
+    const data = await apiDeleteOC(id, currentUser);
+    setState((prev) => ({
+      ...prev,
+      ocs: prev.ocs.filter((item) => item.id !== id),
+      scs: prev.scs.map((item) => (item.id === data.item.scId ? { ...item, numeroOCRelacionada: null } : item)),
+    }));
+    void refreshState();
   }, [currentUser, refreshState]);
 
   const changeScStatus = useCallback(async (id: string, status: SCStatus, reason?: string) => {
-    await apiChangeSCStatus(id, status, currentUser, reason);
-    await refreshState();
+    const data = await apiChangeSCStatus(id, status, currentUser, reason);
+    setState((prev) => ({
+      ...prev,
+      scs: prev.scs.map((item) => (item.id === id ? data.item : item)),
+    }));
+    void refreshState();
   }, [currentUser, refreshState]);
 
   const moveTrackingItem = useCallback(async (entity: "SC" | "OC", id: string, targetStatus: string) => {
-    await apiMoveKanban(entity, id, targetStatus as SCStatus, currentUser);
-    await refreshState();
+    const data = await apiMoveKanban(entity, id, targetStatus as SCStatus, currentUser);
+    setState((prev) => {
+      if (entity === "SC") {
+        return {
+          ...prev,
+          scs: prev.scs.map((item) => (item.id === id ? (data.item as PurchaseRequest) : item)),
+        };
+      }
+
+      return {
+        ...prev,
+        ocs: prev.ocs.map((item) => (item.id === id ? (data.item as PurchaseOrder) : item)),
+      };
+    });
+    void refreshState();
   }, [currentUser, refreshState]);
 
   const importAllData = useCallback(async (payload: AppState) => {
-    await apiReplaceState(payload, currentUser);
-    await refreshState();
+    const data = await apiReplaceState(payload, currentUser);
+    setState(data.state as AppState);
+    void refreshState();
   }, [currentUser, refreshState]);
 
   const value = useMemo<ProcurementContextValue>(

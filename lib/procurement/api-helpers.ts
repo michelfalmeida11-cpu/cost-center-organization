@@ -7,12 +7,27 @@ export type Actor = {
   role: Role;
 };
 
+const NO_STORE_HEADERS = {
+  "Cache-Control": "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0",
+  Pragma: "no-cache",
+  Expires: "0",
+} as const;
+
 export function ok(data: unknown, status = 200) {
-  return NextResponse.json(data, { status });
+  return NextResponse.json(data, {
+    status,
+    headers: NO_STORE_HEADERS,
+  });
 }
 
 export function fail(message: string, status = 400) {
-  return NextResponse.json({ error: message }, { status });
+  return NextResponse.json(
+    { error: message },
+    {
+      status,
+      headers: NO_STORE_HEADERS,
+    },
+  );
 }
 
 export async function getActor(req: NextRequest): Promise<Actor | null> {

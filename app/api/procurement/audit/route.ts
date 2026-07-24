@@ -2,6 +2,8 @@ import { ensureStoreHydrated, listAudit } from "@/lib/procurement/server-store";
 import { ok, requireActor } from "@/lib/procurement/api-helpers";
 import { NextRequest } from "next/server";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: NextRequest) {
   await ensureStoreHydrated();
   const auth = await requireActor(req);

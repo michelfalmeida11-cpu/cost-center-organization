@@ -540,7 +540,7 @@ export function ProcurementControlCenter() {
         auditoria: state.auditoria,
       };
 
-      importAllData(nextState);
+      await importAllData(nextState);
       setImportReport(["Importacao concluida com sucesso."]);
     } catch (error) {
       setImportReport([`Falha na importacao: ${(error as Error).message}`]);
@@ -1769,9 +1769,9 @@ function SupplierModule({
   fornecedores: AppState["fornecedores"];
   ranking: ReturnType<typeof supplierRanking>;
   canWrite: boolean;
-  onCreate: (payload: Omit<AppState["fornecedores"][number], "id" | "createdAt" | "updatedAt" | "deletedAt">) => void;
-  onUpdate: (id: string, payload: Partial<AppState["fornecedores"][number]>) => void;
-  onDelete: (id: string) => void;
+  onCreate: (payload: Omit<AppState["fornecedores"][number], "id" | "createdAt" | "updatedAt" | "deletedAt">) => Promise<void>;
+  onUpdate: (id: string, payload: Partial<AppState["fornecedores"][number]>) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
 }) {
   const [nome, setNome] = useState("");
 
@@ -1784,9 +1784,9 @@ function SupplierModule({
             <input value={nome} onChange={(e) => setNome(e.target.value)} className="field" placeholder="Nome fantasia" />
             <button
               className="rounded-lg border border-cyan-400/45 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-100"
-              onClick={() => {
+              onClick={async () => {
                 if (!nome) return;
-                onCreate({
+                await onCreate({
                   codigo: `F${Math.round(Math.random() * 9999)}`,
                   razaoSocial: nome,
                   nomeFantasia: nome,
@@ -1829,10 +1829,10 @@ function SupplierModule({
                   <td>
                     {canWrite ? (
                       <div className="flex gap-2">
-                        <button className="rounded border border-amber-600 px-2 py-1 text-xs" onClick={() => onUpdate(forn.id, { status: forn.status === "ATIVO" ? "INATIVO" : "ATIVO" })}>
+                        <button className="rounded border border-amber-600 px-2 py-1 text-xs" onClick={async () => await onUpdate(forn.id, { status: forn.status === "ATIVO" ? "INATIVO" : "ATIVO" })}>
                           Alternar
                         </button>
-                        <button className="rounded border border-rose-700 px-2 py-1 text-xs" onClick={() => onDelete(forn.id)}>
+                        <button className="rounded border border-rose-700 px-2 py-1 text-xs" onClick={async () => await onDelete(forn.id)}>
                           Excluir
                         </button>
                       </div>
@@ -1879,9 +1879,9 @@ function SectorModule({
 }: {
   setores: AppState["setores"];
   canWrite: boolean;
-  onCreate: (payload: Omit<AppState["setores"][number], "id" | "createdAt" | "updatedAt" | "deletedAt">) => void;
-  onUpdate: (id: string, payload: Partial<AppState["setores"][number]>) => void;
-  onDelete: (id: string) => void;
+  onCreate: (payload: Omit<AppState["setores"][number], "id" | "createdAt" | "updatedAt" | "deletedAt">) => Promise<void>;
+  onUpdate: (id: string, payload: Partial<AppState["setores"][number]>) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
 }) {
   const [nome, setNome] = useState("");
   return (
@@ -1893,9 +1893,9 @@ function SectorModule({
             <input value={nome} onChange={(e) => setNome(e.target.value)} className="field" placeholder="Nome do setor" />
             <button
               className="rounded-lg border border-cyan-400/45 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-100"
-              onClick={() => {
+              onClick={async () => {
                 if (!nome) return;
-                onCreate({ nome, descricao: "", ativo: true });
+                await onCreate({ nome, descricao: "", ativo: true });
                 setNome("");
               }}
             >
@@ -1921,10 +1921,10 @@ function SectorModule({
                 <td>
                   {canWrite ? (
                     <div className="flex gap-2">
-                      <button className="rounded border border-amber-600 px-2 py-1 text-xs" onClick={() => onUpdate(setor.id, { ativo: !setor.ativo })}>
+                      <button className="rounded border border-amber-600 px-2 py-1 text-xs" onClick={async () => await onUpdate(setor.id, { ativo: !setor.ativo })}>
                         Alternar
                       </button>
-                      <button className="rounded border border-rose-700 px-2 py-1 text-xs" onClick={() => onDelete(setor.id)}>
+                      <button className="rounded border border-rose-700 px-2 py-1 text-xs" onClick={async () => await onDelete(setor.id)}>
                         Excluir
                       </button>
                     </div>
@@ -1947,7 +1947,7 @@ function KanbanBoard({
 }: {
   scs: PurchaseRequest[];
   ocs: PurchaseOrder[];
-  onMove: (entity: "SC" | "OC", id: string, targetStatus: string) => void;
+  onMove: (entity: "SC" | "OC", id: string, targetStatus: string) => Promise<void>;
   canWrite: boolean;
 }) {
   const columns = [
@@ -1977,12 +1977,12 @@ function KanbanBoard({
               if (!canWrite) return;
               e.preventDefault();
             }}
-            onDrop={(e) => {
+            onDrop={async (e) => {
               if (!canWrite) return;
               const payload = e.dataTransfer.getData("text/plain");
               const [entity, id] = payload.split(":");
               if (!entity || !id) return;
-              onMove(entity as "SC" | "OC", id, col.key);
+              await onMove(entity as "SC" | "OC", id, col.key);
             }}
           >
             <p className="mb-2 text-xs font-semibold tracking-wider text-cyan-300">{col.label}</p>
