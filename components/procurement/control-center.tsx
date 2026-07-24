@@ -78,11 +78,22 @@ const RED = "#ff5d7d";
 const PURPLE = "#9f7aff";
 const BLUE = "#5ba5ff";
 
-function scStatusBadge(status: SCStatus) {
+const OC_PHASE_LABEL: Record<OcPhase, string> = {
+  EM_ANALISE: "Em Analise",
+  APROVADA: "Aprovada",
+  REPROVADA: "Reprovada",
+  LANCADA: "Lancada",
+};
+
+function businessStatusBadge(status: SCStatus | OcPhase) {
   if (status === "APROVADA") return "border-emerald-500/40 bg-emerald-500/10 text-emerald-200";
   if (status === "REPROVADA") return "border-rose-500/40 bg-rose-500/10 text-rose-200";
-  if (status === "EM_ANALISE") return "border-amber-500/40 bg-amber-500/10 text-amber-200";
-  return "border-cyan-500/40 bg-cyan-500/10 text-cyan-200";
+  if (status === "LANCADA") return "border-blue-500/40 bg-blue-500/10 text-blue-200";
+  return "border-amber-500/40 bg-amber-500/10 text-amber-200";
+}
+
+function scStatusBadge(status: SCStatus) {
+  return businessStatusBadge(status);
 }
 
 function ocStatusBadge(status: OCStatus) {
@@ -92,6 +103,19 @@ function ocStatusBadge(status: OCStatus) {
 }
 
 type OcPhase = "EM_ANALISE" | "APROVADA" | "REPROVADA" | "LANCADA";
+
+type UnifiedScOcRow = {
+  id: string;
+  entity: "SC" | "OC";
+  numeroSC: string;
+  numeroOC: string;
+  setor: string;
+  statusKey: SCStatus | OcPhase;
+  statusLabel: string;
+  fornecedor: string;
+  valor: number;
+  sortDate: string;
+};
 
 function ocToPhase(status: OCStatus): OcPhase {
   if (status === "CANCELADA") return "REPROVADA";
@@ -106,6 +130,47 @@ function phaseToOcStatus(phase: OcPhase, current: OCStatus): OCStatus {
   if (phase === "EM_ANALISE") return "CRIADA";
   if (current === "ENTREGUE" || current === "ATRASADA") return current;
   return "CONFIRMADA";
+}
+
+function formatCompactCurrency(value: number) {
+  if (value >= 1000000) return `R$ ${(value / 1000000).toFixed(2)} Mi`;
+  if (value >= 1000) return `R$ ${(value / 1000).toFixed(1)} mil`;
+  return formatCurrency(value);
+}
+
+function buildUnifiedRows(
+  scs: PurchaseRequest[],
+  ocs: PurchaseOrder[],
+  setores: AppState["setores"],
+  fornecedores: AppState["fornecedores"],
+): UnifiedScOcRow[] {
+  const scRows: UnifiedScOcRow[] = scs.map((sc) => ({
+    id: sc.id,
+    entity: "SC",
+    numeroSC: sc.numeroSC,
+    numeroOC: sc.numeroOCRelacionada ?? "-",
+    setor: setores.find((setor) => setor.id === sc.setorId)?.nome ?? "-",
+    statusKey: sc.status,
+    statusLabel: SC_STATUS_LABEL[sc.status],
+    fornecedor: fornecedores.find((fornecedor) => fornecedor.id === sc.fornecedorSugeridoId)?.nomeFantasia ?? "-",
+    valor: sc.valorEstimado,
+    sortDate: sc.dataCriacao,
+  }));
+
+  const ocRows: UnifiedScOcRow[] = ocs.map((oc) => ({
+    id: oc.id,
+    entity: "OC",
+    numeroSC: scs.find((sc) => sc.id === oc.scId)?.numeroSC ?? "-",
+    numeroOC: oc.numeroOC,
+    setor: setores.find((setor) => setor.id === oc.setorId)?.nome ?? "-",
+    statusKey: ocToPhase(oc.status as OCStatus),
+    statusLabel: OC_PHASE_LABEL[ocToPhase(oc.status as OCStatus)],
+    fornecedor: fornecedores.find((fornecedor) => fornecedor.id === oc.fornecedorId)?.nomeFantasia ?? "-",
+    valor: oc.valorOC,
+    sortDate: oc.dataOC,
+  }));
+
+  return [...ocRows, ...scRows].sort((a, b) => b.sortDate.localeCompare(a.sortDate));
 }
 
 function ModuleTitle({ title, subtitle }: { title: string; subtitle: string }) {
@@ -187,6 +252,7 @@ export function ProcurementControlCenter() {
   const bySector = useMemo(() => sectorSeries(state, filters), [state, filters]);
   const ranking = useMemo(() => supplierRanking(state, filters), [state, filters]);
   const statuses = useMemo(() => statusSeries(state, filters), [state, filters]);
+  const unifiedRows = useMemo(() => buildUnifiedRows(dataset.scFiltered, dataset.ocFiltered as PurchaseOrder[], state.setores, state.fornecedores), [dataset.scFiltered, dataset.ocFiltered, state.setores, state.fornecedores]);
   const ocBySector = useMemo(() => {
     const map = new Map<string, { setor: string; total: number; valor: number }>();
     dataset.ocFiltered.forEach((oc) => {
@@ -200,21 +266,31 @@ export function ProcurementControlCenter() {
   }, [dataset.ocFiltered, state.setores]);
   const ocByPhase = useMemo(() => {
     const order: OcPhase[] = ["EM_ANALISE", "APROVADA", "LANCADA", "REPROVADA"];
-    const labels: Record<OcPhase, string> = {
-      EM_ANALISE: "Em Analise",
-      APROVADA: "Aprovada",
-      LANCADA: "Lancada",
-      REPROVADA: "Reprovada",
-    };
     const map = new Map<OcPhase, number>();
     dataset.ocFiltered.forEach((oc) => {
       const phase = ocToPhase(oc.status as OCStatus);
       map.set(phase, (map.get(phase) ?? 0) + 1);
     });
-    return order.map((phase) => ({ status: labels[phase], total: map.get(phase) ?? 0 }));
+    return order.map((phase) => ({ status: OC_PHASE_LABEL[phase], total: map.get(phase) ?? 0 }));
   }, [dataset.ocFiltered]);
+  const portfolioByStatus = useMemo(() => {
+    const order: Array<SCStatus | OcPhase> = ["EM_ANALISE", "APROVADA", "LANCADA", "REPROVADA"];
+    const map = new Map<SCStatus | OcPhase, number>();
+    dataset.scFiltered.forEach((sc) => map.set(sc.status, (map.get(sc.status) ?? 0) + 1));
+    dataset.ocFiltered.forEach((oc) => {
+      const phase = ocToPhase(oc.status as OCStatus);
+      map.set(phase, (map.get(phase) ?? 0) + 1);
+    });
+    return order.map((status) => ({
+      status: status in OC_PHASE_LABEL ? OC_PHASE_LABEL[status as OcPhase] : SC_STATUS_LABEL[status as SCStatus],
+      total: map.get(status) ?? 0,
+    }));
+  }, [dataset.scFiltered, dataset.ocFiltered]);
+  const latestRows = useMemo(() => unifiedRows.slice(0, 6), [unifiedRows]);
+  const openOcCount = useMemo(() => dataset.ocFiltered.filter((oc) => !["ENTREGUE", "CANCELADA"].includes(oc.status)).length, [dataset.ocFiltered]);
+  const avgOcTicket = useMemo(() => (dataset.ocFiltered.length ? dataset.ocFiltered.reduce((sum, oc) => sum + oc.valorOC, 0) / dataset.ocFiltered.length : 0), [dataset.ocFiltered]);
+  const topSuppliersChart = useMemo(() => ranking.slice(0, 5).map((item) => ({ fornecedor: item.fornecedor, valor: item.valorTotal })), [ranking]);
   const alerts = useMemo(() => buildAlerts(state, filters), [state, filters]);
-  const latestScs = useMemo(() => dataset.scFiltered.slice(0, 6), [dataset.scFiltered]);
   const delayedOcs = useMemo(() => dataset.ocFiltered.filter((oc) => oc.status === "ATRASADA").slice(0, 6), [dataset.ocFiltered]);
   const anosDisponiveis = useMemo(() => {
     const years = new Set<string>();
@@ -463,28 +539,135 @@ export function ProcurementControlCenter() {
           {module === "DASHBOARD" ? (
             <section>
               <ModuleTitle title="Dashboard Executivo" subtitle="Visao tatica em tempo real" />
-              <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 xl:gap-1.5">
-                <KpiCard label="SC TOTAL" value={String(kpis.totalSC)} note="Volume de solicitacoes" color={CYAN} icon={ClipboardList} />
-                <KpiCard label="OC TOTAL" value={String(kpis.totalOC)} note="Ordens emitidas" color={PURPLE} icon={Truck} />
-                <KpiCard label="VALOR TOTAL" value={formatCurrency(kpis.valorTotalOC)} note="Compromisso financeiro" color={GREEN} icon={BarChart3} />
-                <KpiCard label="EM ANALISE" value={String(kpis.emAnalise)} note="Aguardando aprovacao" color={AMBER} icon={Activity} />
-                <KpiCard label="APROVADAS" value={String(kpis.aprovadas)} note="Fluxo liberado" color={GREEN} icon={Shield} />
-                <KpiCard label="LANCADAS" value={String(kpis.lancadas)} note="SC convertidas" color={BLUE} icon={ClipboardList} />
-                <KpiCard label="ATRASADAS" value={String(kpis.entregasAtrasadas)} note="Exigem acao imediata" color={RED} icon={AlertTriangle} />
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                <KpiCard label="VALOR COMPROMETIDO" value={formatCompactCurrency(kpis.valorTotalOC)} note="Volume financeiro das OCs" color={GREEN} icon={BarChart3} />
+                <KpiCard label="OC EM CURSO" value={String(openOcCount)} note="Ordens abertas e em andamento" color={PURPLE} icon={Truck} />
+                <KpiCard label="PENDENTE APROVACAO" value={String(kpis.emAnalise)} note="Carteira aguardando decisao" color={AMBER} icon={Activity} />
+                <KpiCard label="SC LANCADAS" value={String(kpis.lancadas)} note="SCs prontas para conversao" color={BLUE} icon={ClipboardList} />
+                <KpiCard label="ATRASOS" value={String(kpis.entregasAtrasadas)} note="OCs com risco imediato" color={RED} icon={AlertTriangle} />
+                <KpiCard label="TICKET MEDIO OC" value={formatCompactCurrency(avgOcTicket)} note="Valor medio por ordem" color={CYAN} icon={Gauge} />
               </div>
 
-              <div className="mt-4 grid gap-4 lg:grid-cols-3">
-                <Panel title="Evolucao SC x OC">
+              <div className="mt-4 grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+                <Panel title="Carteira por Status">
                   <ResponsiveContainer width="100%" height={260}>
-                    <LineChart data={monthly}>
+                    <PieChart>
+                      <Pie data={portfolioByStatus} dataKey="total" nameKey="status" outerRadius={92} innerRadius={48}>
+                        {portfolioByStatus.map((entry) => (
+                          <Cell key={entry.status} fill={entry.status === "Aprovada" ? GREEN : entry.status === "Em Analise" ? AMBER : entry.status === "Reprovada" ? RED : BLUE} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </Panel>
+
+                <Panel title="Valor OC por Setor">
+                  <ResponsiveContainer width="100%" height={260}>
+                    <PieChart>
+                      <Pie data={ocBySector} dataKey="valor" nameKey="setor" outerRadius={92} innerRadius={44}>
+                        {ocBySector.map((entry, index) => (
+                          <Cell key={entry.setor} fill={[BLUE, CYAN, GREEN, PURPLE, AMBER][index % 5]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </Panel>
+
+                <Panel title="Valor OC por Mes">
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={monthly}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
                       <XAxis dataKey="mes" stroke="#94a3b8" />
                       <YAxis stroke="#94a3b8" />
-                      <Tooltip />
-                      <Line type="monotone" dataKey="totalSC" stroke={CYAN} strokeWidth={2} />
-                      <Line type="monotone" dataKey="totalOC" stroke={PURPLE} strokeWidth={2} />
-                    </LineChart>
+                      <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                      <Bar dataKey="valorOC" fill={CYAN} radius={[6, 6, 0, 0]} />
+                    </BarChart>
                   </ResponsiveContainer>
+                </Panel>
+
+                <Panel title="Top Fornecedores">
+                  <ResponsiveContainer width="100%" height={260}>
+                    <BarChart data={topSuppliersChart}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                      <XAxis dataKey="fornecedor" stroke="#94a3b8" interval={0} angle={-20} textAnchor="end" height={80} />
+                      <YAxis stroke="#94a3b8" />
+                      <Tooltip formatter={(value: number) => formatCurrency(value)} />
+                      <Bar dataKey="valor" fill={GREEN} radius={[6, 6, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </Panel>
+              </div>
+
+              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                <Panel title="Fase das OCs">
+                  <ResponsiveContainer width="100%" height={260}>
+                    <PieChart>
+                      <Pie data={ocByPhase} dataKey="total" nameKey="status" outerRadius={92} innerRadius={44}>
+                        {ocByPhase.map((entry) => (
+                          <Cell key={entry.status} fill={entry.status === "Aprovada" ? GREEN : entry.status === "Em Analise" ? AMBER : entry.status === "Reprovada" ? RED : BLUE} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </Panel>
+
+                <Panel title="Ultimas Movimentacoes SC / OC">
+                  <div className="overflow-auto">
+                    <table className="w-full table-fixed text-sm">
+                      <thead className="text-left text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                        <tr>
+                          <th className="w-[70px]">Tipo</th>
+                          <th className="w-[150px]">SC</th>
+                          <th className="w-[150px]">OC</th>
+                          <th>Setor</th>
+                          <th className="w-[140px]">Status</th>
+                          <th>Fornecedor</th>
+                          <th className="w-[140px] text-right">Valor</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {latestRows.map((row) => (
+                          <tr key={`${row.entity}-${row.id}`} className="border-t border-slate-800/90 transition hover:bg-slate-900/60">
+                            <td className="py-2 font-semibold text-cyan-200">{row.entity}</td>
+                            <td className="truncate pr-2">{row.numeroSC}</td>
+                            <td className="truncate pr-2">{row.numeroOC}</td>
+                            <td className="truncate pr-2">{row.setor}</td>
+                            <td>
+                              <span className={`rounded-md border px-2 py-0.5 text-[11px] font-medium ${businessStatusBadge(row.statusKey)}`}>{row.statusLabel}</span>
+                            </td>
+                            <td className="truncate pr-2">{row.fornecedor}</td>
+                            <td className="text-right">{formatCurrency(row.valor)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </Panel>
+              </div>
+
+              <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                <Panel title="Alertas Criticos">
+                  <div className="space-y-2">
+                    {alerts.slice(0, 4).map((alert) => (
+                      <div
+                        key={alert.id}
+                        className={`rounded-lg border p-2 text-sm ${
+                          alert.nivel === "CRITICO"
+                            ? "border-rose-500/40 bg-rose-500/10"
+                            : alert.nivel === "ATENCAO"
+                              ? "border-amber-500/40 bg-amber-500/10"
+                              : "border-cyan-500/40 bg-cyan-500/10"
+                        }`}
+                      >
+                        <p className="font-semibold uppercase tracking-wide">{alert.tipo}</p>
+                        <p className="text-slate-300">{alert.mensagem}</p>
+                      </div>
+                    ))}
+                    {alerts.length === 0 ? <p className="text-sm text-emerald-200">Sem alertas no momento.</p> : null}
+                  </div>
                 </Panel>
 
                 <Panel title="OC por Setor (quantidade)">
@@ -494,55 +677,9 @@ export function ProcurementControlCenter() {
                       <XAxis dataKey="setor" stroke="#94a3b8" interval={0} angle={-20} textAnchor="end" height={70} />
                       <YAxis stroke="#94a3b8" />
                       <Tooltip />
-                      <Bar dataKey="total" fill={BLUE} />
+                      <Bar dataKey="total" fill={BLUE} radius={[6, 6, 0, 0]} />
                     </BarChart>
                   </ResponsiveContainer>
-                </Panel>
-
-                <Panel title="Fase das OCs">
-                  <ResponsiveContainer width="100%" height={240}>
-                    <PieChart>
-                      <Pie data={ocByPhase} dataKey="total" nameKey="status" outerRadius={90}>
-                        {ocByPhase.map((entry, index) => (
-                          <Cell key={entry.status} fill={[CYAN, GREEN, RED, PURPLE][index % 4]} />
-                        ))}
-                      </Pie>
-                      <Tooltip />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </Panel>
-              </div>
-
-              <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                <Panel title="Ultimas SC">
-                  <div className="overflow-auto">
-                    <table className="w-full table-fixed text-sm">
-                      <thead className="text-left text-[11px] uppercase tracking-[0.14em] text-slate-500">
-                        <tr>
-                          <th>SC</th>
-                          <th>Data</th>
-                          <th>Setor</th>
-                          <th>Solicitante</th>
-                          <th>Status</th>
-                          <th>Valor</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {latestScs.map((sc) => (
-                          <tr key={sc.id} className="border-t border-slate-800/90 transition hover:bg-slate-900/60">
-                            <td className="py-2 pr-2 font-medium text-cyan-100">{sc.numeroSC}</td>
-                            <td className="pr-2">{sc.dataCriacao}</td>
-                            <td className="pr-2 truncate">{state.setores.find((s) => s.id === sc.setorId)?.nome ?? "-"}</td>
-                            <td className="pr-2 truncate">{sc.solicitante}</td>
-                            <td>
-                              <span className={`rounded-md border px-2 py-0.5 text-[11px] font-medium ${scStatusBadge(sc.status)}`}>{SC_STATUS_LABEL[sc.status]}</span>
-                            </td>
-                            <td className="text-right">{formatCurrency(sc.valorEstimado)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
                 </Panel>
 
                 <Panel title="OC com Atraso">
@@ -583,28 +720,7 @@ export function ProcurementControlCenter() {
                 </Panel>
               </div>
 
-              <div className="mt-4 grid gap-4 lg:grid-cols-3">
-                <Panel title="Alertas Criticos">
-                  <div className="space-y-2">
-                    {alerts.slice(0, 4).map((alert) => (
-                      <div
-                        key={alert.id}
-                        className={`rounded-lg border p-2 text-sm ${
-                          alert.nivel === "CRITICO"
-                            ? "border-rose-500/40 bg-rose-500/10"
-                            : alert.nivel === "ATENCAO"
-                              ? "border-amber-500/40 bg-amber-500/10"
-                              : "border-cyan-500/40 bg-cyan-500/10"
-                        }`}
-                      >
-                        <p className="font-semibold uppercase tracking-wide">{alert.tipo}</p>
-                        <p className="text-slate-300">{alert.mensagem}</p>
-                      </div>
-                    ))}
-                    {alerts.length === 0 ? <p className="text-sm text-emerald-200">Sem alertas no momento.</p> : null}
-                  </div>
-                </Panel>
-
+              <div className="mt-4 grid gap-4 lg:grid-cols-2">
                 <Panel title="Top Fornecedores">
                   <div className="space-y-2 text-sm">
                     {ranking.slice(0, 5).map((r) => (
@@ -635,32 +751,23 @@ export function ProcurementControlCenter() {
           ) : null}
 
           {module === "SC" ? (
-            <section className="space-y-4">
-              <ModuleTitle title="Central SC / OC" subtitle="Solicitacao e ordem em fluxo unico" />
-              <ScModule
-                scs={dataset.scFiltered}
-                setores={state.setores}
-                fornecedores={state.fornecedores}
-                canWrite={canWrite}
-                onCreate={createSC}
-                onUpdate={updateSC}
-                onDelete={deleteSC}
-                onPickTimeline={(id) => {
-                  setSelectedSC(id);
-                  setModule("ACOMPANHAMENTO");
-                }}
-              />
-              <OcModule
-                ocs={dataset.ocFiltered as PurchaseOrder[]}
-                scs={state.scs}
-                fornecedores={state.fornecedores}
-                setores={state.setores}
-                canWrite={canWrite}
-                onCreate={createOC}
-                onUpdate={updateOC}
-                onDelete={deleteOC}
-              />
-            </section>
+            <UnifiedScOcModule
+              scs={dataset.scFiltered}
+              ocs={dataset.ocFiltered as PurchaseOrder[]}
+              setores={state.setores}
+              fornecedores={state.fornecedores}
+              canWrite={canWrite}
+              onCreateSC={createSC}
+              onUpdateSC={updateSC}
+              onDeleteSC={deleteSC}
+              onCreateOC={createOC}
+              onUpdateOC={updateOC}
+              onDeleteOC={deleteOC}
+              onPickTimeline={(id) => {
+                setSelectedSC(id);
+                setModule("ACOMPANHAMENTO");
+              }}
+            />
           ) : null}
 
           {module === "FORNECEDORES" ? (
@@ -894,6 +1001,332 @@ function FilterSelect({
         ))}
       </select>
     </label>
+  );
+}
+
+function UnifiedScOcModule({
+  scs,
+  ocs,
+  setores,
+  fornecedores,
+  canWrite,
+  onCreateSC,
+  onUpdateSC,
+  onDeleteSC,
+  onCreateOC,
+  onUpdateOC,
+  onDeleteOC,
+  onPickTimeline,
+}: {
+  scs: PurchaseRequest[];
+  ocs: PurchaseOrder[];
+  setores: AppState["setores"];
+  fornecedores: AppState["fornecedores"];
+  canWrite: boolean;
+  onCreateSC: (payload: Omit<PurchaseRequest, "id" | "createdAt" | "updatedAt" | "deletedAt">) => Promise<void>;
+  onUpdateSC: (id: string, payload: Partial<PurchaseRequest>) => Promise<void>;
+  onDeleteSC: (id: string) => Promise<void>;
+  onCreateOC: (payload: Omit<PurchaseOrder, "id" | "createdAt" | "updatedAt" | "deletedAt">) => Promise<void>;
+  onUpdateOC: (id: string, payload: Partial<PurchaseOrder>) => Promise<void>;
+  onDeleteOC: (id: string) => Promise<void>;
+  onPickTimeline: (id: string) => void;
+}) {
+  const [entryMode, setEntryMode] = useState<"SC" | "OC">("SC");
+  const [message, setMessage] = useState("");
+  const rows = useMemo(() => buildUnifiedRows(scs, ocs, setores, fornecedores), [scs, ocs, setores, fornecedores]);
+  const [newSC, setNewSC] = useState<{
+    numeroSC: string;
+    solicitante: string;
+    setorId: string;
+    descricao: string;
+    categoria: string;
+    prioridade: PurchaseRequest["prioridade"];
+    valorEstimado: number;
+    fornecedorSugeridoId: string | null;
+    justificativa: string;
+    responsavel: string;
+    observacoes: string;
+  }>({
+    numeroSC: "",
+    solicitante: "",
+    setorId: setores[0]?.id ?? "",
+    descricao: "",
+    categoria: "",
+    prioridade: "MEDIA" as PurchaseRequest["prioridade"],
+    valorEstimado: 0,
+    fornecedorSugeridoId: fornecedores[0]?.id ?? null,
+    justificativa: "",
+    responsavel: "",
+    observacoes: "",
+  });
+  const [newOc, setNewOc] = useState({
+    numeroOC: "",
+    scId: scs[0]?.id ?? "",
+    fornecedorId: fornecedores[0]?.id ?? "",
+    dataPrevistaEntrega: new Date().toISOString().slice(0, 10),
+    valorOC: 0,
+    setorId: setores[0]?.id ?? "",
+    responsavel: "",
+    condicaoPagamento: "30 dias",
+    observacoes: "",
+  });
+
+  return (
+    <section className="space-y-4">
+      <ModuleTitle title="Central SC / OC" subtitle="Criacao e controle em uma unica operacao" />
+
+      {canWrite ? (
+        <Panel title="Criacao Integrada SC / OC">
+          <div className="mb-4 flex flex-wrap gap-2">
+            <button
+              className={`rounded-lg border px-4 py-2 text-sm ${entryMode === "SC" ? "border-cyan-300/70 bg-cyan-500/15 text-cyan-100" : "border-slate-700 bg-slate-900 text-slate-300"}`}
+              onClick={() => {
+                setEntryMode("SC");
+                setMessage("");
+              }}
+            >
+              Criar SC
+            </button>
+            <button
+              className={`rounded-lg border px-4 py-2 text-sm ${entryMode === "OC" ? "border-cyan-300/70 bg-cyan-500/15 text-cyan-100" : "border-slate-700 bg-slate-900 text-slate-300"}`}
+              onClick={() => {
+                setEntryMode("OC");
+                setMessage("");
+              }}
+            >
+              Criar OC
+            </button>
+          </div>
+
+          {entryMode === "SC" ? (
+            <>
+              <div className="grid gap-2 md:grid-cols-4">
+                <input className="field" placeholder="SC" value={newSC.numeroSC} onChange={(e) => setNewSC({ ...newSC, numeroSC: e.target.value })} />
+                <input className="field" placeholder="Solicitante" value={newSC.solicitante} onChange={(e) => setNewSC({ ...newSC, solicitante: e.target.value })} />
+                <select className="field" value={newSC.setorId} onChange={(e) => setNewSC({ ...newSC, setorId: e.target.value })}>
+                  {setores.map((setor) => (
+                    <option key={setor.id} value={setor.id}>{setor.nome}</option>
+                  ))}
+                </select>
+                <select className="field" value={newSC.fornecedorSugeridoId ?? ""} onChange={(e) => setNewSC({ ...newSC, fornecedorSugeridoId: e.target.value || null })}>
+                  <option value="">Sem fornecedor</option>
+                  {fornecedores.map((fornecedor) => (
+                    <option key={fornecedor.id} value={fornecedor.id}>{fornecedor.nomeFantasia}</option>
+                  ))}
+                </select>
+                <input className="field md:col-span-2" placeholder="Descricao" value={newSC.descricao} onChange={(e) => setNewSC({ ...newSC, descricao: e.target.value })} />
+                <input className="field" placeholder="Categoria" value={newSC.categoria} onChange={(e) => setNewSC({ ...newSC, categoria: e.target.value })} />
+                <input className="field" type="number" placeholder="Valor" value={newSC.valorEstimado} onChange={(e) => setNewSC({ ...newSC, valorEstimado: Number(e.target.value) })} />
+                <input className="field" placeholder="Responsavel" value={newSC.responsavel} onChange={(e) => setNewSC({ ...newSC, responsavel: e.target.value })} />
+                <input className="field md:col-span-2" placeholder="Justificativa" value={newSC.justificativa} onChange={(e) => setNewSC({ ...newSC, justificativa: e.target.value })} />
+                <input className="field md:col-span-2" placeholder="Observacoes" value={newSC.observacoes} onChange={(e) => setNewSC({ ...newSC, observacoes: e.target.value })} />
+              </div>
+              <button
+                className="mt-3 rounded-lg border border-cyan-400/45 bg-cyan-500/10 px-4 py-2 text-sm text-cyan-100"
+                onClick={async () => {
+                  if (!newSC.numeroSC || !newSC.solicitante || !newSC.descricao) {
+                    setMessage("Preencha SC, Solicitante e Descricao.");
+                    return;
+                  }
+
+                  try {
+                    await onCreateSC({
+                      numeroSC: newSC.numeroSC,
+                      dataCriacao: new Date().toISOString().slice(0, 10),
+                      solicitante: newSC.solicitante,
+                      setorId: newSC.setorId,
+                      descricao: newSC.descricao,
+                      categoria: newSC.categoria,
+                      prioridade: newSC.prioridade,
+                      valorEstimado: newSC.valorEstimado,
+                      fornecedorSugeridoId: newSC.fornecedorSugeridoId,
+                      justificativa: newSC.justificativa,
+                      status: "EM_ANALISE",
+                      responsavel: newSC.responsavel,
+                      dataAprovacao: null,
+                      dataReprovacao: null,
+                      motivoReprovacao: null,
+                      dataLancamento: null,
+                      numeroOCRelacionada: null,
+                      observacoes: newSC.observacoes,
+                      anexos: [],
+                    });
+                    setNewSC({ ...newSC, numeroSC: "", solicitante: "", descricao: "", valorEstimado: 0, justificativa: "", observacoes: "" });
+                    setMessage("SC criada com sucesso.");
+                  } catch (error) {
+                    setMessage((error as Error).message || "Falha ao criar SC.");
+                  }
+                }}
+              >
+                Salvar SC
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="grid gap-2 md:grid-cols-4">
+                <input className="field" placeholder="OC" value={newOc.numeroOC} onChange={(e) => setNewOc({ ...newOc, numeroOC: e.target.value })} />
+                <select className="field" value={newOc.scId} onChange={(e) => setNewOc({ ...newOc, scId: e.target.value })}>
+                  {scs.map((sc) => (
+                    <option key={sc.id} value={sc.id}>{sc.numeroSC}</option>
+                  ))}
+                </select>
+                <select className="field" value={newOc.setorId} onChange={(e) => setNewOc({ ...newOc, setorId: e.target.value })}>
+                  {setores.map((setor) => (
+                    <option key={setor.id} value={setor.id}>{setor.nome}</option>
+                  ))}
+                </select>
+                <select className="field" value={newOc.fornecedorId} onChange={(e) => setNewOc({ ...newOc, fornecedorId: e.target.value })}>
+                  {fornecedores.map((fornecedor) => (
+                    <option key={fornecedor.id} value={fornecedor.id}>{fornecedor.nomeFantasia}</option>
+                  ))}
+                </select>
+                <input className="field" type="number" placeholder="Valor" value={newOc.valorOC} onChange={(e) => setNewOc({ ...newOc, valorOC: Number(e.target.value) })} />
+                <input className="field" type="date" value={newOc.dataPrevistaEntrega} onChange={(e) => setNewOc({ ...newOc, dataPrevistaEntrega: e.target.value })} />
+                <input className="field" placeholder="Responsavel" value={newOc.responsavel} onChange={(e) => setNewOc({ ...newOc, responsavel: e.target.value })} />
+                <input className="field" placeholder="Condicao de Pagamento" value={newOc.condicaoPagamento} onChange={(e) => setNewOc({ ...newOc, condicaoPagamento: e.target.value })} />
+              </div>
+              <button
+                className="mt-3 rounded-lg border border-cyan-400/45 bg-cyan-500/10 px-4 py-2 text-sm text-cyan-100"
+                onClick={async () => {
+                  if (!newOc.numeroOC || !newOc.scId || !newOc.fornecedorId || !newOc.setorId) {
+                    setMessage("Preencha OC, SC, Setor e Fornecedor.");
+                    return;
+                  }
+
+                  const today = new Date().toISOString().slice(0, 10);
+
+                  try {
+                    await onCreateOC({
+                      numeroOC: newOc.numeroOC,
+                      scId: newOc.scId,
+                      fornecedorId: newOc.fornecedorId,
+                      dataOC: today,
+                      dataEmissao: today,
+                      dataPrevistaEntrega: newOc.dataPrevistaEntrega,
+                      dataRealEntrega: null,
+                      valorOC: newOc.valorOC,
+                      setorId: newOc.setorId,
+                      responsavel: newOc.responsavel,
+                      status: "CRIADA",
+                      condicaoPagamento: newOc.condicaoPagamento,
+                      observacoes: newOc.observacoes,
+                      anexos: [],
+                    });
+                    setNewOc({ ...newOc, numeroOC: "", valorOC: 0, responsavel: "", observacoes: "" });
+                    setMessage("OC criada com sucesso.");
+                  } catch (error) {
+                    setMessage((error as Error).message || "Falha ao criar OC.");
+                  }
+                }}
+              >
+                Salvar OC
+              </button>
+            </>
+          )}
+
+          {message ? <p className="mt-3 text-sm text-cyan-200">{message}</p> : null}
+        </Panel>
+      ) : null}
+
+      <Panel title="Lista Consolidada SC / OC">
+        <div className="overflow-auto">
+          <table className="min-w-[1080px] w-full text-sm">
+            <thead className="text-left text-[11px] uppercase tracking-[0.14em] text-slate-500">
+              <tr>
+                <th className="py-2">SC</th>
+                <th>OC</th>
+                <th>Setor</th>
+                <th>Status</th>
+                <th>Fornecedor</th>
+                <th>Valor</th>
+                <th>Acoes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => {
+                const scRecord = row.entity === "SC" ? scs.find((item) => item.id === row.id) : scs.find((item) => item.numeroSC === row.numeroSC);
+                const ocRecord = row.entity === "OC" ? ocs.find((item) => item.id === row.id) : ocs.find((item) => item.numeroOC === row.numeroOC);
+
+                return (
+                  <tr key={`${row.entity}-${row.id}`} className="border-t border-slate-800 transition hover:bg-slate-900/60">
+                    <td className="py-2 pr-2 font-medium text-cyan-100">{row.numeroSC}</td>
+                    <td className="pr-2 text-slate-200">{row.numeroOC}</td>
+                    <td className="pr-2">{row.setor}</td>
+                    <td>
+                      <div className="flex min-w-[240px] items-center gap-2 overflow-x-auto pb-1">
+                        <span className={`whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-medium ${businessStatusBadge(row.statusKey)}`}>{row.statusLabel}</span>
+                        {canWrite ? (
+                          row.entity === "SC" && scRecord ? (
+                            <select
+                              className="field min-w-[150px] text-xs"
+                              value={scRecord.status}
+                              onChange={async (e) => {
+                                const nextStatus = e.target.value as SCStatus;
+                                await onUpdateSC(scRecord.id, {
+                                  status: nextStatus,
+                                  dataAprovacao: nextStatus === "APROVADA" ? new Date().toISOString().slice(0, 10) : scRecord.dataAprovacao,
+                                  dataReprovacao: nextStatus === "REPROVADA" ? new Date().toISOString().slice(0, 10) : scRecord.dataReprovacao,
+                                  dataLancamento: nextStatus === "LANCADA" ? new Date().toISOString().slice(0, 10) : scRecord.dataLancamento,
+                                });
+                              }}
+                            >
+                              <option value="EM_ANALISE">Em Analise</option>
+                              <option value="APROVADA">Aprovada</option>
+                              <option value="REPROVADA">Reprovada</option>
+                              <option value="LANCADA">Lancada</option>
+                            </select>
+                          ) : row.entity === "OC" && ocRecord ? (
+                            <select
+                              className="field min-w-[150px] text-xs"
+                              value={ocToPhase(ocRecord.status as OCStatus)}
+                              onChange={async (e) => {
+                                const phase = e.target.value as OcPhase;
+                                await onUpdateOC(ocRecord.id, { status: phaseToOcStatus(phase, ocRecord.status as OCStatus) });
+                              }}
+                            >
+                              <option value="EM_ANALISE">Em Analise</option>
+                              <option value="APROVADA">Aprovada</option>
+                              <option value="REPROVADA">Reprovada</option>
+                              <option value="LANCADA">Lancada</option>
+                            </select>
+                          ) : null
+                        ) : null}
+                      </div>
+                    </td>
+                    <td className="pr-2">{row.fornecedor}</td>
+                    <td className="pr-2 font-medium text-right text-emerald-300">{formatCurrency(row.valor)}</td>
+                    <td>
+                      <div className="flex gap-2">
+                        {scRecord ? (
+                          <button className="rounded border border-slate-700 px-2 py-1 text-xs" onClick={() => onPickTimeline(scRecord.id)}>
+                            Timeline
+                          </button>
+                        ) : null}
+                        {canWrite ? (
+                          <button
+                            className="rounded border border-rose-700 px-2 py-1 text-xs"
+                            onClick={async () => {
+                              if (row.entity === "SC") {
+                                await onDeleteSC(row.id);
+                                return;
+                              }
+
+                              await onDeleteOC(row.id);
+                            }}
+                          >
+                            Excluir
+                          </button>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Panel>
+    </section>
   );
 }
 
