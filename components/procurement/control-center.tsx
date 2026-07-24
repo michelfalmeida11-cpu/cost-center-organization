@@ -131,6 +131,10 @@ type AiAnswerContext = {
   alertsCount: number;
 };
 
+type DashboardLayout = "EXECUTIVO" | "OPERACIONAL";
+type StatusChartMode = "PIE" | "BAR";
+type SectorChartMode = "PIE" | "BAR";
+
 function ocToPhase(status: OCStatus): OcPhase {
   if (status === "CANCELADA") return "REPROVADA";
   if (status === "CONFIRMADA" || status === "EM_PRODUCAO" || status === "EM_TRANSPORTE" || status === "ENTREGUE" || status === "ATRASADA") return "APROVADA";
@@ -312,6 +316,10 @@ export function ProcurementControlCenter() {
   const [module, setModule] = useState<AppModule>("DASHBOARD");
   const [selectedSC, setSelectedSC] = useState<string>(state.scs[0]?.id ?? "");
   const [importReport, setImportReport] = useState<string[]>([]);
+  const [dashboardLayout, setDashboardLayout] = useState<DashboardLayout>("EXECUTIVO");
+  const [statusChartMode, setStatusChartMode] = useState<StatusChartMode>("PIE");
+  const [sectorChartMode, setSectorChartMode] = useState<SectorChartMode>("PIE");
+  const [showAssistant, setShowAssistant] = useState(true);
 
   const dataset = useMemo(() => filterData(state, filters), [state, filters]);
   const kpis = useMemo(() => computeKpis(state, filters), [state, filters]);
@@ -706,7 +714,75 @@ export function ProcurementControlCenter() {
           {module === "DASHBOARD" ? (
             <section>
               <ModuleTitle title="Dashboard Executivo" subtitle="Visao tatica em tempo real" />
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+              <Panel title="Opcoes de Visualizacao" className="mb-4">
+                <div className="grid gap-3 lg:grid-cols-4">
+                  <div>
+                    <p className="mb-2 text-xs uppercase tracking-[0.14em] text-slate-400">Layout</p>
+                    <div className="flex gap-2">
+                      <button
+                        className={`rounded-md border px-3 py-1.5 text-xs ${dashboardLayout === "EXECUTIVO" ? "border-cyan-400/60 bg-cyan-500/15 text-cyan-100" : "border-slate-700 bg-slate-900 text-slate-300"}`}
+                        onClick={() => setDashboardLayout("EXECUTIVO")}
+                      >
+                        Executivo
+                      </button>
+                      <button
+                        className={`rounded-md border px-3 py-1.5 text-xs ${dashboardLayout === "OPERACIONAL" ? "border-cyan-400/60 bg-cyan-500/15 text-cyan-100" : "border-slate-700 bg-slate-900 text-slate-300"}`}
+                        onClick={() => setDashboardLayout("OPERACIONAL")}
+                      >
+                        Operacional
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="mb-2 text-xs uppercase tracking-[0.14em] text-slate-400">Status SC + OC</p>
+                    <div className="flex gap-2">
+                      <button
+                        className={`rounded-md border px-3 py-1.5 text-xs ${statusChartMode === "PIE" ? "border-emerald-400/60 bg-emerald-500/15 text-emerald-100" : "border-slate-700 bg-slate-900 text-slate-300"}`}
+                        onClick={() => setStatusChartMode("PIE")}
+                      >
+                        Pizza
+                      </button>
+                      <button
+                        className={`rounded-md border px-3 py-1.5 text-xs ${statusChartMode === "BAR" ? "border-emerald-400/60 bg-emerald-500/15 text-emerald-100" : "border-slate-700 bg-slate-900 text-slate-300"}`}
+                        onClick={() => setStatusChartMode("BAR")}
+                      >
+                        Barras
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="mb-2 text-xs uppercase tracking-[0.14em] text-slate-400">Setor SC + OC</p>
+                    <div className="flex gap-2">
+                      <button
+                        className={`rounded-md border px-3 py-1.5 text-xs ${sectorChartMode === "PIE" ? "border-amber-400/60 bg-amber-500/15 text-amber-100" : "border-slate-700 bg-slate-900 text-slate-300"}`}
+                        onClick={() => setSectorChartMode("PIE")}
+                      >
+                        Pizza
+                      </button>
+                      <button
+                        className={`rounded-md border px-3 py-1.5 text-xs ${sectorChartMode === "BAR" ? "border-amber-400/60 bg-amber-500/15 text-amber-100" : "border-slate-700 bg-slate-900 text-slate-300"}`}
+                        onClick={() => setSectorChartMode("BAR")}
+                      >
+                        Barras
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="mb-2 text-xs uppercase tracking-[0.14em] text-slate-400">Assistente IA</p>
+                    <button
+                      className={`rounded-md border px-3 py-1.5 text-xs ${showAssistant ? "border-cyan-400/60 bg-cyan-500/15 text-cyan-100" : "border-slate-700 bg-slate-900 text-slate-300"}`}
+                      onClick={() => setShowAssistant((prev) => !prev)}
+                    >
+                      {showAssistant ? "Visivel" : "Oculto"}
+                    </button>
+                  </div>
+                </div>
+              </Panel>
+
+              <div className={`grid gap-2 ${dashboardLayout === "EXECUTIVO" ? "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6" : "sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3"}`}>
                 <KpiCard label="VALOR TOTAL SC + OC" value={formatCompactCurrency(kpis.valorTotalSC + kpis.valorTotalOC)} note="Carteira financeira consolidada" color={GREEN} icon={BarChart3} />
                 <KpiCard label="APROVADAS" value={String(unifiedStatusCards.aprovada)} note="SC/OC aprovadas" color={GREEN} icon={Shield} />
                 <KpiCard label="EM ANALISE" value={String(unifiedStatusCards.emAnalise)} note="SC/OC aguardando decisao" color={AMBER} icon={Activity} />
@@ -719,14 +795,28 @@ export function ProcurementControlCenter() {
                 <Panel title="Status SC + OC">
                   <div className="grid gap-3 md:grid-cols-[1.2fr_.8fr]">
                     <ResponsiveContainer width="100%" height={260}>
-                      <PieChart>
-                        <Pie data={unifiedStatusPie} dataKey="total" nameKey="status" outerRadius={92} innerRadius={48}>
-                          {unifiedStatusPie.map((entry) => (
-                            <Cell key={entry.status} fill={phaseColor(entry.status)} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
+                      {statusChartMode === "PIE" ? (
+                        <PieChart>
+                          <Pie data={unifiedStatusPie} dataKey="total" nameKey="status" outerRadius={92} innerRadius={48}>
+                            {unifiedStatusPie.map((entry) => (
+                              <Cell key={entry.status} fill={phaseColor(entry.status)} />
+                            ))}
+                          </Pie>
+                          <Tooltip />
+                        </PieChart>
+                      ) : (
+                        <BarChart data={unifiedStatusPie}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                          <XAxis dataKey="status" stroke="#94a3b8" interval={0} angle={-15} textAnchor="end" height={60} />
+                          <YAxis stroke="#94a3b8" />
+                          <Tooltip />
+                          <Bar dataKey="total">
+                            {unifiedStatusPie.map((entry) => (
+                              <Cell key={`bar-status-${entry.status}`} fill={phaseColor(entry.status)} />
+                            ))}
+                          </Bar>
+                        </BarChart>
+                      )}
                     </ResponsiveContainer>
                     <div className="space-y-2 text-sm">
                       {unifiedStatusPie.map((entry) => (
@@ -745,14 +835,24 @@ export function ProcurementControlCenter() {
                 <Panel title="SC + OC por Setor">
                   <div className="grid gap-3 md:grid-cols-[1.2fr_.8fr]">
                     <ResponsiveContainer width="100%" height={260}>
-                      <PieChart>
-                        <Pie data={scOcBySector} dataKey="total" nameKey="setor" outerRadius={92} innerRadius={44}>
-                          {scOcBySector.map((entry, index) => (
-                            <Cell key={entry.setor} fill={[GREEN, AMBER, RED, BLUE][index % 4]} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
+                      {sectorChartMode === "PIE" ? (
+                        <PieChart>
+                          <Pie data={scOcBySector} dataKey="total" nameKey="setor" outerRadius={92} innerRadius={44}>
+                            {scOcBySector.map((entry, index) => (
+                              <Cell key={entry.setor} fill={[GREEN, AMBER, RED, BLUE][index % 4]} />
+                            ))}
+                          </Pie>
+                          <Tooltip />
+                        </PieChart>
+                      ) : (
+                        <BarChart data={scOcBySector.slice(0, 8)}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                          <XAxis dataKey="setor" stroke="#94a3b8" interval={0} angle={-15} textAnchor="end" height={70} />
+                          <YAxis stroke="#94a3b8" />
+                          <Tooltip formatter={(value: number) => [value, "Total"]} />
+                          <Bar dataKey="total" fill={CYAN} />
+                        </BarChart>
+                      )}
                     </ResponsiveContainer>
                     <div className="space-y-2 text-sm">
                       {scOcBySector.map((entry, index) => (
@@ -770,9 +870,21 @@ export function ProcurementControlCenter() {
               </div>
 
               <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                <Panel title="Assistente IA Operacional">
-                  <OperationalAssistant context={aiContext} />
-                </Panel>
+                {showAssistant ? (
+                  <Panel title="Assistente IA Operacional">
+                    <OperationalAssistant context={aiContext} />
+                  </Panel>
+                ) : (
+                  <Panel title="Resumo Operacional Rapido">
+                    <div className="space-y-2 text-sm text-slate-300">
+                      <p>SCs em analise: <span className="font-semibold text-amber-200">{aiContext.pendingSc}</span></p>
+                      <p>OCs em curso: <span className="font-semibold text-cyan-200">{aiContext.openOcCount}</span></p>
+                      <p>OCs atrasadas: <span className="font-semibold text-rose-200">{aiContext.delayedCount}</span></p>
+                      <p>Setor lider: <span className="font-semibold text-cyan-200">{aiContext.topSector}</span></p>
+                      <p>Fornecedor lider: <span className="font-semibold text-cyan-200">{aiContext.topSupplier}</span></p>
+                    </div>
+                  </Panel>
+                )}
 
                 <Panel title="Evolucao de Status SC + OC">
                   <ResponsiveContainer width="100%" height={260}>
