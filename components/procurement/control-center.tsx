@@ -141,10 +141,6 @@ type AiAnswerContext = {
   alertsCount: number;
 };
 
-type DashboardLayout = "EXECUTIVO" | "OPERACIONAL";
-type StatusChartMode = "PIE" | "BAR";
-type SectorChartMode = "PIE" | "BAR";
-
 function ocToPhase(status: OCStatus): OcPhase {
   if (status === "CANCELADA") return "REPROVADA";
   if (status === "CONFIRMADA" || status === "EM_PRODUCAO" || status === "EM_TRANSPORTE" || status === "ENTREGUE" || status === "ATRASADA") return "APROVADA";
@@ -206,51 +202,6 @@ function buildUnifiedRows(
   }));
 
   return [...ocRows, ...scRows].sort((a, b) => b.sortDate.localeCompare(a.sortDate));
-}
-
-function answerOperationalQuestion(question: string, context: AiAnswerContext) {
-  const normalized = question.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-
-  if (!normalized.trim()) {
-    return "Pergunte sobre status, backlog SC/OC, riscos, fornecedores, setores, volume financeiro, produtividade, entregas ou prioridades.";
-  }
-
-  if (normalized.includes("atras") || normalized.includes("urgente") || normalized.includes("risco")) {
-    if (context.delayedCount > 0) {
-      return `Existem ${context.delayedCount} OCs atrasadas. Priorize tratativas com fornecedores e revisao de prazos imediatamente.`;
-    }
-    return "Nao existem OCs atrasadas no momento. O risco operacional imediato esta controlado.";
-  }
-
-  if (normalized.includes("fornecedor") || normalized.includes("melhor fornecedor") || normalized.includes("lider") || normalized.includes("parceiro")) {
-    return `Fornecedor lider: ${context.topSupplier}. Fornecedores ativos no filtro: ${context.activeSuppliers}.`;
-  }
-
-  if (normalized.includes("setor") || normalized.includes("onde esta") || normalized.includes("maior demanda") || normalized.includes("gargalo")) {
-    return `Setor com maior peso operacional: ${context.topSector}. Use isso para direcionar capacidade e aprovacoes.`;
-  }
-
-  if (normalized.includes("status") || normalized.includes("fase") || normalized.includes("aprovad") || normalized.includes("analise") || normalized.includes("distribuicao")) {
-    return `Distribuicao consolidada de status (SC/OC): ${context.phaseSummary}.`;
-  }
-
-  if (normalized.includes("valor") || normalized.includes("financeiro") || normalized.includes("carteira") || normalized.includes("orcamento") || normalized.includes("gasto")) {
-    return `Carteira consolidada SC+OC: ${context.totalScOcValue}. Apenas OCs: ${context.totalOcValue}.`;
-  }
-
-  if (normalized.includes("abertas") || normalized.includes("em curso") || normalized.includes("andamento") || normalized.includes("backlog") || normalized.includes("fila")) {
-    return `Backlog atual: ${context.pendingSc} SCs em analise e ${context.openOcCount} OCs em curso.`;
-  }
-
-  if (normalized.includes("volume") || normalized.includes("quantidade") || normalized.includes("totais") || normalized.includes("resumo")) {
-    return `Volumes atuais: ${context.totalSc} SCs e ${context.totalOc} OCs.`;
-  }
-
-  if (normalized.includes("alerta") || normalized.includes("critic") || normalized.includes("incidente")) {
-    return `Alertas operacionais ativos no filtro: ${context.alertsCount}.`;
-  }
-
-  return `Resumo executivo: ${context.totalSc} SCs, ${context.totalOc} OCs, ${context.pendingSc} SCs em analise, ${context.openOcCount} OCs em curso, ${context.delayedCount} atrasadas. Setor lider: ${context.topSector}. Fornecedor lider: ${context.topSupplier}. Carteira SC+OC: ${context.totalScOcValue}.`;
 }
 
 function ModuleTitle({ title, subtitle }: { title: string; subtitle: string }) {
@@ -326,10 +277,6 @@ export function ProcurementControlCenter() {
   const [module, setModule] = useState<AppModule>("DASHBOARD");
   const [selectedSC, setSelectedSC] = useState<string>(state.scs[0]?.id ?? "");
   const [importReport, setImportReport] = useState<string[]>([]);
-  const [dashboardLayout, setDashboardLayout] = useState<DashboardLayout>("EXECUTIVO");
-  const [statusChartMode, setStatusChartMode] = useState<StatusChartMode>("PIE");
-  const [sectorChartMode, setSectorChartMode] = useState<SectorChartMode>("PIE");
-  const [showAssistant, setShowAssistant] = useState(true);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const dataset = useMemo(() => filterData(state, filters), [state, filters]);
@@ -797,75 +744,7 @@ export function ProcurementControlCenter() {
           {module === "DASHBOARD" ? (
             <section>
               <ModuleTitle title="Dashboard Executivo" subtitle="Visao tatica em tempo real" />
-              <Panel title="Opcoes de Visualizacao" className="mb-4">
-                <div className="grid gap-3 lg:grid-cols-4">
-                  <div>
-                    <p className="mb-2 text-xs uppercase tracking-[0.14em] text-slate-400">Layout</p>
-                    <div className="flex gap-2">
-                      <button
-                        className={`rounded-md border px-3 py-1.5 text-xs ${dashboardLayout === "EXECUTIVO" ? "border-cyan-400/60 bg-cyan-500/15 text-cyan-100" : "border-slate-700 bg-slate-900 text-slate-300"}`}
-                        onClick={() => setDashboardLayout("EXECUTIVO")}
-                      >
-                        Executivo
-                      </button>
-                      <button
-                        className={`rounded-md border px-3 py-1.5 text-xs ${dashboardLayout === "OPERACIONAL" ? "border-cyan-400/60 bg-cyan-500/15 text-cyan-100" : "border-slate-700 bg-slate-900 text-slate-300"}`}
-                        onClick={() => setDashboardLayout("OPERACIONAL")}
-                      >
-                        Operacional
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="mb-2 text-xs uppercase tracking-[0.14em] text-slate-400">Status SC + OC</p>
-                    <div className="flex gap-2">
-                      <button
-                        className={`rounded-md border px-3 py-1.5 text-xs ${statusChartMode === "PIE" ? "border-emerald-400/60 bg-emerald-500/15 text-emerald-100" : "border-slate-700 bg-slate-900 text-slate-300"}`}
-                        onClick={() => setStatusChartMode("PIE")}
-                      >
-                        Pizza
-                      </button>
-                      <button
-                        className={`rounded-md border px-3 py-1.5 text-xs ${statusChartMode === "BAR" ? "border-emerald-400/60 bg-emerald-500/15 text-emerald-100" : "border-slate-700 bg-slate-900 text-slate-300"}`}
-                        onClick={() => setStatusChartMode("BAR")}
-                      >
-                        Barras
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="mb-2 text-xs uppercase tracking-[0.14em] text-slate-400">Setor SC + OC</p>
-                    <div className="flex gap-2">
-                      <button
-                        className={`rounded-md border px-3 py-1.5 text-xs ${sectorChartMode === "PIE" ? "border-amber-400/60 bg-amber-500/15 text-amber-100" : "border-slate-700 bg-slate-900 text-slate-300"}`}
-                        onClick={() => setSectorChartMode("PIE")}
-                      >
-                        Pizza
-                      </button>
-                      <button
-                        className={`rounded-md border px-3 py-1.5 text-xs ${sectorChartMode === "BAR" ? "border-amber-400/60 bg-amber-500/15 text-amber-100" : "border-slate-700 bg-slate-900 text-slate-300"}`}
-                        onClick={() => setSectorChartMode("BAR")}
-                      >
-                        Barras
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <p className="mb-2 text-xs uppercase tracking-[0.14em] text-slate-400">Assistente IA</p>
-                    <button
-                      className={`rounded-md border px-3 py-1.5 text-xs ${showAssistant ? "border-cyan-400/60 bg-cyan-500/15 text-cyan-100" : "border-slate-700 bg-slate-900 text-slate-300"}`}
-                      onClick={() => setShowAssistant((prev) => !prev)}
-                    >
-                      {showAssistant ? "Visivel" : "Oculto"}
-                    </button>
-                  </div>
-                </div>
-              </Panel>
-
-              <div className={`grid gap-2 ${dashboardLayout === "EXECUTIVO" ? "sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6" : "sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3"}`}>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
                 <KpiCard label="VALOR TOTAL SC + OC" value={formatCompactCurrency(kpis.valorTotalSC + kpis.valorTotalOC)} note="Carteira financeira consolidada" color={GREEN} icon={BarChart3} />
                 <KpiCard label="APROVADAS" value={String(unifiedStatusCards.aprovada)} note="SC/OC aprovadas" color={GREEN} icon={Shield} />
                 <KpiCard label="EM ANALISE" value={String(unifiedStatusCards.emAnalise)} note="SC/OC aguardando decisao" color={AMBER} icon={Activity} />
@@ -878,28 +757,14 @@ export function ProcurementControlCenter() {
                 <Panel title="Status SC + OC">
                   <div className="grid gap-3 md:grid-cols-[1.2fr_.8fr]">
                     <ResponsiveContainer width="100%" height={260}>
-                      {statusChartMode === "PIE" ? (
-                        <PieChart>
-                          <Pie data={unifiedStatusPie} dataKey="total" nameKey="status" outerRadius={92} innerRadius={48}>
-                            {unifiedStatusPie.map((entry) => (
-                              <Cell key={entry.status} fill={phaseColor(entry.status)} />
-                            ))}
-                          </Pie>
-                          <Tooltip />
-                        </PieChart>
-                      ) : (
-                        <BarChart data={unifiedStatusPie}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-                          <XAxis dataKey="status" stroke="#94a3b8" interval={0} angle={-15} textAnchor="end" height={60} />
-                          <YAxis stroke="#94a3b8" />
-                          <Tooltip />
-                          <Bar dataKey="total">
-                            {unifiedStatusPie.map((entry) => (
-                              <Cell key={`bar-status-${entry.status}`} fill={phaseColor(entry.status)} />
-                            ))}
-                          </Bar>
-                        </BarChart>
-                      )}
+                      <PieChart>
+                        <Pie data={unifiedStatusPie} dataKey="total" nameKey="status" outerRadius={92} innerRadius={48}>
+                          {unifiedStatusPie.map((entry) => (
+                            <Cell key={entry.status} fill={phaseColor(entry.status)} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
                     </ResponsiveContainer>
                     <div className="space-y-2 text-sm">
                       {unifiedStatusPie.map((entry) => (
@@ -918,24 +783,14 @@ export function ProcurementControlCenter() {
                 <Panel title="SC + OC por Setor">
                   <div className="grid gap-3 md:grid-cols-[1.2fr_.8fr]">
                     <ResponsiveContainer width="100%" height={260}>
-                      {sectorChartMode === "PIE" ? (
-                        <PieChart>
-                          <Pie data={scOcBySector} dataKey="total" nameKey="setor" outerRadius={92} innerRadius={44}>
-                            {scOcBySector.map((entry, index) => (
-                              <Cell key={entry.setor} fill={[GREEN, AMBER, RED, BLUE][index % 4]} />
-                            ))}
-                          </Pie>
-                          <Tooltip />
-                        </PieChart>
-                      ) : (
-                        <BarChart data={scOcBySector.slice(0, 8)}>
-                          <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-                          <XAxis dataKey="setor" stroke="#94a3b8" interval={0} angle={-15} textAnchor="end" height={70} />
-                          <YAxis stroke="#94a3b8" />
-                          <Tooltip formatter={(value: number) => [value, "Total"]} />
-                          <Bar dataKey="total" fill={CYAN} />
-                        </BarChart>
-                      )}
+                      <PieChart>
+                        <Pie data={scOcBySector} dataKey="total" nameKey="setor" outerRadius={92} innerRadius={44}>
+                          {scOcBySector.map((entry, index) => (
+                            <Cell key={entry.setor} fill={[GREEN, AMBER, RED, BLUE][index % 4]} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
                     </ResponsiveContainer>
                     <div className="space-y-2 text-sm">
                       {scOcBySector.map((entry, index) => (
@@ -953,21 +808,40 @@ export function ProcurementControlCenter() {
               </div>
 
               <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                {showAssistant ? (
-                  <Panel title="Assistente IA Operacional">
-                    <OperationalAssistant context={aiContext} />
-                  </Panel>
-                ) : (
-                  <Panel title="Resumo Operacional Rapido">
-                    <div className="space-y-2 text-sm text-slate-300">
-                      <p>SCs em analise: <span className="font-semibold text-amber-200">{aiContext.pendingSc}</span></p>
-                      <p>OCs em curso: <span className="font-semibold text-cyan-200">{aiContext.openOcCount}</span></p>
-                      <p>OCs atrasadas: <span className="font-semibold text-rose-200">{aiContext.delayedCount}</span></p>
+                <Panel title="Radar Operacional">
+                  <div className="space-y-3 text-sm text-slate-300">
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2">
+                        <p className="text-[11px] uppercase tracking-[0.12em] text-amber-200/90">SC em Analise</p>
+                        <p className="text-xl font-bold text-amber-100">{aiContext.pendingSc}</p>
+                      </div>
+                      <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 p-2">
+                        <p className="text-[11px] uppercase tracking-[0.12em] text-cyan-200/90">OC em Curso</p>
+                        <p className="text-xl font-bold text-cyan-100">{aiContext.openOcCount}</p>
+                      </div>
+                    </div>
+
+                    <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-2">
+                      <p className="text-[11px] uppercase tracking-[0.12em] text-rose-200/90">OCs Atrasadas</p>
+                      <p className="text-lg font-bold text-rose-100">{aiContext.delayedCount}</p>
+                      {delayedOcs.slice(0, 3).length > 0 ? (
+                        <div className="mt-2 space-y-1 text-xs text-rose-100/90">
+                          {delayedOcs.slice(0, 3).map((oc) => (
+                            <p key={`delay-${oc.id}`}>• {oc.numeroOC} • {oc.responsavel || "Sem responsavel"}</p>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="mt-1 text-xs text-emerald-200">Sem atrasos criticos no momento.</p>
+                      )}
+                    </div>
+
+                    <div className="rounded-lg border border-slate-700 bg-slate-900/70 p-2 text-xs">
                       <p>Setor lider: <span className="font-semibold text-cyan-200">{aiContext.topSector}</span></p>
                       <p>Fornecedor lider: <span className="font-semibold text-cyan-200">{aiContext.topSupplier}</span></p>
+                      <p>Alertas ativos: <span className="font-semibold text-cyan-200">{aiContext.alertsCount}</span></p>
                     </div>
-                  </Panel>
-                )}
+                  </div>
+                </Panel>
 
                 <Panel title="Evolucao de Status SC + OC">
                   <ResponsiveContainer width="100%" height={260}>
@@ -1637,42 +1511,6 @@ function UnifiedScOcModule({
   );
 }
 
-function OperationalAssistant({ context }: { context: AiAnswerContext }) {
-  const [question, setQuestion] = useState("");
-  const [answer, setAnswer] = useState(answerOperationalQuestion("", context));
-
-  const ask = (value: string) => {
-    setQuestion(value);
-    setAnswer(answerOperationalQuestion(value, context));
-  };
-
-  return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap gap-2">
-        {[
-          "Quais OCs estao atrasadas?",
-          "Qual setor tem mais demanda?",
-          "Quem e o fornecedor lider?",
-          "Como esta a distribuicao dos status?",
-          "Qual o valor total SC + OC?",
-          "Qual e o backlog atual?",
-        ].map((item) => (
-          <button key={item} className="rounded-full border border-cyan-500/35 bg-cyan-500/10 px-3 py-1 text-xs text-cyan-100" onClick={() => ask(item)}>
-            {item}
-          </button>
-        ))}
-      </div>
-      <div className="flex gap-2">
-        <input className="field" placeholder="Pergunte qualquer coisa sobre SC, OC, fornecedores, setor, riscos e carteira" value={question} onChange={(e) => setQuestion(e.target.value)} />
-        <button className="rounded-lg border border-cyan-400/45 bg-cyan-500/10 px-4 py-2 text-sm text-cyan-100" onClick={() => ask(question)}>
-          Analisar
-        </button>
-      </div>
-      <div className="rounded-lg border border-slate-800 bg-slate-900/60 p-3 text-sm text-slate-200">{answer}</div>
-    </div>
-  );
-}
-
 function ScModule({
   scs,
   setores,
@@ -1988,6 +1826,8 @@ function SupplierModule({
   onDelete: (id: string) => Promise<void>;
 }) {
   const [nome, setNome] = useState("");
+  const [nomeDraft, setNomeDraft] = useState<Record<string, string>>({});
+  const [savingSupplierId, setSavingSupplierId] = useState<string | null>(null);
 
   return (
     <section>
@@ -2031,18 +1871,49 @@ function SupplierModule({
                 <th>Codigo</th>
                 <th>Nome</th>
                 <th>Status</th>
-                <th>Acoes</th>
+                <th className="w-[220px]">Acoes</th>
               </tr>
             </thead>
             <tbody>
               {fornecedores.map((forn) => (
                 <tr key={forn.id} className="border-t border-slate-800">
                   <td className="py-2">{forn.codigo}</td>
-                  <td>{forn.nomeFantasia}</td>
+                  <td>
+                    {canWrite ? (
+                      <input
+                        className="field"
+                        value={nomeDraft[forn.id] ?? forn.nomeFantasia}
+                        onChange={(e) => setNomeDraft((prev) => ({ ...prev, [forn.id]: e.target.value }))}
+                        placeholder="Nome do fornecedor"
+                      />
+                    ) : (
+                      forn.nomeFantasia
+                    )}
+                  </td>
                   <td>{forn.status}</td>
                   <td>
                     {canWrite ? (
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          className="rounded border border-cyan-600 px-2 py-1 text-xs"
+                          onClick={async () => {
+                            const nextNome = (nomeDraft[forn.id] ?? forn.nomeFantasia).trim();
+                            if (!nextNome || nextNome === forn.nomeFantasia || savingSupplierId === forn.id) return;
+                            setSavingSupplierId(forn.id);
+                            try {
+                              await onUpdate(forn.id, { nomeFantasia: nextNome, razaoSocial: nextNome });
+                              setNomeDraft((prev) => {
+                                const copy = { ...prev };
+                                delete copy[forn.id];
+                                return copy;
+                              });
+                            } finally {
+                              setSavingSupplierId(null);
+                            }
+                          }}
+                        >
+                          {savingSupplierId === forn.id ? "Salvando..." : "Salvar Nome"}
+                        </button>
                         <button className="rounded border border-amber-600 px-2 py-1 text-xs" onClick={async () => await onUpdate(forn.id, { status: forn.status === "ATIVO" ? "INATIVO" : "ATIVO" })}>
                           Alternar
                         </button>
