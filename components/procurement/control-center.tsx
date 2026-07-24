@@ -92,6 +92,23 @@ function ocStatusBadge(status: OCStatus) {
   return "border-cyan-500/40 bg-cyan-500/10 text-cyan-200";
 }
 
+type OcPhase = "EM_ANALISE" | "APROVADA" | "REPROVADA" | "LANCADA";
+
+function ocToPhase(status: OCStatus): OcPhase {
+  if (status === "CANCELADA") return "REPROVADA";
+  if (status === "CONFIRMADA" || status === "EM_PRODUCAO" || status === "EM_TRANSPORTE" || status === "ENTREGUE" || status === "ATRASADA") return "APROVADA";
+  if (status === "ENVIADA_FORNECEDOR") return "LANCADA";
+  return "EM_ANALISE";
+}
+
+function phaseToOcStatus(phase: OcPhase, current: OCStatus): OCStatus {
+  if (phase === "REPROVADA") return "CANCELADA";
+  if (phase === "LANCADA") return "ENVIADA_FORNECEDOR";
+  if (phase === "EM_ANALISE") return "CRIADA";
+  if (current === "ENTREGUE" || current === "ATRASADA") return current;
+  return "CONFIRMADA";
+}
+
 function ModuleTitle({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <div className="mb-4">
@@ -593,33 +610,33 @@ export function ProcurementControlCenter() {
             </section>
           ) : null}
 
-          {module === "SC" ? (
-            <ScModule
-              scs={dataset.scFiltered}
-              setores={state.setores}
-              fornecedores={state.fornecedores}
-              canWrite={canWrite}
-              onCreate={createSC}
-              onUpdate={updateSC}
-              onDelete={deleteSC}
-              onPickTimeline={(id) => {
-                setSelectedSC(id);
-                setModule("ACOMPANHAMENTO");
-              }}
-            />
-          ) : null}
-
-          {module === "OC" ? (
-            <OcModule
-              ocs={dataset.ocFiltered as PurchaseOrder[]}
-              scs={state.scs}
-              fornecedores={state.fornecedores}
-              setores={state.setores}
-              canWrite={canWrite}
-              onCreate={createOC}
-              onUpdate={updateOC}
-              onDelete={deleteOC}
-            />
+          {module === "SC" || module === "OC" ? (
+            <section className="space-y-4">
+              <ModuleTitle title="Central SC / OC" subtitle="Solicitacao e ordem em fluxo unico" />
+              <ScModule
+                scs={dataset.scFiltered}
+                setores={state.setores}
+                fornecedores={state.fornecedores}
+                canWrite={canWrite}
+                onCreate={createSC}
+                onUpdate={updateSC}
+                onDelete={deleteSC}
+                onPickTimeline={(id) => {
+                  setSelectedSC(id);
+                  setModule("ACOMPANHAMENTO");
+                }}
+              />
+              <OcModule
+                ocs={dataset.ocFiltered as PurchaseOrder[]}
+                scs={state.scs}
+                fornecedores={state.fornecedores}
+                setores={state.setores}
+                canWrite={canWrite}
+                onCreate={createOC}
+                onUpdate={updateOC}
+                onDelete={deleteOC}
+              />
+            </section>
           ) : null}
 
           {module === "FORNECEDORES" ? (
@@ -870,11 +887,12 @@ function ScModule({
   setores: AppState["setores"];
   fornecedores: AppState["fornecedores"];
   canWrite: boolean;
-  onCreate: (payload: Omit<PurchaseRequest, "id" | "createdAt" | "updatedAt" | "deletedAt">) => void;
-  onUpdate: (id: string, payload: Partial<PurchaseRequest>) => void;
-  onDelete: (id: string) => void;
+  onCreate: (payload: Omit<PurchaseRequest, "id" | "createdAt" | "updatedAt" | "deletedAt">) => Promise<void>;
+  onUpdate: (id: string, payload: Partial<PurchaseRequest>) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
   onPickTimeline: (id: string) => void;
 }) {
+  const [message, setMessage] = useState("");
   const [newSC, setNewSC] = useState({
     numeroSC: "",
     solicitante: "",
@@ -906,9 +924,13 @@ function ScModule({
           </div>
           <button
             className="mt-3 rounded-lg border border-cyan-400/45 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-100"
-            onClick={() => {
-              if (!newSC.numeroSC || !newSC.solicitante) return;
-              onCreate({
+            onClick={async () => {
+              if (!newSC.numeroSC || !newSC.solicitante || !newSC.descricao) {
+                setMessage("Preencha Numero SC, Solicitante e Descricao.");
+                return;
+              }
+              try {
+                await onCreate({
                 numeroSC: newSC.numeroSC,
                 dataCriacao: new Date().toISOString().slice(0, 10),
                 solicitante: newSC.solicitante,
@@ -929,11 +951,16 @@ function ScModule({
                 observacoes: newSC.observacoes,
                 anexos: [],
               });
-              setNewSC({ ...newSC, numeroSC: "", descricao: "", solicitante: "", valorEstimado: 0 });
+                setNewSC({ ...newSC, numeroSC: "", descricao: "", solicitante: "", valorEstimado: 0 });
+                setMessage("SC criada e refletida no dashboard.");
+              } catch (error) {
+                setMessage((error as Error).message || "Falha ao criar SC.");
+              }
             }}
           >
             Criar SC
           </button>
+          {message ? <p className="mt-2 text-xs text-cyan-200">{message}</p> : null}
         </Panel>
       ) : null}
 
@@ -965,10 +992,10 @@ function ScModule({
                       </button>
                       {canWrite ? (
                         <>
-                          <button className="rounded border border-emerald-700 px-2 py-1 text-xs" onClick={() => onUpdate(sc.id, { status: "APROVADA", dataAprovacao: new Date().toISOString().slice(0, 10) })}>
+                          <button className="rounded border border-emerald-700 px-2 py-1 text-xs" onClick={async () => await onUpdate(sc.id, { status: "APROVADA", dataAprovacao: new Date().toISOString().slice(0, 10) })}>
                             Aprovar
                           </button>
-                          <button className="rounded border border-rose-700 px-2 py-1 text-xs" onClick={() => onDelete(sc.id)}>
+                          <button className="rounded border border-rose-700 px-2 py-1 text-xs" onClick={async () => await onDelete(sc.id)}>
                             Excluir
                           </button>
                         </>
@@ -1000,10 +1027,11 @@ function OcModule({
   fornecedores: AppState["fornecedores"];
   setores: AppState["setores"];
   canWrite: boolean;
-  onCreate: (payload: Omit<PurchaseOrder, "id" | "createdAt" | "updatedAt" | "deletedAt">) => void;
-  onUpdate: (id: string, payload: Partial<PurchaseOrder>) => void;
-  onDelete: (id: string) => void;
+  onCreate: (payload: Omit<PurchaseOrder, "id" | "createdAt" | "updatedAt" | "deletedAt">) => Promise<void>;
+  onUpdate: (id: string, payload: Partial<PurchaseOrder>) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
 }) {
+  const [message, setMessage] = useState("");
   const [newOc, setNewOc] = useState({
     numeroOC: "",
     scId: scs[0]?.id ?? "",
@@ -1045,10 +1073,14 @@ function OcModule({
           </div>
           <button
             className="mt-3 rounded-lg border border-cyan-400/45 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-100"
-            onClick={() => {
-              if (!newOc.numeroOC || !newOc.scId || !newOc.fornecedorId) return;
+            onClick={async () => {
+              if (!newOc.numeroOC || !newOc.scId || !newOc.fornecedorId || !newOc.setorId) {
+                setMessage("Preencha Numero OC, SC, Fornecedor e Setor.");
+                return;
+              }
               const today = new Date().toISOString().slice(0, 10);
-              onCreate({
+              try {
+                await onCreate({
                 numeroOC: newOc.numeroOC,
                 scId: newOc.scId,
                 fornecedorId: newOc.fornecedorId,
@@ -1064,11 +1096,16 @@ function OcModule({
                 observacoes: newOc.observacoes,
                 anexos: [],
               });
-              setNewOc({ ...newOc, numeroOC: "", valorOC: 0, responsavel: "" });
+                setNewOc({ ...newOc, numeroOC: "", valorOC: 0, responsavel: "" });
+                setMessage("OC criada e refletida no dashboard.");
+              } catch (error) {
+                setMessage((error as Error).message || "Falha ao criar OC.");
+              }
             }}
           >
             Criar OC
           </button>
+          {message ? <p className="mt-2 text-xs text-cyan-200">{message}</p> : null}
         </Panel>
       ) : null}
 
@@ -1098,10 +1135,26 @@ function OcModule({
                   <td>
                     {canWrite ? (
                       <div className="flex gap-2">
-                        <button className="rounded border border-emerald-700 px-2 py-1 text-xs" onClick={() => onUpdate(oc.id, { status: "ENTREGUE", dataRealEntrega: new Date().toISOString().slice(0, 10) })}>
+                        <select
+                          className="field max-w-[170px] text-xs"
+                          value={ocToPhase(oc.status as OCStatus)}
+                          onChange={async (e) => {
+                            const phase = e.target.value as OcPhase;
+                            const nextStatus = phaseToOcStatus(phase, oc.status as OCStatus);
+                            const payload: Partial<PurchaseOrder> = { status: nextStatus };
+                            if (nextStatus === "ENTREGUE") payload.dataRealEntrega = new Date().toISOString().slice(0, 10);
+                            await onUpdate(oc.id, payload);
+                          }}
+                        >
+                          <option value="EM_ANALISE">Em Analise</option>
+                          <option value="APROVADA">Aprovada</option>
+                          <option value="REPROVADA">Reprovada</option>
+                          <option value="LANCADA">Lancada</option>
+                        </select>
+                        <button className="rounded border border-emerald-700 px-2 py-1 text-xs" onClick={async () => await onUpdate(oc.id, { status: "ENTREGUE", dataRealEntrega: new Date().toISOString().slice(0, 10) })}>
                           Entregar
                         </button>
-                        <button className="rounded border border-rose-700 px-2 py-1 text-xs" onClick={() => onDelete(oc.id)}>
+                        <button className="rounded border border-rose-700 px-2 py-1 text-xs" onClick={async () => await onDelete(oc.id)}>
                           Excluir
                         </button>
                       </div>
