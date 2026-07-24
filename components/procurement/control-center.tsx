@@ -79,6 +79,19 @@ const RED = "#ff5d7d";
 const PURPLE = "#9f7aff";
 const BLUE = "#5ba5ff";
 
+function scStatusBadge(status: SCStatus) {
+  if (status === "APROVADA") return "border-emerald-500/40 bg-emerald-500/10 text-emerald-200";
+  if (status === "REPROVADA") return "border-rose-500/40 bg-rose-500/10 text-rose-200";
+  if (status === "EM_ANALISE") return "border-amber-500/40 bg-amber-500/10 text-amber-200";
+  return "border-cyan-500/40 bg-cyan-500/10 text-cyan-200";
+}
+
+function ocStatusBadge(status: OCStatus) {
+  if (status === "ATRASADA") return "border-rose-500/40 bg-rose-500/10 text-rose-200";
+  if (status === "ENTREGUE") return "border-emerald-500/40 bg-emerald-500/10 text-emerald-200";
+  return "border-cyan-500/40 bg-cyan-500/10 text-cyan-200";
+}
+
 function ModuleTitle({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <div className="mb-4">
@@ -420,7 +433,7 @@ export function ProcurementControlCenter() {
                 <Panel title="Ultimas SC">
                   <div className="overflow-auto">
                     <table className="w-full text-sm">
-                      <thead className="text-left text-slate-400">
+                      <thead className="text-left text-[11px] uppercase tracking-[0.14em] text-slate-500">
                         <tr>
                           <th>SC</th>
                           <th>Data</th>
@@ -432,12 +445,14 @@ export function ProcurementControlCenter() {
                       </thead>
                       <tbody>
                         {latestScs.map((sc) => (
-                          <tr key={sc.id} className="border-t border-slate-800">
+                          <tr key={sc.id} className="border-t border-slate-800/90 transition hover:bg-slate-900/60">
                             <td className="py-2">{sc.numeroSC}</td>
                             <td>{sc.dataCriacao}</td>
                             <td>{state.setores.find((s) => s.id === sc.setorId)?.nome ?? "-"}</td>
                             <td>{sc.solicitante}</td>
-                            <td>{SC_STATUS_LABEL[sc.status]}</td>
+                            <td>
+                              <span className={`rounded-md border px-2 py-0.5 text-[11px] font-medium ${scStatusBadge(sc.status)}`}>{SC_STATUS_LABEL[sc.status]}</span>
+                            </td>
                             <td>{formatCurrency(sc.valorEstimado)}</td>
                           </tr>
                         ))}
@@ -449,7 +464,7 @@ export function ProcurementControlCenter() {
                 <Panel title="OC com Atraso">
                   <div className="overflow-auto">
                     <table className="w-full text-sm">
-                      <thead className="text-left text-slate-400">
+                      <thead className="text-left text-[11px] uppercase tracking-[0.14em] text-slate-500">
                         <tr>
                           <th>OC</th>
                           <th>Fornecedor</th>
@@ -464,13 +479,14 @@ export function ProcurementControlCenter() {
                           const now = Date.now();
                           const lateDays = Math.max(0, Math.floor((now - due) / (1000 * 60 * 60 * 24)));
                           return (
-                            <tr key={oc.id} className="border-t border-slate-800">
+                            <tr key={oc.id} className="border-t border-slate-800/90 transition hover:bg-slate-900/60">
                               <td className="py-2">{oc.numeroOC}</td>
                               <td>{state.fornecedores.find((f) => f.id === oc.fornecedorId)?.nomeFantasia ?? oc.fornecedorId}</td>
                               <td className="text-rose-300">{lateDays}</td>
                               <td>{formatCurrency(oc.valorOC)}</td>
                               <td>
-                                <button className="rounded border border-cyan-500/40 px-2 py-1 text-xs text-cyan-100">
+                                <span className={`mr-2 rounded-md border px-2 py-0.5 text-[11px] font-medium ${ocStatusBadge(oc.status as OCStatus)}`}>{OC_STATUS_LABEL[oc.status as OCStatus]}</span>
+                                <button className="rounded border border-cyan-500/40 px-2 py-1 text-xs text-cyan-100 hover:bg-cyan-500/10">
                                   <Eye size={12} className="mr-1 inline" /> Ver
                                 </button>
                               </td>
@@ -497,7 +513,7 @@ export function ProcurementControlCenter() {
                               : "border-cyan-500/40 bg-cyan-500/10"
                         }`}
                       >
-                        <p className="font-semibold">{alert.tipo}</p>
+                        <p className="font-semibold uppercase tracking-wide">{alert.tipo}</p>
                         <p className="text-slate-300">{alert.mensagem}</p>
                       </div>
                     ))}
@@ -523,10 +539,10 @@ export function ProcurementControlCenter() {
 
                 <Panel title="Exportacao Excel">
                   <p className="mb-3 text-sm text-slate-300">Exporte dados e indicadores no layout corporativo.</p>
-                  <button onClick={exportExcel} className="w-full rounded-lg border border-cyan-500/50 bg-cyan-500/10 px-4 py-2 text-cyan-100">
+                  <button onClick={exportExcel} className="w-full rounded-lg border border-cyan-500/50 bg-cyan-500/10 px-4 py-2 text-cyan-100 transition hover:bg-cyan-500/20">
                     Exportar Tudo
                   </button>
-                  <button onClick={() => setModule("EXCEL")} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-slate-200">
+                  <button onClick={() => setModule("EXCEL")} className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-slate-200 transition hover:border-cyan-500/40">
                     Abrir modulo Excel
                   </button>
                 </Panel>
@@ -709,6 +725,9 @@ export function ProcurementControlCenter() {
               </Panel>
             </section>
           ) : null}
+          <footer className="mt-6 rounded-lg border border-cyan-500/20 bg-slate-950/70 px-4 py-2 text-center text-[11px] uppercase tracking-[0.24em] text-cyan-300/80">
+            Dados hoje • Decisoes melhores • Resultados amanha
+          </footer>
         </main>
       </div>
     </div>
@@ -717,8 +736,8 @@ export function ProcurementControlCenter() {
 
 function Panel({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className={`rounded-xl border border-slate-800 bg-slate-950/75 p-4 ${className}`}>
-      <p className="mb-3 text-sm font-semibold text-cyan-200">{title}</p>
+    <div className={`rounded-xl border border-cyan-500/20 bg-slate-950/80 p-4 shadow-[0_0_22px_rgba(0,210,255,0.08)] ${className}`}>
+      <p className="mb-3 border-b border-slate-800 pb-2 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">{title}</p>
       {children}
     </div>
   );
@@ -738,12 +757,12 @@ function KpiCard({
   icon: React.ElementType;
 }) {
   return (
-    <div className="rounded-xl border bg-slate-950/70 p-4" style={{ borderColor: `${color}66`, boxShadow: `0 0 30px ${color}22` }}>
+    <div className="rounded-xl border bg-slate-950/80 p-4" style={{ borderColor: `${color}66`, boxShadow: `0 0 26px ${color}20` }}>
       <div className="flex items-start justify-between gap-2">
-        <p className="text-xs uppercase tracking-widest text-slate-400">{label}</p>
+        <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">{label}</p>
         <Icon size={16} style={{ color }} />
       </div>
-      <p className="mt-2 text-2xl font-bold" style={{ color }}>
+      <p className="mt-2 text-3xl font-bold leading-none" style={{ color }}>
         {value}
       </p>
       {note ? <p className="mt-1 text-[11px] text-slate-500">{note}</p> : null}
@@ -762,9 +781,9 @@ function MetricCell({ label, value }: { label: string; value: string }) {
 
 function FilterInput({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (value: string) => void; placeholder: string }) {
   return (
-    <label className="rounded-lg border border-slate-700 bg-slate-900 px-2 py-2 text-xs">
-      <span className="text-slate-400">{label}</span>
-      <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="mt-1 w-full bg-transparent text-sm text-slate-200 outline-none" />
+    <label className="rounded-lg border border-slate-700 bg-slate-900/90 px-2 py-2 text-xs transition focus-within:border-cyan-500/60 focus-within:shadow-[0_0_10px_rgba(0,210,255,0.15)]">
+      <span className="text-[11px] uppercase tracking-[0.16em] text-slate-400">{label}</span>
+      <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="mt-1 w-full bg-transparent text-sm text-slate-200 outline-none placeholder:text-slate-600" />
     </label>
   );
 }
