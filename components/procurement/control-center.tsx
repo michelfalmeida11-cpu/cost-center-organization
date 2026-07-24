@@ -164,22 +164,6 @@ export function ProcurementControlCenter() {
   const [module, setModule] = useState<AppModule>("DASHBOARD");
   const [selectedSC, setSelectedSC] = useState<string>(state.scs[0]?.id ?? "");
   const [importReport, setImportReport] = useState<string[]>([]);
-  const [quickMessage, setQuickMessage] = useState<string>("");
-  const [quickSC, setQuickSC] = useState({
-    numeroSC: "",
-    solicitante: "",
-    responsavel: "",
-    valorEstimado: 0,
-    descricao: "",
-  });
-  const [quickOC, setQuickOC] = useState({
-    numeroOC: "",
-    scId: state.scs[0]?.id ?? "",
-    fornecedorId: state.fornecedores[0]?.id ?? "",
-    valorOC: 0,
-    dataPrevistaEntrega: new Date().toISOString().slice(0, 10),
-    responsavel: "",
-  });
 
   const dataset = useMemo(() => filterData(state, filters), [state, filters]);
   const kpis = useMemo(() => computeKpis(state, filters), [state, filters]);
@@ -190,6 +174,12 @@ export function ProcurementControlCenter() {
   const alerts = useMemo(() => buildAlerts(state, filters), [state, filters]);
   const latestScs = useMemo(() => dataset.scFiltered.slice(0, 6), [dataset.scFiltered]);
   const delayedOcs = useMemo(() => dataset.ocFiltered.filter((oc) => oc.status === "ATRASADA").slice(0, 6), [dataset.ocFiltered]);
+  const anosDisponiveis = useMemo(() => {
+    const years = new Set<string>();
+    state.scs.forEach((sc) => years.add(sc.dataCriacao.slice(0, 4)));
+    state.ocs.forEach((oc) => years.add(oc.dataOC.slice(0, 4)));
+    return Array.from(years).sort((a, b) => Number(b) - Number(a));
+  }, [state.scs, state.ocs]);
 
   const selectedScRecord = useMemo(() => dataset.scFiltered.find((x) => x.id === selectedSC) ?? dataset.scFiltered[0], [dataset.scFiltered, selectedSC]);
   const timeline = useMemo(() => (selectedScRecord ? buildScTimeline(selectedScRecord, state.ocs) : []), [selectedScRecord, state.ocs]);
@@ -199,83 +189,6 @@ export function ProcurementControlCenter() {
   }
 
   const canWrite = canEdit;
-
-  const createQuickSC = async () => {
-    if (!canWrite) return;
-    if (!quickSC.numeroSC || !quickSC.solicitante) {
-      setQuickMessage("Preencha numero SC e solicitante.");
-      return;
-    }
-
-    try {
-      await createSC({
-        numeroSC: quickSC.numeroSC,
-        dataCriacao: new Date().toISOString().slice(0, 10),
-        solicitante: quickSC.solicitante,
-        setorId: state.setores[0]?.id ?? "",
-        descricao: quickSC.descricao,
-        categoria: "GERAL",
-        prioridade: "MEDIA",
-        valorEstimado: quickSC.valorEstimado,
-        fornecedorSugeridoId: quickOC.fornecedorId || null,
-        justificativa: "Criacao rapida no dashboard",
-        status: "EM_ANALISE",
-        responsavel: quickSC.responsavel,
-        dataAprovacao: null,
-        dataReprovacao: null,
-        motivoReprovacao: null,
-        dataLancamento: null,
-        numeroOCRelacionada: null,
-        observacoes: "",
-        anexos: [],
-      });
-      setQuickMessage("SC criada com sucesso.");
-      setQuickSC({ numeroSC: "", solicitante: "", responsavel: "", valorEstimado: 0, descricao: "" });
-      setModule("SC");
-    } catch {
-      setQuickMessage("Falha ao criar SC.");
-    }
-  };
-
-  const createQuickOC = async () => {
-    if (!canWrite) return;
-    if (!quickOC.numeroOC || !quickOC.scId || !quickOC.fornecedorId) {
-      setQuickMessage("Preencha numero OC, SC e fornecedor.");
-      return;
-    }
-
-    try {
-      const today = new Date().toISOString().slice(0, 10);
-      await createOC({
-        numeroOC: quickOC.numeroOC,
-        scId: quickOC.scId,
-        fornecedorId: quickOC.fornecedorId,
-        dataOC: today,
-        dataEmissao: today,
-        dataPrevistaEntrega: quickOC.dataPrevistaEntrega,
-        dataRealEntrega: null,
-        valorOC: quickOC.valorOC,
-        setorId: state.setores[0]?.id ?? "",
-        responsavel: quickOC.responsavel,
-        status: "CRIADA",
-        condicaoPagamento: "30 dias",
-        observacoes: "Criacao rapida no dashboard",
-        anexos: [],
-      });
-      setQuickMessage("OC criada com sucesso.");
-      setQuickOC({
-        numeroOC: "",
-        scId: state.scs[0]?.id ?? "",
-        fornecedorId: state.fornecedores[0]?.id ?? "",
-        valorOC: 0,
-        dataPrevistaEntrega: new Date().toISOString().slice(0, 10),
-        responsavel: "",
-      });
-      setModule("OC");
-    } catch {
-      setQuickMessage("Falha ao criar OC.");
-    }
-  };
 
   const exportExcel = () => {
     const wb = XLSX.utils.book_new();
@@ -458,11 +371,47 @@ export function ProcurementControlCenter() {
                 </span>
               </div>
             </div>
-            <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-5">
-              <FilterInput label="Ano" value={filters.ano} onChange={(value) => setFilters({ ...filters, ano: value })} placeholder="2026" />
-              <FilterInput label="Mes" value={filters.mes} onChange={(value) => setFilters({ ...filters, mes: value })} placeholder="07" />
-              <FilterInput label="Setor" value={filters.setorId} onChange={(value) => setFilters({ ...filters, setorId: value })} placeholder="id setor" />
-              <FilterInput label="Fornecedor" value={filters.fornecedorId} onChange={(value) => setFilters({ ...filters, fornecedorId: value })} placeholder="id fornecedor" />
+            <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-7">
+              <FilterSelect
+                label="Ano"
+                value={filters.ano}
+                onChange={(value) => setFilters({ ...filters, ano: value })}
+                options={[{ label: "Todos", value: "" }, ...anosDisponiveis.map((ano) => ({ label: ano, value: ano }))]}
+              />
+              <FilterSelect
+                label="Mes"
+                value={filters.mes}
+                onChange={(value) => setFilters({ ...filters, mes: value })}
+                options={[
+                  { label: "Todos", value: "" },
+                  { label: "01", value: "01" },
+                  { label: "02", value: "02" },
+                  { label: "03", value: "03" },
+                  { label: "04", value: "04" },
+                  { label: "05", value: "05" },
+                  { label: "06", value: "06" },
+                  { label: "07", value: "07" },
+                  { label: "08", value: "08" },
+                  { label: "09", value: "09" },
+                  { label: "10", value: "10" },
+                  { label: "11", value: "11" },
+                  { label: "12", value: "12" },
+                ]}
+              />
+              <FilterSelect
+                label="Setor"
+                value={filters.setorId}
+                onChange={(value) => setFilters({ ...filters, setorId: value })}
+                options={[{ label: "Todos", value: "" }, ...state.setores.map((s) => ({ label: s.nome, value: s.id }))]}
+              />
+              <FilterSelect
+                label="Fornecedor"
+                value={filters.fornecedorId}
+                onChange={(value) => setFilters({ ...filters, fornecedorId: value })}
+                options={[{ label: "Todos", value: "" }, ...state.fornecedores.map((f) => ({ label: f.nomeFantasia, value: f.id }))]}
+              />
+              <FilterInput label="Responsavel" value={filters.responsavel} onChange={(value) => setFilters({ ...filters, responsavel: value })} placeholder="buscar" />
+              <FilterInput label="SC" value={filters.sc} onChange={(value) => setFilters({ ...filters, sc: value })} placeholder="SC-" />
               <button className="rounded-lg border border-slate-700 bg-slate-900 px-3 text-sm hover:border-cyan-300" onClick={() => setFilters(EMPTY_FILTERS)}>
                 Limpar Filtros
               </button>
@@ -481,45 +430,6 @@ export function ProcurementControlCenter() {
                 <KpiCard label="LANCADAS" value={String(kpis.lancadas)} note="SC convertidas" color={BLUE} icon={ClipboardList} />
                 <KpiCard label="ATRASADAS" value={String(kpis.entregasAtrasadas)} note="Exigem acao imediata" color={RED} icon={AlertTriangle} />
               </div>
-
-              <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                <Panel title="Criacao Rapida de SC">
-                  <div className="grid gap-2 md:grid-cols-2">
-                    <input className="field" placeholder="Numero SC" value={quickSC.numeroSC} onChange={(e) => setQuickSC({ ...quickSC, numeroSC: e.target.value })} />
-                    <input className="field" placeholder="Solicitante" value={quickSC.solicitante} onChange={(e) => setQuickSC({ ...quickSC, solicitante: e.target.value })} />
-                    <input className="field" placeholder="Responsavel" value={quickSC.responsavel} onChange={(e) => setQuickSC({ ...quickSC, responsavel: e.target.value })} />
-                    <input className="field" type="number" placeholder="Valor estimado" value={quickSC.valorEstimado} onChange={(e) => setQuickSC({ ...quickSC, valorEstimado: Number(e.target.value) })} />
-                    <input className="field md:col-span-2" placeholder="Descricao" value={quickSC.descricao} onChange={(e) => setQuickSC({ ...quickSC, descricao: e.target.value })} />
-                  </div>
-                  <button onClick={() => void createQuickSC()} className="mt-3 rounded-lg border border-cyan-400/50 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-100">
-                    Criar SC no Dashboard
-                  </button>
-                </Panel>
-
-                <Panel title="Criacao Rapida de OC">
-                  <div className="grid gap-2 md:grid-cols-2">
-                    <input className="field" placeholder="Numero OC" value={quickOC.numeroOC} onChange={(e) => setQuickOC({ ...quickOC, numeroOC: e.target.value })} />
-                    <input className="field" placeholder="Responsavel" value={quickOC.responsavel} onChange={(e) => setQuickOC({ ...quickOC, responsavel: e.target.value })} />
-                    <select className="field" value={quickOC.scId} onChange={(e) => setQuickOC({ ...quickOC, scId: e.target.value })}>
-                      {state.scs.map((sc) => (
-                        <option key={sc.id} value={sc.id}>{sc.numeroSC}</option>
-                      ))}
-                    </select>
-                    <select className="field" value={quickOC.fornecedorId} onChange={(e) => setQuickOC({ ...quickOC, fornecedorId: e.target.value })}>
-                      {state.fornecedores.map((f) => (
-                        <option key={f.id} value={f.id}>{f.nomeFantasia}</option>
-                      ))}
-                    </select>
-                    <input className="field" type="number" placeholder="Valor OC" value={quickOC.valorOC} onChange={(e) => setQuickOC({ ...quickOC, valorOC: Number(e.target.value) })} />
-                    <input className="field" type="date" value={quickOC.dataPrevistaEntrega} onChange={(e) => setQuickOC({ ...quickOC, dataPrevistaEntrega: e.target.value })} />
-                  </div>
-                  <button onClick={() => void createQuickOC()} className="mt-3 rounded-lg border border-cyan-400/50 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-100">
-                    Criar OC no Dashboard
-                  </button>
-                </Panel>
-              </div>
-
-              {quickMessage ? <p className="mt-2 text-sm text-cyan-300">{quickMessage}</p> : null}
 
               <div className="mt-4 grid gap-4 lg:grid-cols-3">
                 <Panel title="Evolucao SC x OC">
@@ -921,6 +831,31 @@ function FilterInput({ label, value, onChange, placeholder }: { label: string; v
   );
 }
 
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: Array<{ label: string; value: string }>;
+}) {
+  return (
+    <label className="rounded-lg border border-slate-700 bg-slate-900/90 px-2 py-2 text-xs transition focus-within:border-cyan-500/60 focus-within:shadow-[0_0_10px_rgba(0,210,255,0.15)]">
+      <span className="text-[11px] uppercase tracking-[0.16em] text-slate-400">{label}</span>
+      <select value={value} onChange={(e) => onChange(e.target.value)} className="mt-1 w-full bg-transparent text-sm text-cyan-100 outline-none">
+        {options.map((opt) => (
+          <option key={`${label}-${opt.value || "all"}`} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
 function ScModule({
   scs,
   setores,
@@ -1088,11 +1023,23 @@ function OcModule({
         <Panel title="Nova OC">
           <div className="grid gap-2 md:grid-cols-4">
             <input className="field" placeholder="Numero OC" value={newOc.numeroOC} onChange={(e) => setNewOc({ ...newOc, numeroOC: e.target.value })} />
-            <input className="field" placeholder="SC ID" value={newOc.scId} onChange={(e) => setNewOc({ ...newOc, scId: e.target.value })} />
-            <input className="field" placeholder="Fornecedor ID" value={newOc.fornecedorId} onChange={(e) => setNewOc({ ...newOc, fornecedorId: e.target.value })} />
+            <select className="field" value={newOc.scId} onChange={(e) => setNewOc({ ...newOc, scId: e.target.value })}>
+              {scs.map((sc) => (
+                <option key={sc.id} value={sc.id}>{sc.numeroSC}</option>
+              ))}
+            </select>
+            <select className="field" value={newOc.fornecedorId} onChange={(e) => setNewOc({ ...newOc, fornecedorId: e.target.value })}>
+              {fornecedores.map((f) => (
+                <option key={f.id} value={f.id}>{f.nomeFantasia}</option>
+              ))}
+            </select>
             <input className="field" type="number" placeholder="Valor" value={newOc.valorOC} onChange={(e) => setNewOc({ ...newOc, valorOC: Number(e.target.value) })} />
             <input className="field" type="date" value={newOc.dataPrevistaEntrega} onChange={(e) => setNewOc({ ...newOc, dataPrevistaEntrega: e.target.value })} />
-            <input className="field" placeholder="Setor ID" value={newOc.setorId} onChange={(e) => setNewOc({ ...newOc, setorId: e.target.value })} />
+            <select className="field" value={newOc.setorId} onChange={(e) => setNewOc({ ...newOc, setorId: e.target.value })}>
+              {setores.map((s) => (
+                <option key={s.id} value={s.id}>{s.nome}</option>
+              ))}
+            </select>
             <input className="field" placeholder="Responsavel" value={newOc.responsavel} onChange={(e) => setNewOc({ ...newOc, responsavel: e.target.value })} />
             <input className="field" placeholder="Condicao" value={newOc.condicaoPagamento} onChange={(e) => setNewOc({ ...newOc, condicaoPagamento: e.target.value })} />
           </div>
