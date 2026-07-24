@@ -164,6 +164,22 @@ export function ProcurementControlCenter() {
   const [module, setModule] = useState<AppModule>("DASHBOARD");
   const [selectedSC, setSelectedSC] = useState<string>(state.scs[0]?.id ?? "");
   const [importReport, setImportReport] = useState<string[]>([]);
+  const [quickMessage, setQuickMessage] = useState<string>("");
+  const [quickSC, setQuickSC] = useState({
+    numeroSC: "",
+    solicitante: "",
+    responsavel: "",
+    valorEstimado: 0,
+    descricao: "",
+  });
+  const [quickOC, setQuickOC] = useState({
+    numeroOC: "",
+    scId: state.scs[0]?.id ?? "",
+    fornecedorId: state.fornecedores[0]?.id ?? "",
+    valorOC: 0,
+    dataPrevistaEntrega: new Date().toISOString().slice(0, 10),
+    responsavel: "",
+  });
 
   const dataset = useMemo(() => filterData(state, filters), [state, filters]);
   const kpis = useMemo(() => computeKpis(state, filters), [state, filters]);
@@ -183,6 +199,83 @@ export function ProcurementControlCenter() {
   }
 
   const canWrite = canEdit;
+
+  const createQuickSC = async () => {
+    if (!canWrite) return;
+    if (!quickSC.numeroSC || !quickSC.solicitante) {
+      setQuickMessage("Preencha numero SC e solicitante.");
+      return;
+    }
+
+    try {
+      await createSC({
+        numeroSC: quickSC.numeroSC,
+        dataCriacao: new Date().toISOString().slice(0, 10),
+        solicitante: quickSC.solicitante,
+        setorId: state.setores[0]?.id ?? "",
+        descricao: quickSC.descricao,
+        categoria: "GERAL",
+        prioridade: "MEDIA",
+        valorEstimado: quickSC.valorEstimado,
+        fornecedorSugeridoId: quickOC.fornecedorId || null,
+        justificativa: "Criacao rapida no dashboard",
+        status: "EM_ANALISE",
+        responsavel: quickSC.responsavel,
+        dataAprovacao: null,
+        dataReprovacao: null,
+        motivoReprovacao: null,
+        dataLancamento: null,
+        numeroOCRelacionada: null,
+        observacoes: "",
+        anexos: [],
+      });
+      setQuickMessage("SC criada com sucesso.");
+      setQuickSC({ numeroSC: "", solicitante: "", responsavel: "", valorEstimado: 0, descricao: "" });
+      setModule("SC");
+    } catch {
+      setQuickMessage("Falha ao criar SC.");
+    }
+  };
+
+  const createQuickOC = async () => {
+    if (!canWrite) return;
+    if (!quickOC.numeroOC || !quickOC.scId || !quickOC.fornecedorId) {
+      setQuickMessage("Preencha numero OC, SC e fornecedor.");
+      return;
+    }
+
+    try {
+      const today = new Date().toISOString().slice(0, 10);
+      await createOC({
+        numeroOC: quickOC.numeroOC,
+        scId: quickOC.scId,
+        fornecedorId: quickOC.fornecedorId,
+        dataOC: today,
+        dataEmissao: today,
+        dataPrevistaEntrega: quickOC.dataPrevistaEntrega,
+        dataRealEntrega: null,
+        valorOC: quickOC.valorOC,
+        setorId: state.setores[0]?.id ?? "",
+        responsavel: quickOC.responsavel,
+        status: "CRIADA",
+        condicaoPagamento: "30 dias",
+        observacoes: "Criacao rapida no dashboard",
+        anexos: [],
+      });
+      setQuickMessage("OC criada com sucesso.");
+      setQuickOC({
+        numeroOC: "",
+        scId: state.scs[0]?.id ?? "",
+        fornecedorId: state.fornecedores[0]?.id ?? "",
+        valorOC: 0,
+        dataPrevistaEntrega: new Date().toISOString().slice(0, 10),
+        responsavel: "",
+      });
+      setModule("OC");
+    } catch {
+      setQuickMessage("Falha ao criar OC.");
+    }
+  };
 
   const exportExcel = () => {
     const wb = XLSX.utils.book_new();
@@ -281,7 +374,7 @@ export function ProcurementControlCenter() {
           <div className="mb-6 flex items-center justify-between rounded-lg border border-cyan-400/30 bg-slate-900/60 px-3 py-2">
             {!collapsedSidebar ? (
               <div>
-                <p className="font-orbitron text-sm tracking-widest text-cyan-300">PROCUREMENT</p>
+                <p className="font-orbitron text-sm tracking-widest text-cyan-300">GRUPO AVG EMESA</p>
                 <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Control Center</p>
               </div>
             ) : null}
@@ -356,7 +449,7 @@ export function ProcurementControlCenter() {
 
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <p className="text-xs uppercase tracking-[0.32em] text-cyan-300">PROCUREMENT CONTROL CENTER</p>
+                <p className="text-xs uppercase tracking-[0.32em] text-cyan-300">GRUPO AVG EMESA</p>
                 <h1 className="font-orbitron text-3xl text-white">SC / OC Enterprise Command</h1>
               </div>
               <div className="flex items-center gap-2 text-xs">
@@ -379,14 +472,54 @@ export function ProcurementControlCenter() {
           {module === "DASHBOARD" ? (
             <section>
               <ModuleTitle title="Dashboard Executivo" subtitle="Visao tatica em tempo real" />
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+              <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
                 <KpiCard label="SC TOTAL" value={String(kpis.totalSC)} note="Volume de solicitacoes" color={CYAN} icon={ClipboardList} />
                 <KpiCard label="OC TOTAL" value={String(kpis.totalOC)} note="Ordens emitidas" color={PURPLE} icon={Truck} />
                 <KpiCard label="VALOR TOTAL" value={formatCurrency(kpis.valorTotalOC)} note="Compromisso financeiro" color={GREEN} icon={BarChart3} />
                 <KpiCard label="EM ANALISE" value={String(kpis.emAnalise)} note="Aguardando aprovacao" color={AMBER} icon={Activity} />
                 <KpiCard label="APROVADAS" value={String(kpis.aprovadas)} note="Fluxo liberado" color={GREEN} icon={Shield} />
+                <KpiCard label="LANCADAS" value={String(kpis.lancadas)} note="SC convertidas" color={BLUE} icon={ClipboardList} />
                 <KpiCard label="ATRASADAS" value={String(kpis.entregasAtrasadas)} note="Exigem acao imediata" color={RED} icon={AlertTriangle} />
               </div>
+
+              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                <Panel title="Criacao Rapida de SC">
+                  <div className="grid gap-2 md:grid-cols-2">
+                    <input className="field" placeholder="Numero SC" value={quickSC.numeroSC} onChange={(e) => setQuickSC({ ...quickSC, numeroSC: e.target.value })} />
+                    <input className="field" placeholder="Solicitante" value={quickSC.solicitante} onChange={(e) => setQuickSC({ ...quickSC, solicitante: e.target.value })} />
+                    <input className="field" placeholder="Responsavel" value={quickSC.responsavel} onChange={(e) => setQuickSC({ ...quickSC, responsavel: e.target.value })} />
+                    <input className="field" type="number" placeholder="Valor estimado" value={quickSC.valorEstimado} onChange={(e) => setQuickSC({ ...quickSC, valorEstimado: Number(e.target.value) })} />
+                    <input className="field md:col-span-2" placeholder="Descricao" value={quickSC.descricao} onChange={(e) => setQuickSC({ ...quickSC, descricao: e.target.value })} />
+                  </div>
+                  <button onClick={() => void createQuickSC()} className="mt-3 rounded-lg border border-cyan-400/50 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-100">
+                    Criar SC no Dashboard
+                  </button>
+                </Panel>
+
+                <Panel title="Criacao Rapida de OC">
+                  <div className="grid gap-2 md:grid-cols-2">
+                    <input className="field" placeholder="Numero OC" value={quickOC.numeroOC} onChange={(e) => setQuickOC({ ...quickOC, numeroOC: e.target.value })} />
+                    <input className="field" placeholder="Responsavel" value={quickOC.responsavel} onChange={(e) => setQuickOC({ ...quickOC, responsavel: e.target.value })} />
+                    <select className="field" value={quickOC.scId} onChange={(e) => setQuickOC({ ...quickOC, scId: e.target.value })}>
+                      {state.scs.map((sc) => (
+                        <option key={sc.id} value={sc.id}>{sc.numeroSC}</option>
+                      ))}
+                    </select>
+                    <select className="field" value={quickOC.fornecedorId} onChange={(e) => setQuickOC({ ...quickOC, fornecedorId: e.target.value })}>
+                      {state.fornecedores.map((f) => (
+                        <option key={f.id} value={f.id}>{f.nomeFantasia}</option>
+                      ))}
+                    </select>
+                    <input className="field" type="number" placeholder="Valor OC" value={quickOC.valorOC} onChange={(e) => setQuickOC({ ...quickOC, valorOC: Number(e.target.value) })} />
+                    <input className="field" type="date" value={quickOC.dataPrevistaEntrega} onChange={(e) => setQuickOC({ ...quickOC, dataPrevistaEntrega: e.target.value })} />
+                  </div>
+                  <button onClick={() => void createQuickOC()} className="mt-3 rounded-lg border border-cyan-400/50 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-100">
+                    Criar OC no Dashboard
+                  </button>
+                </Panel>
+              </div>
+
+              {quickMessage ? <p className="mt-2 text-sm text-cyan-300">{quickMessage}</p> : null}
 
               <div className="mt-4 grid gap-4 lg:grid-cols-3">
                 <Panel title="Evolucao SC x OC">
@@ -757,15 +890,15 @@ function KpiCard({
   icon: React.ElementType;
 }) {
   return (
-    <div className="rounded-xl border bg-slate-950/80 p-4" style={{ borderColor: `${color}66`, boxShadow: `0 0 26px ${color}20` }}>
+    <div className="rounded-xl border bg-slate-950/80 p-3" style={{ borderColor: `${color}66`, boxShadow: `0 0 20px ${color}18` }}>
       <div className="flex items-start justify-between gap-2">
         <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">{label}</p>
         <Icon size={16} style={{ color }} />
       </div>
-      <p className="mt-2 text-3xl font-bold leading-none" style={{ color }}>
+      <p className="mt-1 text-[34px] font-bold leading-none" style={{ color }}>
         {value}
       </p>
-      {note ? <p className="mt-1 text-[11px] text-slate-500">{note}</p> : null}
+      {note ? <p className="mt-1 text-[10px] text-slate-500">{note}</p> : null}
     </div>
   );
 }
