@@ -1,4 +1,4 @@
-import { ensureStoreHydrated, getPersistenceInfo, queryState, replaceState } from "@/lib/procurement/server-store";
+import { ensureStoreHydrated, getPersistenceInfo, persistNow, queryState, replaceState } from "@/lib/procurement/server-store";
 import { fail, ok, canWrite, requireActor } from "@/lib/procurement/api-helpers";
 import { AppState } from "@/lib/procurement/types";
 import { NextRequest } from "next/server";
@@ -22,5 +22,9 @@ export async function POST(req: NextRequest) {
   if (!body.state) return fail("Objeto state e obrigatorio.", 422);
 
   const state = replaceState(body.state, actor);
+
+  const persisted = await persistNow();
+  if (!persisted) return fail("Falha ao persistir dados.", 500);
+
   return ok({ state });
 }

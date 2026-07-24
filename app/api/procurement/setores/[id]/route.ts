@@ -1,5 +1,5 @@
 import { canWrite, fail, ok, requireActor } from "@/lib/procurement/api-helpers";
-import { deleteSetor, ensureStoreHydrated, updateSetor } from "@/lib/procurement/server-store";
+import { deleteSetor, ensureStoreHydrated, persistNow, updateSetor } from "@/lib/procurement/server-store";
 import { NextRequest } from "next/server";
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
@@ -13,6 +13,9 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
   const item = updateSetor(params.id, body, actor);
   if (!item) return fail("Setor nao encontrado.", 404);
 
+  const persisted = await persistNow();
+  if (!persisted) return fail("Falha ao persistir dados.", 500);
+
   return ok({ item });
 }
 
@@ -25,6 +28,9 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
 
   const item = deleteSetor(params.id, actor);
   if (!item) return fail("Setor nao encontrado.", 404);
+
+  const persisted = await persistNow();
+  if (!persisted) return fail("Falha ao persistir dados.", 500);
 
   return ok({ item });
 }

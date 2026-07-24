@@ -1,5 +1,5 @@
 import { canWrite, fail, ok, requireActor } from "@/lib/procurement/api-helpers";
-import { createOC, ensureStoreHydrated, listOC } from "@/lib/procurement/server-store";
+import { createOC, ensureStoreHydrated, listOC, persistNow } from "@/lib/procurement/server-store";
 import { NextRequest } from "next/server";
 
 export async function GET(req: NextRequest) {
@@ -67,6 +67,9 @@ export async function POST(req: NextRequest) {
     },
     actor,
   );
+
+  const persisted = await persistNow();
+  if (!persisted) return fail("Falha ao persistir dados.", 500);
 
   return ok({ item }, 201);
 }

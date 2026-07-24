@@ -1,5 +1,5 @@
 import { fail, ok, canWrite, requireActor } from "@/lib/procurement/api-helpers";
-import { ensureStoreHydrated, moveKanban } from "@/lib/procurement/server-store";
+import { ensureStoreHydrated, moveKanban, persistNow } from "@/lib/procurement/server-store";
 import { NextRequest } from "next/server";
 
 export async function POST(req: NextRequest) {
@@ -14,6 +14,9 @@ export async function POST(req: NextRequest) {
 
   const item = moveKanban(body.entity, body.id, body.targetStatus, actor);
   if (!item) return fail("Item nao encontrado.", 404);
+
+  const persisted = await persistNow();
+  if (!persisted) return fail("Falha ao persistir dados.", 500);
 
   return ok({ item });
 }
