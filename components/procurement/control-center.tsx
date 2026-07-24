@@ -5,25 +5,19 @@ import {
   Activity,
   AlertTriangle,
   BarChart3,
-  Bell,
   Building2,
   ChevronLeft,
   ChevronRight,
   ClipboardList,
-  Database,
-  Download,
-  Eye,
   Factory,
   FileSpreadsheet,
   Filter,
   Gauge,
   LayoutDashboard,
   ListChecks,
-  Search,
   Settings,
   Shield,
   Truck,
-  UserCircle2,
   Users,
 } from "lucide-react";
 import {
@@ -63,13 +57,13 @@ import { AppState, OCStatus, PurchaseOrder, PurchaseRequest, SCStatus } from "@/
 const NAV: Array<{ id: AppModule; label: string; icon: React.ElementType }> = [
   { id: "DASHBOARD", label: "Dashboard", icon: LayoutDashboard },
   { id: "SC", label: "SC - Solicitacoes", icon: ClipboardList },
-  { id: "OC", label: "OC - Ordens de Compra", icon: Truck },
+  { id: "OC", label: "OC - Ordens", icon: Truck },
   { id: "FORNECEDORES", label: "Fornecedores", icon: Building2 },
   { id: "SETORES", label: "Setores", icon: Factory },
   { id: "ACOMPANHAMENTO", label: "Acompanhamento", icon: ListChecks },
   { id: "KPIS_ANALYTICS", label: "KPIs & Analytics", icon: Gauge },
   { id: "RELATORIOS", label: "Relatorios", icon: BarChart3 },
-  { id: "EXCEL", label: "Exportacao / Importacao Excel", icon: FileSpreadsheet },
+  { id: "EXCEL", label: "Exportacao Excel", icon: FileSpreadsheet },
   { id: "CONFIGURACOES", label: "Configuracoes", icon: Settings },
 ];
 
@@ -163,8 +157,6 @@ export function ProcurementControlCenter() {
 
   const selectedScRecord = useMemo(() => dataset.scFiltered.find((x) => x.id === selectedSC) ?? dataset.scFiltered[0], [dataset.scFiltered, selectedSC]);
   const timeline = useMemo(() => (selectedScRecord ? buildScTimeline(selectedScRecord, state.ocs) : []), [selectedScRecord, state.ocs]);
-  const delayedOcs = useMemo(() => dataset.ocFiltered.filter((oc) => oc.status === "ATRASADA").slice(0, 5), [dataset.ocFiltered]);
-  const latestScs = useMemo(() => [...dataset.scFiltered].slice(0, 6), [dataset.scFiltered]);
 
   if (!currentUser) {
     return <LoginCard />;
@@ -263,14 +255,14 @@ export function ProcurementControlCenter() {
   ) : null;
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_10%_0%,rgba(0,210,255,0.18),transparent_28%),radial-gradient(circle_at_85%_0%,rgba(24,85,255,0.16),transparent_34%),#030711] text-slate-200">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_15%_10%,rgba(53,243,255,.12),transparent_25%),radial-gradient(circle_at_85%_0%,rgba(159,122,255,.10),transparent_30%),#04060b] text-slate-200">
       <div className="flex">
-        <aside className={`${collapsedSidebar ? "w-[84px]" : "w-[290px]"} sticky top-0 h-screen border-r border-cyan-400/20 bg-slate-950/95 px-3 py-4 transition-all`}>
-          <div className="mb-6 flex items-center justify-between rounded-lg border border-cyan-400/30 bg-slate-900/70 px-3 py-2">
+        <aside className={`${collapsedSidebar ? "w-[84px]" : "w-[290px]"} sticky top-0 h-screen border-r border-cyan-400/20 bg-slate-950/90 px-3 py-4 transition-all`}>
+          <div className="mb-6 flex items-center justify-between rounded-lg border border-cyan-400/30 bg-slate-900/60 px-3 py-2">
             {!collapsedSidebar ? (
               <div>
-                <p className="font-orbitron text-sm tracking-widest text-cyan-300">PROCUREMENT</p>
-                <p className="text-[11px] uppercase tracking-[0.2em] text-slate-400">Control Center</p>
+                <p className="font-orbitron text-sm tracking-widest text-cyan-300">PCC CORE</p>
+                <p className="text-[10px] text-slate-500">Cyberpunk Enterprise</p>
               </div>
             ) : null}
             <button onClick={() => setCollapsedSidebar(!collapsedSidebar)} className="rounded-md border border-slate-700 p-1 hover:border-cyan-400/70">
@@ -300,54 +292,28 @@ export function ProcurementControlCenter() {
           </nav>
 
           {!collapsedSidebar ? (
-            <div className="mt-6 rounded-xl border border-cyan-500/25 bg-slate-900/70 p-3 text-xs text-slate-300">
-              <div className="mb-3 rounded-lg border border-slate-800 bg-slate-950/80 p-2">
-                <p className="text-cyan-300">Sistema online • v2.0.1</p>
-                <p className="mt-1 text-slate-500">Mina do Brumado - Grupo AVG</p>
-              </div>
-              <div className="space-y-2">
-                <button onClick={() => setModule("CONFIGURACOES")} className="w-full rounded-md border border-slate-700 bg-slate-900/60 px-2 py-1.5 text-left text-slate-200 hover:border-cyan-400/60">
-                  Acessar configuracoes
-                </button>
-                <button onClick={exportExcel} className="w-full rounded-md border border-slate-700 bg-slate-900/60 px-2 py-1.5 text-left text-slate-200 hover:border-cyan-400/60">
-                  Exportar snapshot
-                </button>
-              </div>
-              <div className="mt-3 rounded-lg border border-cyan-400/20 bg-slate-950/90 p-2 text-[11px] text-slate-400">
-                <p>Desenvolvido por Michel Almeida</p>
-                <p>Empresa: Mina do Brumado</p>
-                <p>Grupo AVG</p>
-              </div>
+            <div className="mt-6 rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-xs text-slate-400">
+              <p className="text-cyan-300">Usuario: {currentUser.nome}</p>
+              <p>Perfil: {currentUser.role}</p>
               <button onClick={logout} className="mt-3 w-full rounded-md border border-rose-500/40 bg-rose-500/10 py-2 text-rose-200">Sair</button>
             </div>
           ) : null}
         </aside>
 
-        <main className="flex-1 p-4 md:p-6">
-          <header className="mb-4 rounded-2xl border border-cyan-400/25 bg-slate-950/80 p-4 shadow-[0_0_40px_rgba(53,243,255,0.08)] backdrop-blur-sm">
-            <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <span className="h-2 w-2 rounded-full bg-emerald-400" />
-                <p className="text-xs uppercase tracking-[0.25em] text-emerald-300">Sistema Online</p>
-                <span className="text-xs text-slate-500">v2.0.1</span>
+        <main className="flex-1 p-6">
+          <header className="mb-4 rounded-2xl border border-cyan-400/25 bg-slate-950/75 p-5 shadow-[0_0_40px_rgba(53,243,255,0.09)] backdrop-blur-sm">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <p className="text-xs uppercase tracking-[0.32em] text-cyan-300">PROCUREMENT CONTROL CENTER</p>
+                <h1 className="font-orbitron text-3xl text-white">SC / OC Enterprise Command</h1>
               </div>
-              <p className="text-xs uppercase tracking-[0.34em] text-cyan-300/80">Controle • Supervisao • Resultados</p>
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-2 rounded-lg border border-slate-800 bg-slate-900/80 px-3 py-2 text-sm text-slate-400">
-                  <Search size={14} />
-                  <span className="hidden sm:inline">Buscar SC, OC, Fornecedor...</span>
-                </div>
-                <button className="rounded-lg border border-slate-800 bg-slate-900/80 p-2 text-slate-300"><Bell size={14} /></button>
-                <div className="flex items-center gap-2 rounded-lg border border-cyan-500/30 bg-slate-900/80 px-2 py-1.5">
-                  <UserCircle2 size={18} className="text-cyan-300" />
-                  <div className="hidden sm:block">
-                    <p className="text-xs text-white">{currentUser.nome}</p>
-                    <p className="text-[10px] text-slate-400">{currentUser.role}</p>
-                  </div>
-                </div>
+              <div className="flex items-center gap-2 text-xs">
+                <span className={`rounded-full border px-3 py-1 ${canWrite ? "border-emerald-400/45 bg-emerald-500/10 text-emerald-200" : "border-amber-400/45 bg-amber-500/10 text-amber-200"}`}>
+                  {canWrite ? "Modo Edicao" : "Modo Visualizacao"}
+                </span>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2 md:grid-cols-5">
+            <div className="mt-4 grid grid-cols-2 gap-2 md:grid-cols-5">
               <FilterInput label="Ano" value={filters.ano} onChange={(value) => setFilters({ ...filters, ano: value })} placeholder="2026" />
               <FilterInput label="Mes" value={filters.mes} onChange={(value) => setFilters({ ...filters, mes: value })} placeholder="07" />
               <FilterInput label="Setor" value={filters.setorId} onChange={(value) => setFilters({ ...filters, setorId: value })} placeholder="id setor" />
@@ -360,18 +326,20 @@ export function ProcurementControlCenter() {
 
           {module === "DASHBOARD" ? (
             <section>
-              <ModuleTitle title="Dashboard Executivo" subtitle="Painel tatico em tempo real" />
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
+              <ModuleTitle title="Dashboard Executivo" subtitle="Visao em tempo real" />
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                 <KpiCard label="SC TOTAL" value={String(kpis.totalSC)} color={CYAN} icon={ClipboardList} />
                 <KpiCard label="OC TOTAL" value={String(kpis.totalOC)} color={BLUE} icon={Truck} />
                 <KpiCard label="VALOR TOTAL" value={formatCurrency(kpis.valorTotalOC)} color={GREEN} icon={BarChart3} />
+                <KpiCard label="ENTREGAS ATRASADAS" value={String(kpis.entregasAtrasadas)} color={RED} icon={AlertTriangle} />
                 <KpiCard label="EM ANALISE" value={String(kpis.emAnalise)} color={AMBER} icon={Activity} />
                 <KpiCard label="APROVADAS" value={String(kpis.aprovadas)} color={GREEN} icon={Shield} />
-                <KpiCard label="ATRASADAS" value={String(kpis.entregasAtrasadas)} color={RED} icon={AlertTriangle} />
+                <KpiCard label="REPROVADAS" value={String(kpis.reprovadas)} color={RED} icon={AlertTriangle} />
+                <KpiCard label="LANCADAS" value={String(kpis.lancadas)} color={PURPLE} icon={ClipboardList} />
               </div>
 
-              <div className="mt-4 grid gap-4 lg:grid-cols-3">
-                <Panel title="Evolucao SC x OC">
+              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                <Panel title="SC x OC por Mes">
                   <ResponsiveContainer width="100%" height={260}>
                     <LineChart data={monthly}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
@@ -383,16 +351,15 @@ export function ProcurementControlCenter() {
                     </LineChart>
                   </ResponsiveContainer>
                 </Panel>
-                <Panel title="SC por Setor">
+                <Panel title="Valor por Setor">
                   <ResponsiveContainer width="100%" height={260}>
-                    <PieChart>
-                      <Pie data={bySector} dataKey="valorOC" nameKey="setor" outerRadius={90}>
-                        {bySector.map((entry, index) => (
-                          <Cell key={entry.setor} fill={[BLUE, PURPLE, GREEN, CYAN][index % 4]} />
-                        ))}
-                      </Pie>
+                    <BarChart data={bySector}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                      <XAxis dataKey="setor" stroke="#94a3b8" />
+                      <YAxis stroke="#94a3b8" />
                       <Tooltip />
-                    </PieChart>
+                      <Bar dataKey="valorOC" fill={BLUE} radius={[4, 4, 0, 0]} />
+                    </BarChart>
                   </ResponsiveContainer>
                 </Panel>
                 <Panel title="Status SC">
@@ -407,99 +374,25 @@ export function ProcurementControlCenter() {
                     </PieChart>
                   </ResponsiveContainer>
                 </Panel>
-              </div>
-
-              <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                <Panel title="Ultimas SC">
-                  <div className="overflow-auto">
-                    <table className="w-full text-sm">
-                      <thead className="text-left text-slate-400">
-                        <tr>
-                          <th>SC</th>
-                          <th>Data</th>
-                          <th>Setor</th>
-                          <th>Solicitante</th>
-                          <th>Status</th>
-                          <th>Valor</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {latestScs.map((sc) => (
-                          <tr key={sc.id} className="border-t border-slate-800">
-                            <td className="py-2">{sc.numeroSC}</td>
-                            <td>{sc.dataCriacao}</td>
-                            <td>{state.setores.find((s) => s.id === sc.setorId)?.nome ?? "-"}</td>
-                            <td>{sc.solicitante}</td>
-                            <td>{SC_STATUS_LABEL[sc.status]}</td>
-                            <td>{formatCurrency(sc.valorEstimado)}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </Panel>
-
-                <Panel title="OC com Atraso">
-                  <div className="overflow-auto">
-                    <table className="w-full text-sm">
-                      <thead className="text-left text-slate-400">
-                        <tr>
-                          <th>OC</th>
-                          <th>Fornecedor</th>
-                          <th>Status</th>
-                          <th>Valor</th>
-                          <th>Acoes</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {delayedOcs.map((oc) => (
-                          <tr key={oc.id} className="border-t border-slate-800">
-                            <td className="py-2">{oc.numeroOC}</td>
-                            <td>{state.fornecedores.find((f) => f.id === oc.fornecedorId)?.nomeFantasia ?? oc.fornecedorId}</td>
-                            <td className="text-rose-300">{OC_STATUS_LABEL[oc.status as OCStatus]}</td>
-                            <td>{formatCurrency(oc.valorOC)}</td>
-                            <td>
-                              <button className="rounded border border-cyan-600/40 px-2 py-1 text-xs text-cyan-200">
-                                <Eye size={12} className="inline" /> Ver
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </Panel>
-              </div>
-
-              <div className="mt-4 grid gap-4 lg:grid-cols-3">
-                <Panel title="Alertas">
+                <Panel title="Alertas Criticos">
                   <div className="space-y-2">
-                    {alerts.slice(0, 4).map((alert) => (
-                      <div key={alert.id} className="rounded-lg border border-slate-800 bg-slate-900/60 p-2 text-xs">
-                        <p className="font-semibold text-slate-100">{alert.tipo}</p>
-                        <p className="text-slate-400">{alert.mensagem}</p>
+                    {alerts.slice(0, 8).map((alert) => (
+                      <div
+                        key={alert.id}
+                        className={`rounded-lg border p-2 text-sm ${
+                          alert.nivel === "CRITICO"
+                            ? "border-rose-500/40 bg-rose-500/10"
+                            : alert.nivel === "ATENCAO"
+                              ? "border-amber-500/40 bg-amber-500/10"
+                              : "border-cyan-500/40 bg-cyan-500/10"
+                        }`}
+                      >
+                        <p className="font-semibold">{alert.tipo}</p>
+                        <p className="text-slate-300">{alert.mensagem}</p>
                       </div>
                     ))}
+                    {alerts.length === 0 ? <p className="text-sm text-emerald-200">Sem alertas no momento.</p> : null}
                   </div>
-                </Panel>
-                <Panel title="Top Fornecedores">
-                  <div className="space-y-2 text-sm">
-                    {ranking.slice(0, 5).map((r) => (
-                      <div key={r.fornecedorId} className="flex items-center justify-between rounded-md border border-slate-800 bg-slate-900/60 px-2 py-1.5">
-                        <span>{r.fornecedor}</span>
-                        <span className="text-emerald-300">{r.taxaPrazo}%</span>
-                      </div>
-                    ))}
-                  </div>
-                </Panel>
-                <Panel title="Exportacao Excel">
-                  <p className="mb-2 text-sm text-slate-400">Exporte SC, OC, fornecedores e indicadores com um clique.</p>
-                  <button onClick={exportExcel} className="w-full rounded-md border border-cyan-500/40 bg-cyan-500/10 px-3 py-2 text-sm text-cyan-100">
-                    <Download size={14} className="mr-1 inline" /> Exportar Tudo
-                  </button>
-                  <button onClick={() => setModule("EXCEL")} className="mt-2 w-full rounded-md border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm text-slate-200">
-                    <Database size={14} className="mr-1 inline" /> Abrir modulo de importacao
-                  </button>
                 </Panel>
               </div>
             </section>
