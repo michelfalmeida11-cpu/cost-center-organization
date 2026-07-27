@@ -212,6 +212,22 @@ function buildUnifiedRows(
   return [...ocRows, ...scRows].sort((a, b) => b.sortDate.localeCompare(a.sortDate));
 }
 
+function getTaggedValue(text: string | null | undefined, tag: string) {
+  if (!text) return "";
+  const regex = new RegExp(`(?:^|\\n)${tag}:([^\\n]*)`, "i");
+  const match = text.match(regex);
+  return match?.[1]?.trim() ?? "";
+}
+
+function setTaggedValue(text: string | null | undefined, tag: string, value: string) {
+  const lines = (text ?? "")
+    .split("\n")
+    .filter((line) => line.trim().length > 0 && !new RegExp(`^${tag}:`, "i").test(line));
+
+  if (value.trim()) lines.push(`${tag}:${value.trim()}`);
+  return lines.join("\n");
+}
+
 function ModuleTitle({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <div className="mb-4">
@@ -1221,41 +1237,19 @@ function UnifiedScOcModule({
 }) {
   const [message, setMessage] = useState("");
   const rows = useMemo(() => buildUnifiedRows(scs, ocs, setores, fornecedores), [scs, ocs, setores, fornecedores]);
-  const [newSC, setNewSC] = useState<{
-    numeroSC: string;
-    solicitante: string;
-    setorId: string;
-    descricao: string;
-    categoria: string;
-    prioridade: PurchaseRequest["prioridade"];
-    valorEstimado: number;
-    fornecedorSugeridoId: string | null;
-    justificativa: string;
-    responsavel: string;
-    observacoes: string;
-  }>({
-    numeroSC: "",
+  const [formEntry, setFormEntry] = useState({
     solicitante: "",
-    setorId: setores[0]?.id ?? "",
-    descricao: "",
-    categoria: "",
-    prioridade: "MEDIA" as PurchaseRequest["prioridade"],
-    valorEstimado: 0,
-    fornecedorSugeridoId: fornecedores[0]?.id ?? null,
-    justificativa: "",
-    responsavel: "",
-    observacoes: "",
-  });
-  const [newOc, setNewOc] = useState({
+    unidade: "",
+    area: "",
+    numeroSC: "",
     numeroOC: "",
-    linkedNumeroSC: scs[0]?.numeroSC ?? "",
-    fornecedorNome: fornecedores[0]?.nomeFantasia ?? "",
-    dataPrevistaEntrega: new Date().toISOString().slice(0, 10),
-    valorOC: 0,
-    setorId: setores[0]?.id ?? "",
-    responsavel: "",
-    condicaoPagamento: "30 dias",
-    observacoes: "",
+    cnpj: "",
+    fornecedorNome: "",
+    numeroNF: "",
+    valor: 0,
+    contrato: true,
+    descricao: "",
+    status: "EM_ANALISE" as SCStatus,
   });
 
   return (
@@ -1264,59 +1258,40 @@ function UnifiedScOcModule({
 
       {canWrite ? (
         <Panel title="Criacao Integrada SC / OC">
-          <div className="grid gap-2 md:grid-cols-4">
-            <input className="field" placeholder="Numero SC" value={newSC.numeroSC} onChange={(e) => setNewSC({ ...newSC, numeroSC: e.target.value })} />
-            <input className="field" placeholder="Numero OC" value={newOc.numeroOC} onChange={(e) => setNewOc({ ...newOc, numeroOC: e.target.value })} />
-            <select className="field" value={newSC.setorId} onChange={(e) => {
-              setNewSC({ ...newSC, setorId: e.target.value });
-              setNewOc({ ...newOc, setorId: e.target.value });
-            }}>
-              {setores.map((setor) => (
-                <option key={setor.id} value={setor.id}>{setor.nome}</option>
-              ))}
-            </select>
-            <input
-              className="field"
-              list="fornecedores-oc-central"
-              placeholder="Fornecedor (nome)"
-              value={newOc.fornecedorNome}
-              onChange={(e) => {
-                const nome = e.target.value;
-                setNewOc({ ...newOc, fornecedorNome: nome });
-                const termo = nome.trim().toLowerCase();
-                const matched =
-                  fornecedores.find((fornecedor) => fornecedor.nomeFantasia.toLowerCase() === termo) ??
-                  fornecedores.find((fornecedor) => fornecedor.nomeFantasia.toLowerCase().includes(termo));
-                setNewSC((prev) => ({ ...prev, fornecedorSugeridoId: matched?.id ?? null }));
-              }}
-            />
+          <div className="grid gap-2 md:grid-cols-5">
+            <input className="field" placeholder="Solicitante" value={formEntry.solicitante} onChange={(e) => setFormEntry((prev) => ({ ...prev, solicitante: e.target.value }))} />
+            <input className="field" placeholder="Unidade" value={formEntry.unidade} onChange={(e) => setFormEntry((prev) => ({ ...prev, unidade: e.target.value }))} />
+            <input className="field" placeholder="Area" value={formEntry.area} onChange={(e) => setFormEntry((prev) => ({ ...prev, area: e.target.value }))} />
+            <input className="field" placeholder="SC" value={formEntry.numeroSC} onChange={(e) => setFormEntry((prev) => ({ ...prev, numeroSC: e.target.value }))} />
+            <input className="field" placeholder="OC" value={formEntry.numeroOC} onChange={(e) => setFormEntry((prev) => ({ ...prev, numeroOC: e.target.value }))} />
+
+            <input className="field" placeholder="CNPJ" value={formEntry.cnpj} onChange={(e) => setFormEntry((prev) => ({ ...prev, cnpj: e.target.value }))} />
+            <input className="field" list="fornecedores-oc-central" placeholder="Fornecedor" value={formEntry.fornecedorNome} onChange={(e) => setFormEntry((prev) => ({ ...prev, fornecedorNome: e.target.value }))} />
             <datalist id="fornecedores-oc-central">
               {fornecedores.map((fornecedor) => (
                 <option key={fornecedor.id} value={fornecedor.nomeFantasia} />
               ))}
             </datalist>
-            <input className="field" placeholder="Solicitante" value={newSC.solicitante} onChange={(e) => setNewSC({ ...newSC, solicitante: e.target.value })} />
-            <input className="field" placeholder="Responsavel" value={newOc.responsavel} onChange={(e) => {
-              setNewOc({ ...newOc, responsavel: e.target.value });
-              setNewSC({ ...newSC, responsavel: e.target.value });
-            }} />
-            <input className="field md:col-span-2" placeholder="Descricao da SC" value={newSC.descricao} onChange={(e) => setNewSC({ ...newSC, descricao: e.target.value })} />
-            <input className="field" placeholder="Categoria" value={newSC.categoria} onChange={(e) => setNewSC({ ...newSC, categoria: e.target.value })} />
-            <input className="field" type="date" value={newOc.dataPrevistaEntrega} onChange={(e) => setNewOc({ ...newOc, dataPrevistaEntrega: e.target.value })} />
-            <input className="field" type="number" placeholder="Valor SC" value={newSC.valorEstimado} onChange={(e) => setNewSC({ ...newSC, valorEstimado: Number(e.target.value) })} />
-            <input className="field" type="number" placeholder="Valor OC" value={newOc.valorOC} onChange={(e) => setNewOc({ ...newOc, valorOC: Number(e.target.value) })} />
+            <input className="field" placeholder="Nº NF" value={formEntry.numeroNF} onChange={(e) => setFormEntry((prev) => ({ ...prev, numeroNF: e.target.value }))} />
+            <input className="field" type="number" placeholder="Valor" value={formEntry.valor} onChange={(e) => setFormEntry((prev) => ({ ...prev, valor: Number(e.target.value || 0) }))} />
+            <label className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm text-slate-200">
+              <span>Contrato</span>
+              <input type="checkbox" checked={formEntry.contrato} onChange={(e) => setFormEntry((prev) => ({ ...prev, contrato: e.target.checked }))} />
+            </label>
+
+            <textarea
+              className="field md:col-span-5 min-h-[120px]"
+              placeholder="Descricao"
+              value={formEntry.descricao}
+              onChange={(e) => setFormEntry((prev) => ({ ...prev, descricao: e.target.value }))}
+            />
           </div>
 
           <div className="mt-3 flex flex-wrap gap-2">
             <button
               className="rounded-lg border border-cyan-400/45 bg-cyan-500/10 px-4 py-2 text-sm text-cyan-100"
               onClick={async () => {
-                if (!newSC.numeroSC || !newSC.solicitante || !newSC.descricao) {
-                  setMessage("Preencha Numero SC, Solicitante e Descricao da SC.");
-                  return;
-                }
-
-                const fornecedorInformado = newOc.fornecedorNome.trim();
+                const fornecedorInformado = formEntry.fornecedorNome.trim();
                 let matchedSupplier =
                   fornecedores.find((fornecedor) => fornecedor.nomeFantasia.toLowerCase() === fornecedorInformado.toLowerCase()) ??
                   fornecedores.find((fornecedor) => fornecedor.nomeFantasia.toLowerCase().includes(fornecedorInformado.toLowerCase()));
@@ -1324,13 +1299,13 @@ function UnifiedScOcModule({
                 try {
                   if (!matchedSupplier && fornecedorInformado) {
                     const digits = Date.now().toString();
-                    const cnpjSeed = digits.padStart(14, "0").slice(-14);
+                    const cnpjSeed = formEntry.cnpj.trim() || digits.padStart(14, "0").slice(-14);
                     matchedSupplier = await onCreateSupplierWithResult({
                       codigo: `AUTO-${digits.slice(-6)}`,
                       razaoSocial: fornecedorInformado,
                       nomeFantasia: fornecedorInformado,
                       cnpj: cnpjSeed,
-                      contato: newSC.solicitante || "Cadastro rapido",
+                      contato: formEntry.solicitante || "Cadastro rapido",
                       telefone: "",
                       email: "",
                       cidade: "",
@@ -1345,31 +1320,33 @@ function UnifiedScOcModule({
                   return;
                 }
 
-                const fornecedorSugeridoId = matchedSupplier?.id ?? newSC.fornecedorSugeridoId;
+                const now = new Date().toISOString().slice(0, 10);
+                const numeroSC = formEntry.numeroSC.trim() || `SC-${Date.now().toString().slice(-6)}`;
+                const observacoesSc = setTaggedValue(setTaggedValue(formEntry.descricao, "NF", formEntry.numeroNF), "UNIDADE", formEntry.unidade);
 
                 try {
                   await onCreateSC({
-                    numeroSC: newSC.numeroSC,
-                    dataCriacao: new Date().toISOString().slice(0, 10),
-                    solicitante: newSC.solicitante,
-                    setorId: newSC.setorId,
-                    descricao: newSC.descricao,
-                    categoria: newSC.categoria,
-                    prioridade: newSC.prioridade,
-                    valorEstimado: newSC.valorEstimado,
-                    fornecedorSugeridoId,
-                    justificativa: newSC.justificativa,
-                    status: "EM_ANALISE",
-                    responsavel: newSC.responsavel,
+                    numeroSC,
+                    dataCriacao: now,
+                    solicitante: formEntry.solicitante || "-",
+                    setorId: setores[0]?.id ?? "-",
+                    descricao: formEntry.descricao || "-",
+                    categoria: formEntry.area,
+                    prioridade: "MEDIA",
+                    valorEstimado: formEntry.valor,
+                    fornecedorSugeridoId: matchedSupplier?.id ?? null,
+                    justificativa: formEntry.contrato ? "CONTRATO:SIM" : "CONTRATO:NAO",
+                    status: formEntry.status,
+                    responsavel: formEntry.solicitante,
                     dataAprovacao: null,
                     dataReprovacao: null,
                     motivoReprovacao: null,
                     dataLancamento: null,
-                    numeroOCRelacionada: newOc.numeroOC || null,
-                    observacoes: newSC.observacoes,
+                    numeroOCRelacionada: formEntry.numeroOC.trim() || null,
+                    observacoes: observacoesSc,
                     anexos: [],
                   });
-                  setNewSC({ ...newSC, numeroSC: "", solicitante: "", descricao: "", valorEstimado: 0, justificativa: "", observacoes: "", fornecedorSugeridoId: matchedSupplier?.id ?? null });
+                  setFormEntry((prev) => ({ ...prev, numeroSC: "", descricao: "", numeroNF: "", valor: 0 }));
                   setMessage("SC criada com sucesso.");
                 } catch (error) {
                   setMessage((error as Error).message || "Falha ao criar SC.");
@@ -1381,28 +1358,26 @@ function UnifiedScOcModule({
             <button
               className="rounded-lg border border-blue-400/45 bg-blue-500/10 px-4 py-2 text-sm text-blue-100"
               onClick={async () => {
-                const fornecedorInformado = newOc.fornecedorNome.trim();
+                const fornecedorInformado = formEntry.fornecedorNome.trim();
                 let matchedSupplier =
                   fornecedores.find((fornecedor) => fornecedor.nomeFantasia.toLowerCase() === fornecedorInformado.toLowerCase()) ??
                   fornecedores.find((fornecedor) => fornecedor.nomeFantasia.toLowerCase().includes(fornecedorInformado.toLowerCase()));
-                const linkedSc = scs.find((sc) => sc.numeroSC.trim().toLowerCase() === newSC.numeroSC.trim().toLowerCase()) ?? scs.find((sc) => sc.numeroSC === newOc.linkedNumeroSC);
-                if (!newOc.numeroOC || !linkedSc || !newOc.setorId || !fornecedorInformado) {
-                  setMessage("Para criar a OC informe Numero OC, Numero SC ja existente, Setor e Fornecedor por nome.");
-                  return;
-                }
+                const linkedSc =
+                  scs.find((sc) => sc.numeroSC.trim().toLowerCase() === formEntry.numeroSC.trim().toLowerCase()) ??
+                  scs[0];
 
                 const today = new Date().toISOString().slice(0, 10);
 
                 try {
-                  if (!matchedSupplier) {
+                  if (!matchedSupplier && fornecedorInformado) {
                     const digits = Date.now().toString();
-                    const cnpjSeed = digits.padStart(14, "0").slice(-14);
+                    const cnpjSeed = formEntry.cnpj.trim() || digits.padStart(14, "0").slice(-14);
                     matchedSupplier = await onCreateSupplierWithResult({
                       codigo: `AUTO-${digits.slice(-6)}`,
                       razaoSocial: fornecedorInformado,
                       nomeFantasia: fornecedorInformado,
                       cnpj: cnpjSeed,
-                      contato: newOc.responsavel || "Cadastro rapido",
+                      contato: formEntry.solicitante || "Cadastro rapido",
                       telefone: "",
                       email: "",
                       cidade: "",
@@ -1413,24 +1388,26 @@ function UnifiedScOcModule({
                     });
                   }
 
+                  const numeroOC = formEntry.numeroOC.trim() || `OC-${Date.now().toString().slice(-6)}`;
+                  const observacoesOc = setTaggedValue(setTaggedValue(formEntry.descricao, "NF", formEntry.numeroNF), "UNIDADE", formEntry.unidade);
+
                   await onCreateOC({
-                    numeroOC: newOc.numeroOC,
-                    scId: linkedSc.id,
-                    fornecedorId: matchedSupplier.id,
+                    numeroOC,
+                    scId: linkedSc?.id ?? "-",
+                    fornecedorId: matchedSupplier?.id ?? "-",
                     dataOC: today,
                     dataEmissao: today,
-                    dataPrevistaEntrega: newOc.dataPrevistaEntrega,
+                    dataPrevistaEntrega: today,
                     dataRealEntrega: null,
-                    valorOC: newOc.valorOC,
-                    setorId: newOc.setorId,
-                    responsavel: newOc.responsavel,
+                    valorOC: formEntry.valor,
+                    setorId: linkedSc?.setorId ?? setores[0]?.id ?? "-",
+                    responsavel: formEntry.solicitante,
                     status: "CRIADA",
-                    condicaoPagamento: newOc.condicaoPagamento,
-                    observacoes: newOc.observacoes,
+                    condicaoPagamento: formEntry.contrato ? "Contrato" : "Avulso",
+                    observacoes: observacoesOc,
                     anexos: [],
                   });
-                  setNewSC((prev) => ({ ...prev, fornecedorSugeridoId: matchedSupplier?.id ?? prev.fornecedorSugeridoId }));
-                  setNewOc({ ...newOc, numeroOC: "", valorOC: 0, observacoes: "" });
+                  setFormEntry((prev) => ({ ...prev, numeroOC: "", numeroNF: "", valor: 0 }));
                   setMessage("OC criada com sucesso.");
                 } catch (error) {
                   setMessage((error as Error).message || "Falha ao criar OC.");
@@ -1447,15 +1424,19 @@ function UnifiedScOcModule({
 
       <Panel title="Lista de Acompanhamento SC / OC">
         <div className="overflow-auto">
-          <table className="min-w-[1080px] w-full text-sm">
+          <table className="min-w-[1280px] w-full text-sm">
             <thead className="text-left text-[11px] uppercase tracking-[0.14em] text-slate-500">
               <tr>
                 <th className="py-2">SC</th>
                 <th>OC</th>
-                <th>Setor</th>
+                <th>NF</th>
+                <th>Solicitante</th>
+                <th>Razao Social</th>
+                <th>Unidade</th>
+                <th>CNPJ</th>
                 <th>Status</th>
-                <th>Fornecedor</th>
                 <th>Valor</th>
+                <th>Data</th>
                 <th>Acoes</th>
               </tr>
             </thead>
@@ -1463,17 +1444,67 @@ function UnifiedScOcModule({
               {rows.map((row) => {
                 const scRecord = row.entity === "SC" ? scs.find((item) => item.id === row.id) : scs.find((item) => item.numeroSC === row.numeroSC);
                 const ocRecord = row.entity === "OC" ? ocs.find((item) => item.id === row.id) : ocs.find((item) => item.numeroOC === row.numeroOC);
+                const supplierId = ocRecord?.fornecedorId ?? scRecord?.fornecedorSugeridoId ?? null;
+                const supplier = supplierId ? fornecedores.find((item) => item.id === supplierId) : null;
+                const currentObservacoes = ocRecord?.observacoes ?? scRecord?.observacoes ?? "";
+                const nfValue = getTaggedValue(currentObservacoes, "NF");
+                const unidadeValue = getTaggedValue(currentObservacoes, "UNIDADE") || row.setor;
+                const razaoSocial = supplier?.razaoSocial || row.fornecedor || "-";
+                const cnpj = supplier?.cnpj || "-";
+                const solicitante = scRecord?.solicitante || ocRecord?.responsavel || "-";
+                const rowDate = scRecord?.dataCriacao || ocRecord?.dataOC || row.sortDate;
 
                 return (
                   <tr key={`${row.entity}-${row.id}`} className="border-t border-slate-800 transition hover:bg-slate-900/60">
                     <td className="py-2 pr-2 font-medium text-cyan-100">{row.numeroSC}</td>
                     <td className="pr-2 text-slate-200">{row.numeroOC}</td>
-                    <td className="pr-2">{row.setor}</td>
+                    <td className="pr-2">{nfValue || "-"}</td>
+                    <td className="pr-2">{solicitante}</td>
+                    <td className="pr-2">{razaoSocial}</td>
+                    <td className="pr-2">{unidadeValue}</td>
+                    <td className="pr-2">{cnpj}</td>
                     <td>
-                      <span className={`whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-medium ${businessStatusBadge(row.statusKey)}`}>{row.statusLabel}</span>
+                      {canWrite && row.entity === "SC" && scRecord ? (
+                        <select
+                          className="field max-w-[150px] text-xs"
+                          value={scRecord.status}
+                          onChange={async (e) => {
+                            const nextStatus = e.target.value as SCStatus;
+                            await onUpdateSC(scRecord.id, {
+                              status: nextStatus,
+                              dataAprovacao: nextStatus === "APROVADA" ? new Date().toISOString().slice(0, 10) : scRecord.dataAprovacao,
+                              dataReprovacao: nextStatus === "REPROVADA" ? new Date().toISOString().slice(0, 10) : scRecord.dataReprovacao,
+                              dataLancamento: nextStatus === "LANCADA" ? new Date().toISOString().slice(0, 10) : scRecord.dataLancamento,
+                            });
+                          }}
+                        >
+                          <option value="EM_ANALISE">Em Analise</option>
+                          <option value="APROVADA">Aprovada</option>
+                          <option value="REPROVADA">Reprovada</option>
+                          <option value="LANCADA">Lancada</option>
+                        </select>
+                      ) : null}
+
+                      {canWrite && row.entity === "OC" && ocRecord ? (
+                        <select
+                          className="field max-w-[150px] text-xs"
+                          value={ocToPhase(ocRecord.status as OCStatus)}
+                          onChange={async (e) => {
+                            const phase = e.target.value as OcPhase;
+                            await onUpdateOC(ocRecord.id, { status: phaseToOcStatus(phase, ocRecord.status as OCStatus) });
+                          }}
+                        >
+                          <option value="EM_ANALISE">Em Analise</option>
+                          <option value="APROVADA">Aprovada</option>
+                          <option value="REPROVADA">Reprovada</option>
+                          <option value="LANCADA">Lancada</option>
+                        </select>
+                      ) : null}
+
+                      {!canWrite ? <span className={`whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-medium ${businessStatusBadge(row.statusKey)}`}>{row.statusLabel}</span> : null}
                     </td>
-                    <td className="pr-2">{row.fornecedor}</td>
                     <td className="pr-2 font-medium text-right text-emerald-300">{formatCurrency(row.valor)}</td>
+                    <td className="pr-2">{rowDate}</td>
                     <td>
                       <div className="flex flex-wrap gap-2">
                         {scRecord ? (
@@ -1481,40 +1512,24 @@ function UnifiedScOcModule({
                             Timeline
                           </button>
                         ) : null}
-                        {canWrite && row.entity === "SC" && scRecord ? (
-                          <select
-                            className="field max-w-[140px] text-xs"
-                            value={scRecord.status}
-                            onChange={async (e) => {
-                              const nextStatus = e.target.value as SCStatus;
-                              await onUpdateSC(scRecord.id, {
-                                status: nextStatus,
-                                dataAprovacao: nextStatus === "APROVADA" ? new Date().toISOString().slice(0, 10) : scRecord.dataAprovacao,
-                                dataReprovacao: nextStatus === "REPROVADA" ? new Date().toISOString().slice(0, 10) : scRecord.dataReprovacao,
-                                dataLancamento: nextStatus === "LANCADA" ? new Date().toISOString().slice(0, 10) : scRecord.dataLancamento,
-                              });
+                        {canWrite ? (
+                          <button
+                            className="rounded border border-emerald-700 px-2 py-1 text-xs"
+                            onClick={async () => {
+                              const nfPrompt = typeof window !== "undefined" ? window.prompt("Informe o Nº NF", nfValue || "") : "";
+                              if (nfPrompt === null) return;
+                              const nextObservacoes = setTaggedValue(currentObservacoes, "NF", nfPrompt);
+                              if (row.entity === "OC" && ocRecord) {
+                                await onUpdateOC(ocRecord.id, { observacoes: nextObservacoes });
+                                return;
+                              }
+                              if (row.entity === "SC" && scRecord) {
+                                await onUpdateSC(scRecord.id, { observacoes: nextObservacoes });
+                              }
                             }}
                           >
-                            <option value="EM_ANALISE">Em Analise</option>
-                            <option value="APROVADA">Aprovada</option>
-                            <option value="REPROVADA">Reprovada</option>
-                            <option value="LANCADA">Lancada</option>
-                          </select>
-                        ) : null}
-                        {canWrite && row.entity === "OC" && ocRecord ? (
-                          <select
-                            className="field max-w-[140px] text-xs"
-                            value={ocToPhase(ocRecord.status as OCStatus)}
-                            onChange={async (e) => {
-                              const phase = e.target.value as OcPhase;
-                              await onUpdateOC(ocRecord.id, { status: phaseToOcStatus(phase, ocRecord.status as OCStatus) });
-                            }}
-                          >
-                            <option value="EM_ANALISE">Em Analise</option>
-                            <option value="APROVADA">Aprovada</option>
-                            <option value="REPROVADA">Reprovada</option>
-                            <option value="LANCADA">Lancada</option>
-                          </select>
+                            Salvar NF
+                          </button>
                         ) : null}
                         {canWrite ? (
                           <button
