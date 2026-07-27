@@ -18,7 +18,9 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
 
   const persistenceMeta = data as T & { persisted?: boolean; warning?: string };
   if (method !== "GET" && persistenceMeta.persisted === false) {
-    throw new Error(persistenceMeta.warning || "Dados atualizados apenas em memoria. Persistencia indisponivel.");
+    const baseWarning = persistenceMeta.warning || "Dados atualizados apenas em memoria. Persistencia indisponivel.";
+    const envHint = " Configure no Vercel: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, NEXT_PUBLIC_SUPABASE_URL, NEXT_PUBLIC_SUPABASE_ANON_KEY e PROCUREMENT_PERSISTENCE_DRIVER=supabase.";
+    throw new Error(`${baseWarning}${envHint}`);
   }
 
   return data;
