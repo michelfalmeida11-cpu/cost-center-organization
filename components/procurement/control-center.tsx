@@ -218,6 +218,77 @@ function formatDatePtBr(dateValue: string) {
   return date.toLocaleDateString("pt-BR");
 }
 
+function diffDaysFromNow(dateValue: string) {
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return 0;
+  const now = new Date();
+  const diff = now.getTime() - date.getTime();
+  return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
+}
+
+function toPercent(value: number, total: number) {
+  if (!total) return 0;
+  return Number(((value / total) * 100).toFixed(2));
+}
+
+function agingBucketLabel(days: number) {
+  if (days <= 7) return "0-7";
+  if (days <= 15) return "8-15";
+  if (days <= 30) return "16-30";
+  if (days <= 60) return "31-60";
+  return "+60";
+}
+
+function calculateOperationalHealth(params: {
+  totalSc: number;
+  totalOc: number;
+  delayedOc: number;
+  pendingSc: number;
+  withoutSupplier: number;
+  withoutOc: number;
+  longAging: number;
+}) {
+  const total = params.totalSc + params.totalOc;
+  if (!total) return null;
+
+  const delayedWeight = 30;
+  const pendingWeight = 20;
+  const withoutSupplierWeight = 20;
+  const withoutOcWeight = 15;
+  const agingWeight = 15;
+
+  const delayedFactor = Math.min(1, params.delayedOc / total);
+  const pendingFactor = Math.min(1, params.pendingSc / Math.max(1, params.totalSc));
+  const noSupplierFactor = Math.min(1, params.withoutSupplier / Math.max(1, params.totalSc));
+  const noOcFactor = Math.min(1, params.withoutOc / Math.max(1, params.totalSc));
+  const agingFactor = Math.min(1, params.longAging / total);
+
+  const penalty =
+    delayedFactor * delayedWeight +
+    pendingFactor * pendingWeight +
+    noSupplierFactor * withoutSupplierWeight +
+    noOcFactor * withoutOcWeight +
+    agingFactor * agingWeight;
+
+  const score = Math.max(0, Math.min(100, Number((100 - penalty).toFixed(1))));
+  const status = score >= 80 ? "HEALTHY" : score >= 60 ? "ATENCAO" : "CRITICO";
+
+  return { score, status };
+}
+
+function relativeTimePtBr(dateValue: string) {
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return "agora";
+  const diffMs = Date.now() - date.getTime();
+  const minutes = Math.floor(diffMs / (1000 * 60));
+  if (minutes < 1) return "agora";
+  if (minutes < 60) return `ha ${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `ha ${hours} h`;
+  const days = Math.floor(hours / 24);
+  return `ha ${days} d`;
+}
+
 function buildUnifiedRows(
   scs: PurchaseRequest[],
   ocs: PurchaseOrder[],
@@ -450,9 +521,47 @@ export function ProcurementControlCenter() {
   const [aiQuestion, setAiQuestion] = useState("");
   const [aiAnswer, setAiAnswer] = useState("Pergunte sobre SC, OC, valores, atrasos, fornecedores e indicadores.");
   const [movementDetail, setMovementDetail] = useState<{ title: string; description: string; details: string } | null>(null);
+  const [filterDraft, setFilterDraft] = useState(filters);
+  const [financialSort, setFinancialSort] = useState<"desc" | "asc">("desc");
+  const [healthExpanded, setHealthExpanded] = useState(false);
+  const [agingDrilldown, setAgingDrilldown] = useState<string>("");
+  const [centralPreset, setCentralPreset] = useState<"" | "SC_SEM_FORNECEDOR" | "SC_SEM_OC">("");
   const commandInputRef = useRef<HTMLInputElement | null>(null);
   const scFilterInputRef = useRef<HTMLInputElement | null>(null);
   const responsibleFilterInputRef = useRef<HTMLInputElement | null>(null);
+
+  function openCentralWithFilters(partial: Partial<typeof filters>) {
+    const nextFilters = { ...filters, ...partial };
+    setFilters(nextFilters);
+    setFilterDraft(nextFilters);
+    setAgingDrilldown("");
+    setCentralPreset("");
+    setModule("SC");
+  }
+
+  function openCentralWithPreset(preset: "SC_SEM_FORNECEDOR" | "SC_SEM_OC") {
+    setAgingDrilldown("");
+    setCentralPreset(preset);
+    setModule("SC");
+  }
+
+  function openAgingDrilldown(bucket: string) {
+    setAgingDrilldown(bucket);
+    setCentralPreset("");
+    setModule("SC");
+  }
+
+  function applyGlobalFilters() {
+    setFilters(filterDraft);
+  }
+
+  function clearGlobalFilters() {
+    resetFilters();
+    setFilterDraft(EMPTY_FILTERS);
+    setCentralPreset("");
+    setAgingDrilldown("");
+    setQuickActionFeedback("Filtros limpos.");
+  }
 
   const dataset = useMemo(() => filterData(state, filters), [state, filters]);
   const kpis = useMemo(() => computeKpis(state, filters), [state, filters]);
@@ -475,6 +584,24 @@ export function ProcurementControlCenter() {
     () => (kpisGlobal.totalSC > 0 ? Number(((kpisGlobal.totalOC / kpisGlobal.totalSC) * 100).toFixed(2)) : 0),
     [kpisGlobal.totalOC, kpisGlobal.totalSC],
   );
+  const activeFilterChips = useMemo(() => {
+    const chips: Array<{ key: keyof typeof filters; label: string; value: string }> = [];
+    if (filters.ano) chips.push({ key: "ano", label: "ANO", value: filters.ano });
+    if (filters.mes) chips.push({ key: "mes", label: "MES", value: filters.mes });
+    if (filters.setorId) {
+      const setor = state.setores.find((x) => x.id === filters.setorId)?.nome ?? filters.setorId;
+      chips.push({ key: "setorId", label: "SETOR", value: setor });
+    }
+    if (filters.fornecedorId) {
+      const forn = state.fornecedores.find((x) => x.id === filters.fornecedorId)?.nomeFantasia ?? filters.fornecedorId;
+      chips.push({ key: "fornecedorId", label: "FORNECEDOR", value: forn });
+    }
+    if (filters.responsavel) chips.push({ key: "responsavel", label: "RESP", value: filters.responsavel });
+    if (filters.status) chips.push({ key: "status", label: "STATUS", value: filters.status });
+    if (filters.sc) chips.push({ key: "sc", label: "SC", value: filters.sc });
+    if (filters.oc) chips.push({ key: "oc", label: "OC", value: filters.oc });
+    return chips;
+  }, [filters, state.setores, state.fornecedores]);
   const unifiedRows = useMemo(() => buildUnifiedRows(dataset.scFiltered, dataset.ocFiltered as PurchaseOrder[], state.setores, state.fornecedores), [dataset.scFiltered, dataset.ocFiltered, state.setores, state.fornecedores]);
   const scOcBySector = useMemo(() => {
     const map = new Map<string, { setor: string; total: number; valor: number }>();
@@ -508,6 +635,148 @@ export function ProcurementControlCenter() {
     leadTime: kpisGlobal.leadTimeMedioDias,
     approvalTime: kpisGlobal.tempoMedioAprovacaoDias,
   }), [kpisGlobal, rankingPerformance, scOcBySector]);
+  const pipelineStages = useMemo(() => {
+    const total = Math.max(1, kpis.totalSC + kpis.totalOC);
+    let phaseAprovada = dataset.scFiltered.filter((sc) => sc.status === "APROVADA").length;
+    let phaseEmAnalise = dataset.scFiltered.filter((sc) => sc.status === "EM_ANALISE").length;
+    let phaseReprovada = dataset.scFiltered.filter((sc) => sc.status === "REPROVADA").length;
+    let phaseLancada = dataset.scFiltered.filter((sc) => sc.status === "LANCADA").length;
+    dataset.ocFiltered.forEach((oc) => {
+      const phase = ocToPhase(oc.status as OCStatus);
+      if (phase === "APROVADA") phaseAprovada += 1;
+      else if (phase === "EM_ANALISE") phaseEmAnalise += 1;
+      else if (phase === "REPROVADA") phaseReprovada += 1;
+      else phaseLancada += 1;
+    });
+    const emittedOc = dataset.ocFiltered.length;
+    const deliveredOc = dataset.ocFiltered.filter((oc) => oc.status === "ENTREGUE").length;
+    return [
+      { key: "SC_CRIADA", label: "SC Criada", count: kpis.totalSC, percent: toPercent(kpis.totalSC, total), value: kpis.valorTotalSC, action: () => openCentralWithFilters({ status: "" }) },
+      { key: "EM_ANALISE", label: "Em Analise", count: phaseEmAnalise, percent: toPercent(phaseEmAnalise, total), value: 0, action: () => openCentralWithFilters({ status: "EM_ANALISE" }) },
+      { key: "APROVADA", label: "Aprovada", count: phaseAprovada, percent: toPercent(phaseAprovada, total), value: 0, action: () => openCentralWithFilters({ status: "APROVADA" }) },
+      { key: "OC_EMITIDA", label: "OC Emitida", count: emittedOc, percent: toPercent(emittedOc, total), value: kpis.valorTotalOC, action: () => openCentralWithFilters({ oc: "OC-" }) },
+      { key: "LANCADA", label: "Lancada", count: phaseLancada, percent: toPercent(phaseLancada, total), value: 0, action: () => openCentralWithFilters({ status: "LANCADA" }) },
+      { key: "RECEBIDA", label: "Recebida", count: deliveredOc, percent: toPercent(deliveredOc, total), value: dataset.ocFiltered.filter((oc) => oc.status === "ENTREGUE").reduce((sum, oc) => sum + oc.valorOC, 0), action: () => openCentralWithFilters({ status: "ENTREGUE" }) },
+    ];
+  }, [kpis.totalSC, kpis.totalOC, kpis.valorTotalSC, kpis.valorTotalOC, dataset.scFiltered, dataset.ocFiltered]);
+  const pipelineDistribution = useMemo(() => {
+    let aprovada = dataset.scFiltered.filter((sc) => sc.status === "APROVADA").length;
+    let emAnalise = dataset.scFiltered.filter((sc) => sc.status === "EM_ANALISE").length;
+    let reprovada = dataset.scFiltered.filter((sc) => sc.status === "REPROVADA").length;
+    let lancada = dataset.scFiltered.filter((sc) => sc.status === "LANCADA").length;
+    dataset.ocFiltered.forEach((oc) => {
+      const phase = ocToPhase(oc.status as OCStatus);
+      if (phase === "APROVADA") aprovada += 1;
+      else if (phase === "EM_ANALISE") emAnalise += 1;
+      else if (phase === "REPROVADA") reprovada += 1;
+      else lancada += 1;
+    });
+    const total = aprovada + emAnalise + reprovada + lancada;
+    return [
+      { status: "Aprovada", total: aprovada, percent: toPercent(aprovada, total), filter: "APROVADA" },
+      { status: "Em Analise", total: emAnalise, percent: toPercent(emAnalise, total), filter: "EM_ANALISE" },
+      { status: "Reprovada", total: reprovada, percent: toPercent(reprovada, total), filter: "REPROVADA" },
+      { status: "Lancada", total: lancada, percent: toPercent(lancada, total), filter: "LANCADA" },
+    ];
+  }, [dataset.scFiltered, dataset.ocFiltered]);
+  const sectorDistribution = useMemo(() => {
+    const total = scOcBySector.reduce((sum, item) => sum + item.total, 0);
+    return scOcBySector.map((item) => ({ ...item, percent: toPercent(item.total, total) }));
+  }, [scOcBySector]);
+  const financialBySector = useMemo(() => {
+    const data = [...scOcBySector].sort((a, b) => (financialSort === "desc" ? b.valor - a.valor : a.valor - b.valor));
+    return data;
+  }, [scOcBySector, financialSort]);
+  const agingData = useMemo(() => {
+    const buckets = new Map<string, number>([["0-7", 0], ["8-15", 0], ["16-30", 0], ["31-60", 0], ["+60", 0]]);
+    dataset.scFiltered.forEach((sc) => {
+      if (["APROVADA", "REPROVADA", "LANCADA"].includes(sc.status)) return;
+      const days = diffDaysFromNow(sc.dataCriacao);
+      buckets.set(agingBucketLabel(days), (buckets.get(agingBucketLabel(days)) ?? 0) + 1);
+    });
+    dataset.ocFiltered.forEach((oc) => {
+      if (["ENTREGUE", "CANCELADA"].includes(oc.status)) return;
+      const days = diffDaysFromNow(oc.dataOC);
+      buckets.set(agingBucketLabel(days), (buckets.get(agingBucketLabel(days)) ?? 0) + 1);
+    });
+    return Array.from(buckets.entries()).map(([faixa, total]) => ({ faixa, total }));
+  }, [dataset.scFiltered, dataset.ocFiltered]);
+  const scForCentral = useMemo(() => {
+    let scoped = dataset.scFiltered;
+    if (agingDrilldown) {
+      scoped = scoped.filter((sc) => {
+        if (["APROVADA", "REPROVADA", "LANCADA"].includes(sc.status)) return false;
+        return agingBucketLabel(diffDaysFromNow(sc.dataCriacao)) === agingDrilldown;
+      });
+    }
+    if (centralPreset === "SC_SEM_FORNECEDOR") {
+      scoped = scoped.filter((sc) => !sc.fornecedorSugeridoId);
+    }
+    if (centralPreset === "SC_SEM_OC") {
+      scoped = scoped.filter((sc) => !sc.numeroOCRelacionada);
+    }
+    return scoped;
+  }, [dataset.scFiltered, agingDrilldown, centralPreset]);
+  const ocForCentral = useMemo(() => {
+    let scoped = dataset.ocFiltered as PurchaseOrder[];
+    if (agingDrilldown) {
+      scoped = scoped.filter((oc) => {
+        if (["ENTREGUE", "CANCELADA"].includes(oc.status)) return false;
+        return agingBucketLabel(diffDaysFromNow(oc.dataOC)) === agingDrilldown;
+      });
+    }
+    if (centralPreset === "SC_SEM_FORNECEDOR" || centralPreset === "SC_SEM_OC") {
+      scoped = [];
+    }
+    return scoped;
+  }, [dataset.ocFiltered, agingDrilldown, centralPreset]);
+  const supplierPerformance = useMemo(() => {
+    const scBySupplier = new Map<string, number>();
+    dataset.scFiltered.forEach((sc) => {
+      if (!sc.fornecedorSugeridoId) return;
+      scBySupplier.set(sc.fornecedorSugeridoId, (scBySupplier.get(sc.fornecedorSugeridoId) ?? 0) + 1);
+    });
+    return rankingPerformance
+      .map((item) => ({
+        ...item,
+        totalSC: scBySupplier.get(item.fornecedorId) ?? 0,
+      }))
+      .slice(0, 10);
+  }, [dataset.scFiltered, rankingPerformance]);
+  const scWithoutOc = useMemo(() => dataset.scFiltered.filter((sc) => !sc.numeroOCRelacionada).length, [dataset.scFiltered]);
+  const scWithoutSupplier = useMemo(() => dataset.scFiltered.filter((sc) => !sc.fornecedorSugeridoId).length, [dataset.scFiltered]);
+  const longAgingCount = useMemo(() => agingData.find((x) => x.faixa === "+60")?.total ?? 0, [agingData]);
+  const operationalHealth = useMemo(
+    () => calculateOperationalHealth({
+      totalSc: kpis.totalSC,
+      totalOc: kpis.totalOC,
+      delayedOc: kpis.entregasAtrasadas,
+      pendingSc: kpis.emAnalise,
+      withoutSupplier: scWithoutSupplier,
+      withoutOc: scWithoutOc,
+      longAging: longAgingCount,
+    }),
+    [kpis, scWithoutSupplier, scWithoutOc, longAgingCount],
+  );
+  const operationalHealthFactors = useMemo(
+    () => [
+      { label: "SC em analise", score: Math.max(0, 100 - toPercent(kpis.emAnalise, Math.max(1, kpis.totalSC))) },
+      { label: "OC atrasadas", score: Math.max(0, 100 - toPercent(kpis.entregasAtrasadas, Math.max(1, kpis.totalOC))) },
+      { label: "SC sem fornecedor", score: Math.max(0, 100 - toPercent(scWithoutSupplier, Math.max(1, kpis.totalSC))) },
+      { label: "SC sem OC", score: Math.max(0, 100 - toPercent(scWithoutOc, Math.max(1, kpis.totalSC))) },
+      { label: "Aging critico (+60)", score: Math.max(0, 100 - toPercent(longAgingCount, Math.max(1, kpis.totalSC + kpis.totalOC))) },
+    ],
+    [kpis.emAnalise, kpis.totalSC, kpis.entregasAtrasadas, kpis.totalOC, scWithoutSupplier, scWithoutOc, longAgingCount],
+  );
+  const attentionItems = useMemo(() => {
+    const items: Array<{ id: string; label: string; detail: string; onClick: () => void }> = [];
+    if (kpis.emAnalise > 0) items.push({ id: "att-analise", label: "SC aguardando aprovacao", detail: `${kpis.emAnalise} em analise`, onClick: () => openCentralWithFilters({ status: "EM_ANALISE" }) });
+    if (kpis.entregasAtrasadas > 0) items.push({ id: "att-atrasadas", label: "OC atrasada", detail: `${kpis.entregasAtrasadas} atrasadas`, onClick: () => openCentralWithFilters({ status: "ATRASADA" }) });
+    if (scWithoutSupplier > 0) items.push({ id: "att-no-supplier", label: "SC sem fornecedor", detail: `${scWithoutSupplier} sem fornecedor`, onClick: () => openCentralWithPreset("SC_SEM_FORNECEDOR") });
+    if (scWithoutOc > 0) items.push({ id: "att-no-oc", label: "SC sem OC", detail: `${scWithoutOc} sem OC`, onClick: () => openCentralWithPreset("SC_SEM_OC") });
+    if (longAgingCount > 0) items.push({ id: "att-aging", label: "Processos +60 dias", detail: `${longAgingCount} processos`, onClick: () => openAgingDrilldown("+60") });
+    return items;
+  }, [kpis.emAnalise, kpis.entregasAtrasadas, scWithoutSupplier, scWithoutOc, longAgingCount]);
   const ocByPhase = useMemo(() => {
     const order: OcPhase[] = ["EM_ANALISE", "APROVADA", "LANCADA", "REPROVADA"];
     const map = new Map<OcPhase, number>();
@@ -723,6 +992,20 @@ export function ProcurementControlCenter() {
     ];
   }, [monthlyFinanceSeries, unifiedStatusEvolution, delayedSeries, kpis, unifiedStatusCards]);
   const latestRows = useMemo(() => unifiedRows.slice(0, 8), [unifiedRows]);
+  const recentActivity = useMemo(() => {
+    if (state.auditoria.length > 0) {
+      return [...state.auditoria]
+        .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+        .slice(0, 8)
+        .map((item) => ({ id: item.id, title: `${item.entidade} ${item.acao}`, when: relativeTimePtBr(item.createdAt) }));
+    }
+
+    return latestRows.slice(0, 8).map((row) => ({
+      id: `${row.entity}-${row.id}`,
+      title: `${row.entity} ${row.entity === "SC" ? row.numeroSC : row.numeroOC} atualizada`,
+      when: relativeTimePtBr(row.sortDate),
+    }));
+  }, [state.auditoria, latestRows]);
   const openOcCount = useMemo(() => dataset.ocFiltered.filter((oc) => !["ENTREGUE", "CANCELADA"].includes(oc.status)).length, [dataset.ocFiltered]);
   const alerts = useMemo(() => buildAlerts(state, filters), [state, filters]);
   const delayedOcs = useMemo(() => dataset.ocFiltered.filter((oc) => oc.status === "ATRASADA"), [dataset.ocFiltered]);
@@ -818,8 +1101,7 @@ export function ProcurementControlCenter() {
 
       if (event.altKey && event.key.toLowerCase() === "l") {
         event.preventDefault();
-        resetFilters();
-        setQuickActionFeedback("Filtros limpos.");
+        clearGlobalFilters();
       }
 
       if (event.altKey && event.key.toLowerCase() === "s") {
@@ -865,7 +1147,7 @@ export function ProcurementControlCenter() {
 
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, [cycleModule, resetFilters, runQuickRefresh]);
+  }, [clearGlobalFilters, cycleModule, runQuickRefresh]);
 
   useEffect(() => {
     if (commandOpen) {
@@ -878,6 +1160,10 @@ export function ProcurementControlCenter() {
     const timer = window.setTimeout(() => setQuickActionFeedback(""), 2600);
     return () => window.clearTimeout(timer);
   }, [quickActionFeedback]);
+
+  useEffect(() => {
+    setFilterDraft(filters);
+  }, [filters]);
 
   if (!currentUser) {
     return <LoginCard />;
@@ -1216,8 +1502,7 @@ export function ProcurementControlCenter() {
               </button>
               <button
                 onClick={() => {
-                  resetFilters();
-                  setQuickActionFeedback("Filtros limpos.");
+                  clearGlobalFilters();
                 }}
                 className="rounded-md border border-slate-700 px-2 py-1 transition hover:border-cyan-500/40"
               >
@@ -1231,17 +1516,17 @@ export function ProcurementControlCenter() {
               <span className="text-slate-500">Modulos: Alt+1..6 | Navegar: Alt+←/→ | SC: Alt+S | Responsavel: Alt+U</span>
             </div>
             {quickActionFeedback ? <p className="mt-2 text-xs text-emerald-300">{quickActionFeedback}</p> : null}
-            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-7">
+            <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-10">
               <FilterSelect
                 label="Ano"
-                value={filters.ano}
-                onChange={(value) => setFilters({ ...filters, ano: value })}
+                value={filterDraft.ano}
+                onChange={(value) => setFilterDraft({ ...filterDraft, ano: value })}
                 options={[{ label: "Todos", value: "" }, ...anosDisponiveis.map((ano) => ({ label: ano, value: ano }))]}
               />
               <FilterSelect
                 label="Mes"
-                value={filters.mes}
-                onChange={(value) => setFilters({ ...filters, mes: value })}
+                value={filterDraft.mes}
+                onChange={(value) => setFilterDraft({ ...filterDraft, mes: value })}
                 options={[
                   { label: "Todos", value: "" },
                   { label: "01", value: "01" },
@@ -1260,28 +1545,60 @@ export function ProcurementControlCenter() {
               />
               <FilterSelect
                 label="Setor"
-                value={filters.setorId}
-                onChange={(value) => setFilters({ ...filters, setorId: value })}
+                value={filterDraft.setorId}
+                onChange={(value) => setFilterDraft({ ...filterDraft, setorId: value })}
                 options={[{ label: "Todos", value: "" }, ...state.setores.map((s) => ({ label: s.nome, value: s.id }))]}
               />
               <FilterSelect
                 label="Fornecedor"
-                value={filters.fornecedorId}
-                onChange={(value) => setFilters({ ...filters, fornecedorId: value })}
+                value={filterDraft.fornecedorId}
+                onChange={(value) => setFilterDraft({ ...filterDraft, fornecedorId: value })}
                 options={[{ label: "Todos", value: "" }, ...state.fornecedores.map((f) => ({ label: f.nomeFantasia, value: f.id }))]}
               />
-              <FilterInput label="Responsavel" value={filters.responsavel} onChange={(value) => setFilters({ ...filters, responsavel: value })} placeholder="buscar" inputRef={responsibleFilterInputRef} />
-              <FilterInput label="SC" value={filters.sc} onChange={(value) => setFilters({ ...filters, sc: value })} placeholder="SC-" inputRef={scFilterInputRef} />
+              <FilterSelect
+                label="Status"
+                value={filterDraft.status}
+                onChange={(value) => setFilterDraft({ ...filterDraft, status: value })}
+                options={[
+                  { label: "Todos", value: "" },
+                  { label: "Em Analise", value: "EM_ANALISE" },
+                  { label: "Aprovada", value: "APROVADA" },
+                  { label: "Reprovada", value: "REPROVADA" },
+                  { label: "Lancada", value: "LANCADA" },
+                  { label: "Entregue", value: "ENTREGUE" },
+                  { label: "Atrasada", value: "ATRASADA" },
+                ]}
+              />
+              <FilterInput label="Responsavel" value={filterDraft.responsavel} onChange={(value) => setFilterDraft({ ...filterDraft, responsavel: value })} placeholder="buscar" inputRef={responsibleFilterInputRef} />
+              <FilterInput label="SC" value={filterDraft.sc} onChange={(value) => setFilterDraft({ ...filterDraft, sc: value })} placeholder="SC-" inputRef={scFilterInputRef} />
+              <FilterInput label="OC" value={filterDraft.oc} onChange={(value) => setFilterDraft({ ...filterDraft, oc: value })} placeholder="OC-" />
+              <button className="rounded-lg border border-cyan-500/45 bg-cyan-500/10 px-3 text-sm text-cyan-100 hover:bg-cyan-500/20" onClick={applyGlobalFilters}>
+                Aplicar Filtros
+              </button>
               <button
                 className="rounded-lg border border-slate-700 bg-slate-900 px-3 text-sm hover:border-cyan-300"
-                onClick={() => {
-                  resetFilters();
-                  setQuickActionFeedback("Filtros limpos.");
-                }}
+                onClick={clearGlobalFilters}
               >
                 Limpar Filtros
               </button>
             </div>
+            {activeFilterChips.length > 0 ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {activeFilterChips.map((chip) => (
+                  <button
+                    key={`chip-${chip.key}`}
+                    onClick={() => {
+                      const next = { ...filters, [chip.key]: "" };
+                      setFilters(next);
+                      setFilterDraft(next);
+                    }}
+                    className="rounded-full border border-cyan-500/35 bg-cyan-500/10 px-2 py-1 text-[11px] text-cyan-100"
+                  >
+                    {chip.label}: {chip.value} x
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </header>
 
           <div className="mb-4 grid grid-cols-2 gap-2 md:hidden">
@@ -1315,109 +1632,215 @@ export function ProcurementControlCenter() {
                 ))}
               </div>
 
-              <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                <Panel title="Status SC + OC">
-                  <div className="grid gap-3 md:grid-cols-[1.2fr_.8fr]">
-                    <ResponsiveContainer width="100%" height={260}>
-                      <PieChart>
-                        <Pie data={unifiedStatusPie} dataKey="total" nameKey="status" outerRadius={92} innerRadius={48}>
-                          {unifiedStatusPie.map((entry) => (
-                            <Cell key={entry.status} fill={phaseColor(entry.status)} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="space-y-2 text-sm">
-                      {unifiedStatusPie.map((entry) => (
-                        <div key={`legend-status-${entry.status}`} className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2">
-                          <div className="flex items-center gap-2">
-                            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: phaseColor(entry.status) }} />
-                            <span>{entry.status}</span>
-                          </div>
-                          <span className="font-semibold text-cyan-200">{entry.total}</span>
+              <div className="mt-4">
+                <Panel title="Procurement Pipeline">
+                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
+                    {pipelineStages.map((stage, index) => (
+                      <button
+                        key={stage.key}
+                        onClick={stage.action}
+                        className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-left transition hover:border-cyan-500/45 hover:bg-slate-900"
+                      >
+                        <p className="text-[10px] uppercase tracking-[0.16em] text-slate-400">{stage.label}</p>
+                        <p className="mt-1 text-2xl font-bold text-cyan-100">{stage.count}</p>
+                        <p className="text-xs text-slate-400">{stage.percent}% do fluxo</p>
+                        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-800">
+                          <div className="h-full rounded-full" style={{ width: `${stage.percent}%`, backgroundColor: [CYAN, AMBER, GREEN, BLUE, PURPLE, RED][index % 6] }} />
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                </Panel>
-
-                <Panel title="SC + OC por Setor">
-                  <div className="grid gap-3 md:grid-cols-[1.2fr_.8fr]">
-                    <ResponsiveContainer width="100%" height={260}>
-                      <PieChart>
-                        <Pie data={scOcBySector} dataKey="total" nameKey="setor" outerRadius={92} innerRadius={44}>
-                          {scOcBySector.map((entry, index) => (
-                            <Cell key={entry.setor} fill={[GREEN, AMBER, RED, BLUE][index % 4]} />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
-                    <div className="space-y-2 text-sm">
-                      {scOcBySector.map((entry, index) => (
-                        <div key={`legend-setor-${entry.setor}`} className="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2">
-                          <div className="flex items-center gap-2">
-                            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: [GREEN, AMBER, RED, BLUE][index % 4] }} />
-                            <span className="truncate">{entry.setor}</span>
-                          </div>
-                          <span className="font-semibold text-cyan-200">{entry.total}</span>
-                        </div>
-                      ))}
-                    </div>
+                        <p className="mt-2 text-[11px] text-slate-300">{formatCurrency(stage.value)}</p>
+                      </button>
+                    ))}
                   </div>
                 </Panel>
               </div>
 
               <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                <Panel title="Radar Operacional">
-                  <div className="space-y-3 text-sm text-slate-300">
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-2">
-                        <p className="text-[11px] uppercase tracking-[0.12em] text-amber-200/90">SC em Analise</p>
-                        <p className="text-xl font-bold text-amber-100">{aiContext.pendingSc}</p>
-                      </div>
-                      <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/10 p-2">
-                        <p className="text-[11px] uppercase tracking-[0.12em] text-cyan-200/90">OC em Curso</p>
-                        <p className="text-xl font-bold text-cyan-100">{aiContext.openOcCount}</p>
-                      </div>
-                    </div>
+                <Panel title="Distribuicao do Pipeline">
+                  <ResponsiveContainer width="100%" height={250}>
+                    <BarChart data={pipelineDistribution} layout="vertical" margin={{ left: 8, right: 14 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                      <XAxis type="number" stroke="#94a3b8" />
+                      <YAxis dataKey="status" type="category" stroke="#94a3b8" width={96} />
+                      <Tooltip formatter={(value, _name, item) => [`${value} (${item?.payload?.percent ?? 0}%)`, "Total"]} />
+                      <Bar
+                        dataKey="total"
+                        fill={CYAN}
+                        radius={[0, 8, 8, 0]}
+                        onClick={(data) => {
+                          if (data && typeof data === "object" && "filter" in data) {
+                            openCentralWithFilters({ status: String(data.filter) });
+                          }
+                        }}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </Panel>
 
-                    <div className="rounded-lg border border-rose-500/30 bg-rose-500/10 p-2">
-                      <p className="text-[11px] uppercase tracking-[0.12em] text-rose-200/90">OCs Atrasadas</p>
-                      <p className="text-lg font-bold text-rose-100">{aiContext.delayedCount}</p>
-                      {delayedOcs.slice(0, 3).length > 0 ? (
-                        <div className="mt-2 space-y-1 text-xs text-rose-100/90">
-                          {delayedOcs.slice(0, 3).map((oc) => (
-                            <p key={`delay-${oc.id}`}>• {oc.numeroOC} • {oc.responsavel || "Sem responsavel"}</p>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="mt-1 text-xs text-emerald-200">Sem atrasos criticos no momento.</p>
-                      )}
-                    </div>
+                <Panel title="Distribuicao por Setor">
+                  <ResponsiveContainer width="100%" height={250}>
+                    <BarChart data={sectorDistribution} layout="vertical" margin={{ left: 10, right: 14 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                      <XAxis type="number" stroke="#94a3b8" />
+                      <YAxis dataKey="setor" type="category" stroke="#94a3b8" width={120} />
+                      <Tooltip formatter={(value, _name, item) => [`${value} (${item?.payload?.percent ?? 0}%)`, "SC + OC"]} />
+                      <Bar
+                        dataKey="total"
+                        fill={BLUE}
+                        radius={[0, 8, 8, 0]}
+                        onClick={(data) => {
+                          if (data && typeof data === "object" && "setor" in data) {
+                            const sector = state.setores.find((x) => x.nome === String(data.setor));
+                            if (sector?.id) openCentralWithFilters({ setorId: sector.id });
+                          }
+                        }}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </Panel>
+              </div>
 
-                    <div className="rounded-lg border border-slate-700 bg-slate-900/70 p-2 text-xs">
-                      <p>Setor lider: <span className="font-semibold text-cyan-200">{aiContext.topSector}</span></p>
-                      <p>Fornecedor lider: <span className="font-semibold text-cyan-200">{aiContext.topSupplier}</span></p>
-                      <p>Alertas ativos: <span className="font-semibold text-cyan-200">{aiContext.alertsCount}</span></p>
-                    </div>
+              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                <Panel title="Aging de Processos (SC + OC)">
+                  <ResponsiveContainer width="100%" height={250}>
+                    <BarChart data={agingData}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                      <XAxis dataKey="faixa" stroke="#94a3b8" />
+                      <YAxis stroke="#94a3b8" />
+                      <Tooltip />
+                      <Bar dataKey="total" fill={AMBER} radius={[8, 8, 0, 0]} onClick={(data) => data?.faixa && openAgingDrilldown(String(data.faixa))} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                  <p className="mt-2 text-xs text-slate-400">Clique em uma faixa para abrir a Central SC/OC com o recorte selecionado.</p>
+                </Panel>
+
+                <Panel title="Financeiro por Setor">
+                  <div className="mb-2 flex gap-2">
+                    <button
+                      className={`rounded-md border px-2 py-1 text-xs ${financialSort === "desc" ? "border-cyan-500/50 bg-cyan-500/10 text-cyan-100" : "border-slate-700 text-slate-300"}`}
+                      onClick={() => setFinancialSort("desc")}
+                    >
+                      Maior Valor
+                    </button>
+                    <button
+                      className={`rounded-md border px-2 py-1 text-xs ${financialSort === "asc" ? "border-cyan-500/50 bg-cyan-500/10 text-cyan-100" : "border-slate-700 text-slate-300"}`}
+                      onClick={() => setFinancialSort("asc")}
+                    >
+                      Menor Valor
+                    </button>
+                  </div>
+                  <div className="space-y-2">
+                    {financialBySector.slice(0, 8).map((item) => {
+                      const width = Math.max(8, toPercent(item.valor, Math.max(1, financialBySector[0]?.valor ?? 1)));
+                      return (
+                        <button
+                          key={`fin-${item.setor}`}
+                          className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-left"
+                          onClick={() => {
+                            const sector = state.setores.find((x) => x.nome === item.setor);
+                            if (sector?.id) openCentralWithFilters({ setorId: sector.id });
+                          }}
+                        >
+                          <div className="flex items-center justify-between text-xs text-slate-300">
+                            <span>{item.setor}</span>
+                            <span className="text-cyan-200">{formatCurrency(item.valor)}</span>
+                          </div>
+                          <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-800">
+                            <div className="h-full rounded-full bg-cyan-400" style={{ width: `${width}%` }} />
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </Panel>
+              </div>
+
+              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                <Panel title="Performance de Fornecedores">
+                  <div className="overflow-hidden rounded-lg border border-slate-800">
+                    <table className="w-full text-xs">
+                      <thead className="bg-slate-900/80 text-left uppercase tracking-[0.12em] text-slate-400">
+                        <tr>
+                          <th className="px-2 py-2">Fornecedor</th>
+                          <th className="px-2">SC</th>
+                          <th className="px-2">OC</th>
+                          <th className="px-2">Prazo</th>
+                          <th className="px-2 text-right">Indice</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {supplierPerformance.length === 0 ? (
+                          <tr className="border-t border-slate-800">
+                            <td colSpan={5} className="px-2 py-3 text-center text-slate-500">Sem dados de performance no periodo.</td>
+                          </tr>
+                        ) : supplierPerformance.map((item) => (
+                          <tr key={`supf-${item.fornecedorId}`} className="border-t border-slate-800/80">
+                            <td className="px-2 py-2">
+                              <button
+                                className="truncate text-left text-cyan-200 underline decoration-dotted underline-offset-2"
+                                onClick={() => openCentralWithFilters({ fornecedorId: item.fornecedorId })}
+                              >
+                                {item.fornecedor}
+                              </button>
+                            </td>
+                            <td className="px-2">{item.totalSC}</td>
+                            <td className="px-2">{item.totalOC}</td>
+                            <td className="px-2">{item.taxaPrazo}%</td>
+                            <td className="px-2 text-right font-semibold text-cyan-200">{item.indicePerformance}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </Panel>
 
-                <Panel title="Evolucao de Status SC + OC">
-                  <ResponsiveContainer width="100%" height={260}>
-                    <LineChart data={unifiedStatusEvolution}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-                      <XAxis dataKey="mes" stroke="#94a3b8" />
-                      <YAxis stroke="#94a3b8" />
-                      <Tooltip />
-                      <Line type="monotone" dataKey="aprovada" stroke={GREEN} strokeWidth={2} />
-                      <Line type="monotone" dataKey="emAnalise" stroke={AMBER} strokeWidth={2} />
-                      <Line type="monotone" dataKey="reprovada" stroke={RED} strokeWidth={2} />
-                      <Line type="monotone" dataKey="lancada" stroke={BLUE} strokeWidth={2} />
-                    </LineChart>
-                  </ResponsiveContainer>
+                <Panel title="Saude Operacional">
+                  <div className="rounded-lg border border-cyan-500/30 bg-cyan-500/8 p-3">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs uppercase tracking-[0.14em] text-cyan-200">Indice Geral</p>
+                      <p className="text-3xl font-bold text-cyan-100">{operationalHealth?.score ?? 0}</p>
+                    </div>
+                    <p className="mt-1 text-xs text-slate-300">Quanto maior o indice, melhor o fluxo de procurement no periodo filtrado.</p>
+                    <p className="mt-1 text-xs text-slate-400">Status: {operationalHealth?.status ?? "SEM DADOS"}</p>
+                    <button className="mt-2 rounded border border-slate-700 px-2 py-1 text-xs text-slate-300" onClick={() => setHealthExpanded((v) => !v)}>
+                      {healthExpanded ? "Ocultar fatores" : "Ver fatores"}
+                    </button>
+                    {healthExpanded ? (
+                      <div className="mt-2 space-y-1 text-xs text-slate-300">
+                        {operationalHealthFactors.map((factor) => (
+                          <div key={factor.label} className="flex items-center justify-between rounded border border-slate-800 bg-slate-900/70 px-2 py-1.5">
+                            <span>{factor.label}</span>
+                            <span className={factor.score >= 70 ? "text-emerald-300" : factor.score >= 40 ? "text-amber-300" : "text-rose-300"}>{factor.score}</span>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                </Panel>
+              </div>
+
+              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                <Panel title="Atencao Necessaria">
+                  <div className="space-y-2">
+                    {attentionItems.length === 0 ? (
+                      <p className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">Sem pendencias criticas no momento.</p>
+                    ) : attentionItems.map((item) => (
+                      <button key={item.id} onClick={item.onClick} className="w-full rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-left">
+                        <p className="text-sm font-medium text-rose-100">{item.label}</p>
+                        <p className="text-xs text-rose-200/85">{item.detail}</p>
+                      </button>
+                    ))}
+                  </div>
+                </Panel>
+
+                <Panel title="Atividade Recente">
+                  <div className="space-y-2">
+                    {recentActivity.map((item) => (
+                      <div key={item.id} className="rounded-lg border border-slate-800 bg-slate-900/70 px-3 py-2">
+                        <p className="text-sm text-slate-100">{item.title}</p>
+                        <p className="text-xs text-slate-400">{item.when}</p>
+                      </div>
+                    ))}
+                  </div>
                 </Panel>
               </div>
 
@@ -1623,24 +2046,48 @@ export function ProcurementControlCenter() {
           ) : null}
 
           {module === "SC" ? (
-            <UnifiedScOcModule
-              scs={dataset.scFiltered}
-              ocs={dataset.ocFiltered as PurchaseOrder[]}
-              setores={state.setores}
-              fornecedores={state.fornecedores}
-              canWrite={canWrite}
-              onCreateSC={createSC}
-              onUpdateSC={updateSC}
-              onDeleteSC={deleteSC}
-              onCreateOC={createOC}
-              onUpdateOC={updateOC}
-              onDeleteOC={deleteOC}
-              onCreateSupplierWithResult={createSupplierWithResult}
-              onPickTimeline={(id) => {
-                setSelectedSC(id);
-                setModule("ACOMPANHAMENTO");
-              }}
-            />
+            <>
+              {agingDrilldown || centralPreset ? (
+                <div className="mb-3 rounded-xl border border-amber-500/35 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span>
+                      {agingDrilldown
+                        ? `Recorte Aging ativo: ${agingDrilldown} dias`
+                        : centralPreset === "SC_SEM_FORNECEDOR"
+                          ? "Recorte ativo: SC sem fornecedor"
+                          : "Recorte ativo: SC sem OC"}
+                    </span>
+                    <button
+                      className="rounded border border-amber-400/45 px-2 py-1 text-xs"
+                      onClick={() => {
+                        setAgingDrilldown("");
+                        setCentralPreset("");
+                      }}
+                    >
+                      Limpar recorte
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+              <UnifiedScOcModule
+                scs={scForCentral}
+                ocs={ocForCentral}
+                setores={state.setores}
+                fornecedores={state.fornecedores}
+                canWrite={canWrite}
+                onCreateSC={createSC}
+                onUpdateSC={updateSC}
+                onDeleteSC={deleteSC}
+                onCreateOC={createOC}
+                onUpdateOC={updateOC}
+                onDeleteOC={deleteOC}
+                onCreateSupplierWithResult={createSupplierWithResult}
+                onPickTimeline={(id) => {
+                  setSelectedSC(id);
+                  setModule("ACOMPANHAMENTO");
+                }}
+              />
+            </>
           ) : null}
 
           {module === "FORNECEDORES" ? (
