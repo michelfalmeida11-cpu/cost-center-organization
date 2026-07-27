@@ -1,5 +1,5 @@
 import { canWrite, fail, ok, requireActor } from "@/lib/procurement/api-helpers";
-import { createSC, ensureStoreHydrated, listSC, persistNow } from "@/lib/procurement/server-store";
+import { createSC, ensureStoreHydrated, getPersistenceInfo, listSC, persistNow, restoreStateFromSnapshot, snapshotState } from "@/lib/procurement/server-store";
 import { NextRequest } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -54,6 +54,7 @@ export async function POST(req: NextRequest) {
     return fail("numeroSC, solicitante, setorId e descricao sao obrigatorios.", 422);
   }
 
+  const snapshot = snapshotState();
   const item = createSC(
     {
       numeroSC: body.numeroSC,
@@ -81,7 +82,9 @@ export async function POST(req: NextRequest) {
 
   const persisted = await persistNow();
   if (!persisted) {
-    return ok({ item, persisted: false, warning: "Dados atualizados em memoria. Persistencia Supabase indisponivel no momento." }, 202);
+    restoreStateFromSnapshot(snapshot);
+    const details = getPersistenceInfo().supabase?.lastPersistenceError;
+    return fail(`Falha ao salvar no Supabase. Nenhuma alteracao foi aplicada.${details ? ` Detalhes: ${details}` : ""}`, 503);
   }
 
   return ok({ item }, 201);

@@ -153,6 +153,14 @@ export function listState() {
   return getStore().state;
 }
 
+export function snapshotState(): AppState {
+  return JSON.parse(JSON.stringify(getStore().state)) as AppState;
+}
+
+export function restoreStateFromSnapshot(snapshot: AppState) {
+  getStore().state = normalizedState(snapshot);
+}
+
 export function listDashboard() {
   const state = getStore().state;
   const empty = {
