@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const hasSupabaseConfig = Boolean(supabaseUrl && supabaseKey);
 
 if (!supabaseUrl || !supabaseKey) {
   // Keep runtime safe in environments where secrets are not set.
@@ -15,6 +16,7 @@ export const supabase = createClient(
 
 // Table: cost_centers (id, data JSONB)
 export async function saveCostCenters(data: any[]) {
+  if (!hasSupabaseConfig) return;
   const { error } = await supabase
     .from('cost_centers')
     .upsert({ id: 'main', data }, { onConflict: 'id' });
@@ -22,6 +24,7 @@ export async function saveCostCenters(data: any[]) {
 }
 
 export async function loadCostCenters() {
+  if (!hasSupabaseConfig) return null;
   const { data } = await supabase
     .from('cost_centers')
     .select('data')
