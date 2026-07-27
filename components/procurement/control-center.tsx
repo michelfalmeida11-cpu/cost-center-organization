@@ -228,6 +228,15 @@ function setTaggedValue(text: string | null | undefined, tag: string, value: str
   return lines.join("\n");
 }
 
+async function fileToDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(new Error("Nao foi possivel ler o arquivo."));
+    reader.readAsDataURL(file);
+  });
+}
+
 function ModuleTitle({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <div className="mb-4">
@@ -886,32 +895,52 @@ export function ProcurementControlCenter() {
               <div className="mt-4">
                 <Panel title="Ultimas Movimentacoes SC / OC">
                   <div className="overflow-auto">
-                    <table className="w-full table-fixed text-sm">
+                    <table className="min-w-[1180px] w-full text-sm">
                       <thead className="text-left text-[11px] uppercase tracking-[0.14em] text-slate-500">
                         <tr>
-                          <th className="w-[70px]">Tipo</th>
-                          <th className="w-[150px]">SC</th>
-                          <th className="w-[150px]">OC</th>
-                          <th>Setor</th>
-                          <th className="w-[140px]">Status</th>
-                          <th>Fornecedor</th>
-                          <th className="w-[140px] text-right">Valor</th>
+                          <th className="py-2">SC</th>
+                          <th>OC</th>
+                          <th>NF</th>
+                          <th>Solicitante</th>
+                          <th>Razao Social</th>
+                          <th>Unidade</th>
+                          <th>CNPJ</th>
+                          <th>Status</th>
+                          <th>Valor</th>
+                          <th>Data</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {latestRows.map((row) => (
+                        {latestRows.map((row) => {
+                          const scRecord = row.entity === "SC" ? dataset.scFiltered.find((item) => item.id === row.id) : dataset.scFiltered.find((item) => item.numeroSC === row.numeroSC);
+                          const ocRecord = row.entity === "OC" ? (dataset.ocFiltered as PurchaseOrder[]).find((item) => item.id === row.id) : (dataset.ocFiltered as PurchaseOrder[]).find((item) => item.numeroOC === row.numeroOC);
+                          const supplierId = ocRecord?.fornecedorId ?? scRecord?.fornecedorSugeridoId ?? null;
+                          const supplier = supplierId ? state.fornecedores.find((item) => item.id === supplierId) : null;
+                          const currentObservacoes = ocRecord?.observacoes ?? scRecord?.observacoes ?? "";
+                          const nfValue = getTaggedValue(currentObservacoes, "NF");
+                          const unidadeValue = getTaggedValue(currentObservacoes, "UNIDADE") || row.setor;
+                          const razaoSocial = supplier?.razaoSocial || row.fornecedor || "-";
+                          const cnpj = supplier?.cnpj || "-";
+                          const solicitante = scRecord?.solicitante || ocRecord?.responsavel || "-";
+                          const rowDate = scRecord?.dataCriacao || ocRecord?.dataOC || row.sortDate;
+
+                          return (
                           <tr key={`${row.entity}-${row.id}`} className="border-t border-slate-800/90 transition hover:bg-slate-900/60">
-                            <td className="py-2 font-semibold text-cyan-200">{row.entity}</td>
-                            <td className="truncate pr-2">{row.numeroSC}</td>
-                            <td className="truncate pr-2">{row.numeroOC}</td>
-                            <td className="truncate pr-2">{row.setor}</td>
-                            <td>
+                            <td className="py-2 pr-2 font-medium text-cyan-100">{row.numeroSC}</td>
+                            <td className="pr-2 text-slate-200">{row.numeroOC}</td>
+                            <td className="pr-2">{nfValue || "-"}</td>
+                            <td className="pr-2">{solicitante}</td>
+                            <td className="pr-2">{razaoSocial}</td>
+                            <td className="pr-2">{unidadeValue}</td>
+                            <td className="pr-2">{cnpj}</td>
+                            <td className="pr-2">
                               <span className={`rounded-md border px-2 py-0.5 text-[11px] font-medium ${businessStatusBadge(row.statusKey)}`}>{row.statusLabel}</span>
                             </td>
-                            <td className="truncate pr-2">{row.fornecedor}</td>
-                            <td className="text-right">{formatCurrency(row.valor)}</td>
+                            <td className="pr-2 font-medium text-right text-emerald-300">{formatCurrency(row.valor)}</td>
+                            <td className="pr-2">{rowDate}</td>
                           </tr>
-                        ))}
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -1226,16 +1255,17 @@ function UnifiedScOcModule({
   setores: AppState["setores"];
   fornecedores: AppState["fornecedores"];
   canWrite: boolean;
-  onCreateSC: (payload: Omit<PurchaseRequest, "id" | "createdAt" | "updatedAt" | "deletedAt">) => Promise<void>;
+  onCreateSC: (payload: Omit<PurchaseRequest, "id" | "createdAt" | "updatedAt" | "deletedAt">) => Promise<PurchaseRequest>;
   onUpdateSC: (id: string, payload: Partial<PurchaseRequest>) => Promise<void>;
   onDeleteSC: (id: string) => Promise<void>;
-  onCreateOC: (payload: Omit<PurchaseOrder, "id" | "createdAt" | "updatedAt" | "deletedAt">) => Promise<void>;
+  onCreateOC: (payload: Omit<PurchaseOrder, "id" | "createdAt" | "updatedAt" | "deletedAt">) => Promise<PurchaseOrder>;
   onUpdateOC: (id: string, payload: Partial<PurchaseOrder>) => Promise<void>;
   onDeleteOC: (id: string) => Promise<void>;
   onCreateSupplierWithResult: (payload: Omit<AppState["fornecedores"][number], "id" | "createdAt" | "updatedAt" | "deletedAt">) => Promise<AppState["fornecedores"][number]>;
   onPickTimeline: (id: string) => void;
 }) {
   const [message, setMessage] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
   const rows = useMemo(() => buildUnifiedRows(scs, ocs, setores, fornecedores), [scs, ocs, setores, fornecedores]);
   const [formEntry, setFormEntry] = useState({
     solicitante: "",
@@ -1290,7 +1320,19 @@ function UnifiedScOcModule({
           <div className="mt-3 flex flex-wrap gap-2">
             <button
               className="rounded-lg border border-cyan-400/45 bg-cyan-500/10 px-4 py-2 text-sm text-cyan-100"
+              disabled={isSaving}
               onClick={async () => {
+                if (isSaving) return;
+
+                const withRetry = async <T,>(fn: () => Promise<T>, retries = 1): Promise<T> => {
+                  try {
+                    return await fn();
+                  } catch (error) {
+                    if (retries <= 0) throw error;
+                    return withRetry(fn, retries - 1);
+                  }
+                };
+
                 const fornecedorInformado = formEntry.fornecedorNome.trim();
                 let matchedSupplier =
                   fornecedores.find((fornecedor) => fornecedor.nomeFantasia.toLowerCase() === fornecedorInformado.toLowerCase()) ??
@@ -1322,14 +1364,20 @@ function UnifiedScOcModule({
 
                 const now = new Date().toISOString().slice(0, 10);
                 const numeroSC = formEntry.numeroSC.trim() || `SC-${Date.now().toString().slice(-6)}`;
+                const numeroOC = formEntry.numeroOC.trim() || `OC-${Date.now().toString().slice(-6)}`;
                 const observacoesSc = setTaggedValue(setTaggedValue(formEntry.descricao, "NF", formEntry.numeroNF), "UNIDADE", formEntry.unidade);
+                const observacoesOc = setTaggedValue(setTaggedValue(formEntry.descricao, "NF", formEntry.numeroNF), "UNIDADE", formEntry.unidade);
+                const setorId = setores[0]?.id ?? "-";
 
                 try {
-                  await onCreateSC({
+                  setIsSaving(true);
+                  setMessage("Salvando SC/OC...");
+
+                  const createdSc = await withRetry(() => onCreateSC({
                     numeroSC,
                     dataCriacao: now,
                     solicitante: formEntry.solicitante || "-",
-                    setorId: setores[0]?.id ?? "-",
+                    setorId,
                     descricao: formEntry.descricao || "-",
                     categoria: formEntry.area,
                     prioridade: "MEDIA",
@@ -1345,76 +1393,45 @@ function UnifiedScOcModule({
                     numeroOCRelacionada: formEntry.numeroOC.trim() || null,
                     observacoes: observacoesSc,
                     anexos: [],
-                  });
-                  setFormEntry((prev) => ({ ...prev, numeroSC: "", descricao: "", numeroNF: "", valor: 0 }));
-                  setMessage("SC criada com sucesso.");
-                } catch (error) {
-                  setMessage((error as Error).message || "Falha ao criar SC.");
-                }
-              }}
-            >
-              Salvar SC
-            </button>
-            <button
-              className="rounded-lg border border-blue-400/45 bg-blue-500/10 px-4 py-2 text-sm text-blue-100"
-              onClick={async () => {
-                const fornecedorInformado = formEntry.fornecedorNome.trim();
-                let matchedSupplier =
-                  fornecedores.find((fornecedor) => fornecedor.nomeFantasia.toLowerCase() === fornecedorInformado.toLowerCase()) ??
-                  fornecedores.find((fornecedor) => fornecedor.nomeFantasia.toLowerCase().includes(fornecedorInformado.toLowerCase()));
-                const linkedSc =
-                  scs.find((sc) => sc.numeroSC.trim().toLowerCase() === formEntry.numeroSC.trim().toLowerCase()) ??
-                  scs[0];
-
-                const today = new Date().toISOString().slice(0, 10);
-
-                try {
-                  if (!matchedSupplier && fornecedorInformado) {
-                    const digits = Date.now().toString();
-                    const cnpjSeed = formEntry.cnpj.trim() || digits.padStart(14, "0").slice(-14);
-                    matchedSupplier = await onCreateSupplierWithResult({
-                      codigo: `AUTO-${digits.slice(-6)}`,
-                      razaoSocial: fornecedorInformado,
-                      nomeFantasia: fornecedorInformado,
-                      cnpj: cnpjSeed,
-                      contato: formEntry.solicitante || "Cadastro rapido",
-                      telefone: "",
-                      email: "",
-                      cidade: "",
-                      estado: "",
-                      categoria: "Cadastro Rapido",
-                      status: "ATIVO",
-                      observacoes: "Fornecedor criado automaticamente na Central SC/OC.",
-                    });
-                  }
-
-                  const numeroOC = formEntry.numeroOC.trim() || `OC-${Date.now().toString().slice(-6)}`;
-                  const observacoesOc = setTaggedValue(setTaggedValue(formEntry.descricao, "NF", formEntry.numeroNF), "UNIDADE", formEntry.unidade);
-
-                  await onCreateOC({
+                  }));
+                  await withRetry(() => onCreateOC({
                     numeroOC,
-                    scId: linkedSc?.id ?? "-",
+                    scId: createdSc.id,
                     fornecedorId: matchedSupplier?.id ?? "-",
-                    dataOC: today,
-                    dataEmissao: today,
-                    dataPrevistaEntrega: today,
+                    dataOC: now,
+                    dataEmissao: now,
+                    dataPrevistaEntrega: now,
                     dataRealEntrega: null,
                     valorOC: formEntry.valor,
-                    setorId: linkedSc?.setorId ?? setores[0]?.id ?? "-",
+                    setorId,
                     responsavel: formEntry.solicitante,
                     status: "CRIADA",
                     condicaoPagamento: formEntry.contrato ? "Contrato" : "Avulso",
                     observacoes: observacoesOc,
                     anexos: [],
-                  });
-                  setFormEntry((prev) => ({ ...prev, numeroOC: "", numeroNF: "", valor: 0 }));
-                  setMessage("OC criada com sucesso.");
+                  }));
+                  setFormEntry((prev) => ({
+                    ...prev,
+                    solicitante: "",
+                    unidade: "",
+                    area: "",
+                    numeroSC: "",
+                    numeroOC: "",
+                    cnpj: "",
+                    fornecedorNome: "",
+                    numeroNF: "",
+                    valor: 0,
+                    descricao: "",
+                  }));
+                  setMessage("SC e OC salvas com sucesso.");
                 } catch (error) {
-                  setMessage((error as Error).message || "Falha ao criar OC.");
+                  setMessage((error as Error).message || "Falha ao salvar SC/OC.");
+                } finally {
+                  setIsSaving(false);
                 }
               }}
             >
-              Salvar OC
+              {isSaving ? "Salvando..." : "Salvar"}
             </button>
           </div>
 
@@ -1448,11 +1465,17 @@ function UnifiedScOcModule({
                 const supplier = supplierId ? fornecedores.find((item) => item.id === supplierId) : null;
                 const currentObservacoes = ocRecord?.observacoes ?? scRecord?.observacoes ?? "";
                 const nfValue = getTaggedValue(currentObservacoes, "NF");
+                const nfArquivoLabel =
+                  (ocRecord?.anexos ?? scRecord?.anexos ?? [])
+                    .find((entry) => entry.startsWith("NF_FILE:"))
+                    ?.replace("NF_FILE:", "")
+                    .split("|")[0] ?? "";
                 const unidadeValue = getTaggedValue(currentObservacoes, "UNIDADE") || row.setor;
                 const razaoSocial = supplier?.razaoSocial || row.fornecedor || "-";
                 const cnpj = supplier?.cnpj || "-";
                 const solicitante = scRecord?.solicitante || ocRecord?.responsavel || "-";
                 const rowDate = scRecord?.dataCriacao || ocRecord?.dataOC || row.sortDate;
+                const fileInputId = `nf-upload-${row.entity}-${row.id}`;
 
                 return (
                   <tr key={`${row.entity}-${row.id}`} className="border-t border-slate-800 transition hover:bg-slate-900/60">
@@ -1513,24 +1536,46 @@ function UnifiedScOcModule({
                           </button>
                         ) : null}
                         {canWrite ? (
-                          <button
-                            className="rounded border border-emerald-700 px-2 py-1 text-xs"
-                            onClick={async () => {
-                              const nfPrompt = typeof window !== "undefined" ? window.prompt("Informe o Nº NF", nfValue || "") : "";
-                              if (nfPrompt === null) return;
-                              const nextObservacoes = setTaggedValue(currentObservacoes, "NF", nfPrompt);
-                              if (row.entity === "OC" && ocRecord) {
-                                await onUpdateOC(ocRecord.id, { observacoes: nextObservacoes });
-                                return;
-                              }
-                              if (row.entity === "SC" && scRecord) {
-                                await onUpdateSC(scRecord.id, { observacoes: nextObservacoes });
-                              }
-                            }}
-                          >
-                            Salvar NF
-                          </button>
+                          <label className="cursor-pointer rounded border border-emerald-700 px-2 py-1 text-xs text-emerald-200">
+                            Arquivo NF
+                            <input
+                              id={fileInputId}
+                              type="file"
+                              accept=".pdf,.png,.jpg,.jpeg,.webp"
+                              className="hidden"
+                              onChange={async (e) => {
+                                const file = e.target.files?.[0];
+                                if (!file) return;
+                                if (file.size > 1_500_000) {
+                                  setMessage("Arquivo NF maior que 1.5MB. Use arquivo menor para persistir com estabilidade.");
+                                  e.currentTarget.value = "";
+                                  return;
+                                }
+
+                                try {
+                                  const encoded = await fileToDataUrl(file);
+                                  const fileEntry = `NF_FILE:${file.name}|${file.type}|${file.size}|${Date.now()}|${encoded}`;
+                                  if (row.entity === "OC" && ocRecord) {
+                                    await onUpdateOC(ocRecord.id, {
+                                      anexos: [...(ocRecord.anexos ?? []).filter((entry) => !entry.startsWith("NF_FILE:")), fileEntry],
+                                    });
+                                  } else if (row.entity === "SC" && scRecord) {
+                                    await onUpdateSC(scRecord.id, {
+                                      anexos: [...(scRecord.anexos ?? []).filter((entry) => !entry.startsWith("NF_FILE:")), fileEntry],
+                                    });
+                                  }
+
+                                  setMessage(`Arquivo NF salvo: ${file.name}`);
+                                } catch (error) {
+                                  setMessage((error as Error).message || "Falha ao salvar arquivo NF.");
+                                } finally {
+                                  e.currentTarget.value = "";
+                                }
+                              }}
+                            />
+                          </label>
                         ) : null}
+                        {nfArquivoLabel ? <span className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300">NF: {nfArquivoLabel}</span> : null}
                         {canWrite ? (
                           <button
                             className="rounded border border-rose-700 px-2 py-1 text-xs"

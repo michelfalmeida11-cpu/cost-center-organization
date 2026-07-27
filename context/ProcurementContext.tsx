@@ -58,10 +58,10 @@ interface ProcurementContextValue {
   createSupplierWithResult: (payload: Omit<Supplier, "id" | "createdAt" | "updatedAt" | "deletedAt">) => Promise<Supplier>;
   updateSupplier: (id: string, payload: Partial<Supplier>) => Promise<void>;
   deleteSupplier: (id: string) => Promise<void>;
-  createSC: (payload: Omit<PurchaseRequest, "id" | "createdAt" | "updatedAt" | "deletedAt">) => Promise<void>;
+  createSC: (payload: Omit<PurchaseRequest, "id" | "createdAt" | "updatedAt" | "deletedAt">) => Promise<PurchaseRequest>;
   updateSC: (id: string, payload: Partial<PurchaseRequest>) => Promise<void>;
   deleteSC: (id: string) => Promise<void>;
-  createOC: (payload: Omit<PurchaseOrder, "id" | "createdAt" | "updatedAt" | "deletedAt">) => Promise<void>;
+  createOC: (payload: Omit<PurchaseOrder, "id" | "createdAt" | "updatedAt" | "deletedAt">) => Promise<PurchaseOrder>;
   updateOC: (id: string, payload: Partial<PurchaseOrder>) => Promise<void>;
   deleteOC: (id: string) => Promise<void>;
   changeScStatus: (id: string, status: SCStatus, reason?: string) => Promise<void>;
@@ -210,6 +210,7 @@ export function ProcurementProvider({ children }: { children: React.ReactNode })
         : [...prev.scs, data.item],
     }));
     void refreshState();
+    return data.item;
   }, [currentUser, refreshState]);
 
   const updateSC = useCallback(async (id: string, payload: Partial<PurchaseRequest>) => {
@@ -241,6 +242,7 @@ export function ProcurementProvider({ children }: { children: React.ReactNode })
       scs: prev.scs.map((item) => (item.id === data.item.scId ? { ...item, numeroOCRelacionada: data.item.numeroOC } : item)),
     }));
     void refreshState();
+    return data.item;
   }, [currentUser, refreshState]);
 
   const updateOC = useCallback(async (id: string, payload: Partial<PurchaseOrder>) => {
