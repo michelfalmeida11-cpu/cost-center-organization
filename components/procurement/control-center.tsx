@@ -580,7 +580,7 @@ export function ProcurementControlCenter() {
   ) : null;
 
   return (
-    <div className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_15%_10%,rgba(53,243,255,.12),transparent_25%),radial-gradient(circle_at_85%_0%,rgba(159,122,255,.10),transparent_30%),#04060b] text-slate-200">
+    <div className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_12%_8%,rgba(14,165,233,.10),transparent_28%),radial-gradient(circle_at_88%_6%,rgba(16,185,129,.08),transparent_24%),#060b14] text-slate-100">
       <div className="flex min-h-screen">
         <aside className={`${collapsedSidebar ? "w-[84px]" : "w-[290px]"} sticky top-0 hidden h-screen border-r border-cyan-400/20 bg-slate-950/90 px-3 py-4 transition-all md:block`}>
           <div className="mb-6 flex items-center justify-between rounded-lg border border-cyan-400/30 bg-slate-900/60 px-3 py-2">
@@ -687,7 +687,7 @@ export function ProcurementControlCenter() {
         </aside>
 
         <main className="min-w-0 flex-1 px-3 pb-24 pt-3 md:p-6 md:pb-6">
-          <header className="mb-4 rounded-2xl border border-cyan-400/25 bg-slate-950/75 p-3 shadow-[0_0_40px_rgba(53,243,255,0.09)] backdrop-blur-sm md:p-5">
+          <header className="mb-4 rounded-2xl border border-slate-800/90 bg-slate-950/88 p-3 shadow-[0_16px_45px_rgba(2,6,23,0.55)] backdrop-blur-sm md:p-5">
             <div className="mb-3 flex items-center justify-between gap-2 md:hidden">
               <button onClick={() => setMobileMenuOpen(true)} className="rounded-lg border border-slate-700 bg-slate-900/80 p-2 text-slate-200">
                 <Menu size={16} />
@@ -1265,8 +1265,8 @@ export function ProcurementControlCenter() {
 
 function Panel({ title, children, className = "" }: { title: string; children: React.ReactNode; className?: string }) {
   return (
-    <div className={`rounded-xl border border-cyan-500/20 bg-slate-950/80 p-4 shadow-[0_0_22px_rgba(0,210,255,0.08)] ${className}`}>
-      <p className="mb-3 border-b border-slate-800 pb-2 text-xs font-semibold uppercase tracking-[0.2em] text-cyan-200">{title}</p>
+    <div className={`rounded-2xl border border-slate-800/90 bg-slate-950/88 p-4 shadow-[0_10px_30px_rgba(2,6,23,0.45)] ${className}`}>
+      <p className="mb-3 border-b border-slate-800 pb-2 text-xs font-semibold uppercase tracking-[0.18em] text-cyan-100">{title}</p>
       {children}
     </div>
   );
@@ -1286,15 +1286,15 @@ function KpiCard({
   icon: React.ElementType;
 }) {
   return (
-    <div className="h-[102px] rounded-xl border bg-slate-950/80 p-2.5 xl:p-2" style={{ borderColor: `${color}66`, boxShadow: `0 0 18px ${color}16` }}>
+    <div className="h-[108px] rounded-2xl border bg-slate-950/88 p-3" style={{ borderColor: `${color}50`, boxShadow: `0 10px 24px rgba(2,6,23,.35)` }}>
       <div className="flex items-start justify-between gap-2">
         <p className="text-[10px] uppercase tracking-[0.16em] text-slate-400">{label}</p>
         <Icon size={14} style={{ color }} />
       </div>
-      <p className="mt-1 text-[30px] font-bold leading-none xl:text-[26px]" style={{ color }}>
+      <p className="mt-1 text-[28px] font-bold leading-none" style={{ color }}>
         {value}
       </p>
-      {note ? <p className="mt-1 line-clamp-1 text-[9px] text-slate-500 xl:text-[8px]">{note}</p> : null}
+      {note ? <p className="mt-1 line-clamp-1 text-[10px] text-slate-500">{note}</p> : null}
     </div>
   );
 }
@@ -1377,11 +1377,10 @@ function UnifiedScOcModule({
   const [formEntry, setFormEntry] = useState({
     solicitante: "",
     unidade: "",
+    setorId: setores[0]?.id ?? "",
     area: "",
     numeroSC: "",
     numeroOC: "",
-    cnpj: "",
-    fornecedorNome: "",
     numeroNF: "",
     valor: 0,
     contrato: true,
@@ -1398,17 +1397,16 @@ function UnifiedScOcModule({
           <div className="grid gap-2 md:grid-cols-5">
             <input className="field" placeholder="Solicitante" value={formEntry.solicitante} onChange={(e) => setFormEntry((prev) => ({ ...prev, solicitante: e.target.value }))} />
             <input className="field" placeholder="Unidade" value={formEntry.unidade} onChange={(e) => setFormEntry((prev) => ({ ...prev, unidade: e.target.value }))} />
+            <select className="field" value={formEntry.setorId} onChange={(e) => setFormEntry((prev) => ({ ...prev, setorId: e.target.value }))}>
+              <option value="">Setor</option>
+              {setores.map((setor) => (
+                <option key={setor.id} value={setor.id}>{setor.nome}</option>
+              ))}
+            </select>
             <input className="field" placeholder="Area" value={formEntry.area} onChange={(e) => setFormEntry((prev) => ({ ...prev, area: e.target.value }))} />
             <input className="field" placeholder="SC" value={formEntry.numeroSC} onChange={(e) => setFormEntry((prev) => ({ ...prev, numeroSC: e.target.value }))} />
             <input className="field" placeholder="OC" value={formEntry.numeroOC} onChange={(e) => setFormEntry((prev) => ({ ...prev, numeroOC: e.target.value }))} />
 
-            <input className="field" placeholder="CNPJ" value={formEntry.cnpj} onChange={(e) => setFormEntry((prev) => ({ ...prev, cnpj: e.target.value }))} />
-            <input className="field" list="fornecedores-oc-central" placeholder="Fornecedor" value={formEntry.fornecedorNome} onChange={(e) => setFormEntry((prev) => ({ ...prev, fornecedorNome: e.target.value }))} />
-            <datalist id="fornecedores-oc-central">
-              {fornecedores.map((fornecedor) => (
-                <option key={fornecedor.id} value={fornecedor.nomeFantasia} />
-              ))}
-            </datalist>
             <input className="field" placeholder="Nº NF" value={formEntry.numeroNF} onChange={(e) => setFormEntry((prev) => ({ ...prev, numeroNF: e.target.value }))} />
             <input className="field" type="number" placeholder="Valor" value={formEntry.valor} onChange={(e) => setFormEntry((prev) => ({ ...prev, valor: Number(e.target.value || 0) }))} />
             <label className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-2 text-sm text-slate-200">
@@ -1440,33 +1438,29 @@ function UnifiedScOcModule({
                   }
                 };
 
-                const fornecedorInformado = formEntry.fornecedorNome.trim();
-                let matchedSupplier =
-                  fornecedores.find((fornecedor) => fornecedor.nomeFantasia.toLowerCase() === fornecedorInformado.toLowerCase()) ??
-                  fornecedores.find((fornecedor) => fornecedor.nomeFantasia.toLowerCase().includes(fornecedorInformado.toLowerCase()));
-
-                try {
-                  if (!matchedSupplier && fornecedorInformado) {
+                let supplierId = fornecedores[0]?.id ?? null;
+                if (!supplierId) {
+                  try {
                     const digits = Date.now().toString();
-                    const cnpjSeed = formEntry.cnpj.trim() || digits.padStart(14, "0").slice(-14);
-                    matchedSupplier = await onCreateSupplierWithResult({
+                    const createdSupplier = await onCreateSupplierWithResult({
                       codigo: `AUTO-${digits.slice(-6)}`,
-                      razaoSocial: fornecedorInformado,
-                      nomeFantasia: fornecedorInformado,
-                      cnpj: cnpjSeed,
-                      contato: formEntry.solicitante || "Cadastro rapido",
+                      razaoSocial: "Fornecedor Padrao",
+                      nomeFantasia: "Fornecedor Padrao",
+                      cnpj: "00000000000000",
+                      contato: formEntry.solicitante || "Cadastro automatico",
                       telefone: "",
                       email: "",
                       cidade: "",
                       estado: "",
-                      categoria: "Cadastro Rapido",
+                      categoria: "Cadastro Automatico",
                       status: "ATIVO",
-                      observacoes: "Fornecedor criado automaticamente na criacao da SC.",
+                      observacoes: "Fornecedor padrao criado automaticamente para manter fluxo SC/OC.",
                     });
+                    supplierId = createdSupplier.id;
+                  } catch {
+                    setMessage("Nao foi possivel criar fornecedor padrao para concluir a OC.");
+                    return;
                   }
-                } catch {
-                  setMessage("Nao foi possivel criar fornecedor automaticamente para a SC.");
-                  return;
                 }
 
                 const now = new Date().toISOString().slice(0, 10);
@@ -1474,7 +1468,7 @@ function UnifiedScOcModule({
                 const numeroOC = formEntry.numeroOC.trim() || `OC-${Date.now().toString().slice(-6)}`;
                 const observacoesSc = setTaggedValue(setTaggedValue(formEntry.descricao, "NF", formEntry.numeroNF), "UNIDADE", formEntry.unidade);
                 const observacoesOc = setTaggedValue(setTaggedValue(formEntry.descricao, "NF", formEntry.numeroNF), "UNIDADE", formEntry.unidade);
-                const setorId = setores[0]?.id ?? "-";
+                const setorId = formEntry.setorId || setores[0]?.id || "-";
 
                 try {
                   setIsSaving(true);
@@ -1489,7 +1483,7 @@ function UnifiedScOcModule({
                     categoria: formEntry.area,
                     prioridade: "MEDIA",
                     valorEstimado: formEntry.valor,
-                    fornecedorSugeridoId: matchedSupplier?.id ?? null,
+                    fornecedorSugeridoId: supplierId,
                     justificativa: formEntry.contrato ? "CONTRATO:SIM" : "CONTRATO:NAO",
                     status: formEntry.status,
                     responsavel: formEntry.solicitante,
@@ -1504,7 +1498,7 @@ function UnifiedScOcModule({
                   await withRetry(() => onCreateOC({
                     numeroOC,
                     scId: createdSc.id,
-                    fornecedorId: matchedSupplier?.id ?? "-",
+                    fornecedorId: supplierId ?? "-",
                     dataOC: now,
                     dataEmissao: now,
                     dataPrevistaEntrega: now,
@@ -1521,11 +1515,10 @@ function UnifiedScOcModule({
                     ...prev,
                     solicitante: "",
                     unidade: "",
+                    setorId: setores[0]?.id ?? "",
                     area: "",
                     numeroSC: "",
                     numeroOC: "",
-                    cnpj: "",
-                    fornecedorNome: "",
                     numeroNF: "",
                     valor: 0,
                     descricao: "",
