@@ -1,10 +1,12 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   AlertTriangle,
+  ArrowDownRight,
+  ArrowUpRight,
   BarChart3,
   Bell,
   Building2,
@@ -29,6 +31,8 @@ import {
   X,
 } from "lucide-react";
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   CartesianGrid,
@@ -149,6 +153,18 @@ type AiAnswerContext = {
   alertsCount: number;
 };
 
+type PremiumKpiCard = {
+  label: string;
+  value: string;
+  note: string;
+  context: string;
+  delta: number;
+  color: string;
+  icon: React.ElementType;
+  invertDelta?: boolean;
+  series: number[];
+};
+
 function ocToPhase(status: OCStatus): OcPhase {
   if (status === "CANCELADA") return "REPROVADA";
   if (status === "CONFIRMADA" || status === "EM_PRODUCAO" || status === "EM_TRANSPORTE" || status === "ENTREGUE" || status === "ATRASADA") return "APROVADA";
@@ -175,6 +191,22 @@ function phaseColor(label: string) {
   if (label === "Em Analise") return AMBER;
   if (label === "Reprovada") return RED;
   return BLUE;
+}
+
+function toDeltaPercent(current: number, previous: number) {
+  if (previous === 0) return current > 0 ? 100 : 0;
+  return Number((((current - previous) / previous) * 100).toFixed(1));
+}
+
+function formatDelta(delta: number) {
+  const sign = delta > 0 ? "+" : "";
+  return `${sign}${delta.toFixed(1)}%`;
+}
+
+function formatDatePtBr(dateValue: string) {
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return dateValue;
+  return date.toLocaleDateString("pt-BR");
 }
 
 function buildUnifiedRows(
@@ -318,6 +350,7 @@ export function ProcurementControlCenter() {
     filters,
     setFilters,
     resetFilters,
+    refreshState,
     currentUser,
     logout,
     collapsedSidebar,
@@ -346,7 +379,11 @@ export function ProcurementControlCenter() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [globalQuery, setGlobalQuery] = useState("");
   const [commandOpen, setCommandOpen] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [quickActionFeedback, setQuickActionFeedback] = useState("");
   const commandInputRef = useRef<HTMLInputElement | null>(null);
+  const scFilterInputRef = useRef<HTMLInputElement | null>(null);
+  const responsibleFilterInputRef = useRef<HTMLInputElement | null>(null);
 
   const dataset = useMemo(() => filterData(state, filters), [state, filters]);
   const kpis = useMemo(() => computeKpis(state, filters), [state, filters]);
@@ -476,6 +513,116 @@ export function ProcurementControlCenter() {
 
     return Array.from(map.values()).sort((a, b) => a.mes.localeCompare(b.mes));
   }, [dataset.scFiltered, dataset.ocFiltered]);
+  const monthlyFinanceSeries = useMemo(() => {
+    const map = new Map<string, { mes: string; valor: number }>();
+
+    dataset.scFiltered.forEach((sc) => {
+      const key = sc.dataCriacao.slice(0, 7);
+      const current = map.get(key) ?? { mes: key, valor: 0 };
+      current.valor += sc.valorEstimado;
+      map.set(key, current);
+    });
+
+    dataset.ocFiltered.forEach((oc) => {
+      const key = oc.dataOC.slice(0, 7);
+      const current = map.get(key) ?? { mes: key, valor: 0 };
+      current.valor += oc.valorOC;
+      map.set(key, current);
+    });
+
+    return Array.from(map.values()).sort((a, b) => a.mes.localeCompare(b.mes));
+  }, [dataset.scFiltered, dataset.ocFiltered]);
+
+  const delayedSeries = useMemo(() => {
+    const map = new Map<string, number>();
+    dataset.ocFiltered.forEach((oc) => {
+      if (oc.status !== "ATRASADA") return;
+      const key = oc.dataOC.slice(0, 7);
+      map.set(key, (map.get(key) ?? 0) + 1);
+    });
+    return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([, total]) => total);
+  }, [dataset.ocFiltered]);
+
+  const premiumKpis = useMemo<PremiumKpiCard[]>(() => {
+    const valueSeries = monthlyFinanceSeries.map((item) => item.valor);
+    const approvedSeries = unifiedStatusEvolution.map((item) => item.aprovada);
+    const analysisSeries = unifiedStatusEvolution.map((item) => item.emAnalise);
+    const rejectedSeries = unifiedStatusEvolution.map((item) => item.reprovada);
+    const launchedSeries = unifiedStatusEvolution.map((item) => item.lancada);
+    const delayed = delayedSeries.length ? delayedSeries : [0];
+
+    const deltaFrom = (series: number[]) => {
+      const current = series.at(-1) ?? 0;
+      const previous = series.at(-2) ?? current;
+      return toDeltaPercent(current, previous);
+    };
+
+    return [
+      {
+        label: "VALOR TOTAL SC + OC",
+        value: formatCompactCurrency(kpis.valorTotalSC + kpis.valorTotalOC),
+        note: "Carteira financeira consolidada",
+        context: "vs. periodo anterior",
+        delta: deltaFrom(valueSeries),
+        color: GREEN,
+        icon: BarChart3,
+        series: valueSeries.length ? valueSeries : [0],
+      },
+      {
+        label: "APROVADAS",
+        value: String(unifiedStatusCards.aprovada),
+        note: `${kpis.totalSC + kpis.totalOC ? Math.round((unifiedStatusCards.aprovada / (kpis.totalSC + kpis.totalOC)) * 100) : 0}% do total`,
+        context: "vs. periodo anterior",
+        delta: deltaFrom(approvedSeries),
+        color: GREEN,
+        icon: Shield,
+        series: approvedSeries.length ? approvedSeries : [0],
+      },
+      {
+        label: "EM ANALISE",
+        value: String(unifiedStatusCards.emAnalise),
+        note: `Tempo medio: ${kpis.tempoMedioAprovacaoDias} dias`,
+        context: "vs. periodo anterior",
+        delta: deltaFrom(analysisSeries),
+        color: AMBER,
+        icon: Activity,
+        invertDelta: true,
+        series: analysisSeries.length ? analysisSeries : [0],
+      },
+      {
+        label: "REPROVADAS",
+        value: String(unifiedStatusCards.reprovada),
+        note: `${kpis.totalSC + kpis.totalOC ? Math.round((unifiedStatusCards.reprovada / (kpis.totalSC + kpis.totalOC)) * 100) : 0}% do total`,
+        context: "vs. periodo anterior",
+        delta: deltaFrom(rejectedSeries),
+        color: RED,
+        icon: AlertTriangle,
+        invertDelta: true,
+        series: rejectedSeries.length ? rejectedSeries : [0],
+      },
+      {
+        label: "LANCADAS",
+        value: String(unifiedStatusCards.lancada),
+        note: "Processos com liberacao operacional",
+        context: "vs. periodo anterior",
+        delta: deltaFrom(launchedSeries),
+        color: BLUE,
+        icon: ClipboardList,
+        series: launchedSeries.length ? launchedSeries : [0],
+      },
+      {
+        label: "ATRASADAS",
+        value: String(unifiedStatusCards.atrasada),
+        note: "OCs fora da janela de entrega",
+        context: "vs. periodo anterior",
+        delta: deltaFrom(delayed),
+        color: RED,
+        icon: Truck,
+        invertDelta: true,
+        series: delayed,
+      },
+    ];
+  }, [monthlyFinanceSeries, unifiedStatusEvolution, delayedSeries, kpis, unifiedStatusCards]);
   const latestRows = useMemo(() => unifiedRows.slice(0, 8), [unifiedRows]);
   const openOcCount = useMemo(() => dataset.ocFiltered.filter((oc) => !["ENTREGUE", "CANCELADA"].includes(oc.status)).length, [dataset.ocFiltered]);
   const alerts = useMemo(() => buildAlerts(state, filters), [state, filters]);
@@ -529,12 +676,85 @@ export function ProcurementControlCenter() {
     return [...scMatches, ...ocMatches, ...supplierMatches].slice(0, 14);
   }, [globalQuery, state.scs, state.ocs, state.fornecedores]);
 
+  const runQuickRefresh = useCallback(async () => {
+    if (isRefreshing) return;
+    try {
+      setIsRefreshing(true);
+      await refreshState();
+      setQuickActionFeedback("Dados sincronizados com sucesso.");
+    } catch {
+      setQuickActionFeedback("Nao foi possivel sincronizar os dados agora.");
+    } finally {
+      setIsRefreshing(false);
+    }
+  }, [isRefreshing, refreshState]);
+
+  const cycleModule = useCallback((direction: "next" | "previous") => {
+    const index = NAV.findIndex((item) => item.id === module);
+    if (index < 0) return;
+    const nextIndex = direction === "next"
+      ? (index + 1) % NAV.length
+      : (index - 1 + NAV.length) % NAV.length;
+    setModule(NAV[nextIndex].id);
+  }, [module]);
+
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      const isTypingContext = !!target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT" || target.isContentEditable);
+
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         setCommandOpen((prev) => !prev);
       }
+
+      if (event.altKey && event.key.toLowerCase() === "r") {
+        event.preventDefault();
+        void runQuickRefresh();
+      }
+
+      if (event.altKey && event.key.toLowerCase() === "l") {
+        event.preventDefault();
+        resetFilters();
+        setQuickActionFeedback("Filtros limpos.");
+      }
+
+      if (event.altKey && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        scFilterInputRef.current?.focus();
+      }
+
+      if (event.altKey && event.key.toLowerCase() === "u") {
+        event.preventDefault();
+        responsibleFilterInputRef.current?.focus();
+      }
+
+      if (event.altKey && event.key === "ArrowRight" && !isTypingContext) {
+        event.preventDefault();
+        cycleModule("next");
+      }
+
+      if (event.altKey && event.key === "ArrowLeft" && !isTypingContext) {
+        event.preventDefault();
+        cycleModule("previous");
+      }
+
+      if (event.altKey && !isTypingContext) {
+        const moduleMap: Record<string, AppModule> = {
+          "1": "DASHBOARD",
+          "2": "SC",
+          "3": "ACOMPANHAMENTO",
+          "4": "FORNECEDORES",
+          "5": "KPIS_ANALYTICS",
+          "6": "RELATORIOS",
+        };
+        const targetModule = moduleMap[event.key];
+        if (targetModule) {
+          event.preventDefault();
+          setModule(targetModule);
+        }
+      }
+
       if (event.key === "Escape") {
         setCommandOpen(false);
       }
@@ -542,13 +762,19 @@ export function ProcurementControlCenter() {
 
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, []);
+  }, [cycleModule, resetFilters, runQuickRefresh]);
 
   useEffect(() => {
     if (commandOpen) {
       window.setTimeout(() => commandInputRef.current?.focus(), 0);
     }
   }, [commandOpen]);
+
+  useEffect(() => {
+    if (!quickActionFeedback) return;
+    const timer = window.setTimeout(() => setQuickActionFeedback(""), 2600);
+    return () => window.clearTimeout(timer);
+  }, [quickActionFeedback]);
 
   if (!currentUser) {
     return <LoginCard />;
@@ -830,6 +1056,32 @@ export function ProcurementControlCenter() {
                 </span>
               </div>
             </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/55 px-3 py-2 text-[11px] text-slate-300">
+              <button
+                onClick={() => void runQuickRefresh()}
+                disabled={isRefreshing}
+                className="rounded-md border border-cyan-500/40 bg-cyan-500/10 px-2 py-1 text-cyan-100 transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {isRefreshing ? "Sincronizando..." : "Sincronizar dados"}
+                <span className="ml-1 rounded border border-cyan-600/50 px-1 text-[10px] text-cyan-300">Alt+R</span>
+              </button>
+              <button
+                onClick={() => {
+                  resetFilters();
+                  setQuickActionFeedback("Filtros limpos.");
+                }}
+                className="rounded-md border border-slate-700 px-2 py-1 transition hover:border-cyan-500/40"
+              >
+                Limpar filtros
+                <span className="ml-1 rounded border border-slate-600 px-1 text-[10px] text-slate-400">Alt+L</span>
+              </button>
+              <button onClick={() => setCommandOpen(true)} className="rounded-md border border-slate-700 px-2 py-1 transition hover:border-cyan-500/40">
+                Busca global
+                <span className="ml-1 rounded border border-slate-600 px-1 text-[10px] text-slate-400">Ctrl+K</span>
+              </button>
+              <span className="text-slate-500">Modulos: Alt+1..6 | Navegar: Alt+←/→ | SC: Alt+S | Responsavel: Alt+U</span>
+            </div>
+            {quickActionFeedback ? <p className="mt-2 text-xs text-emerald-300">{quickActionFeedback}</p> : null}
             <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-7">
               <FilterSelect
                 label="Ano"
@@ -869,9 +1121,15 @@ export function ProcurementControlCenter() {
                 onChange={(value) => setFilters({ ...filters, fornecedorId: value })}
                 options={[{ label: "Todos", value: "" }, ...state.fornecedores.map((f) => ({ label: f.nomeFantasia, value: f.id }))]}
               />
-              <FilterInput label="Responsavel" value={filters.responsavel} onChange={(value) => setFilters({ ...filters, responsavel: value })} placeholder="buscar" />
-              <FilterInput label="SC" value={filters.sc} onChange={(value) => setFilters({ ...filters, sc: value })} placeholder="SC-" />
-              <button className="rounded-lg border border-slate-700 bg-slate-900 px-3 text-sm hover:border-cyan-300" onClick={() => setFilters(EMPTY_FILTERS)}>
+              <FilterInput label="Responsavel" value={filters.responsavel} onChange={(value) => setFilters({ ...filters, responsavel: value })} placeholder="buscar" inputRef={responsibleFilterInputRef} />
+              <FilterInput label="SC" value={filters.sc} onChange={(value) => setFilters({ ...filters, sc: value })} placeholder="SC-" inputRef={scFilterInputRef} />
+              <button
+                className="rounded-lg border border-slate-700 bg-slate-900 px-3 text-sm hover:border-cyan-300"
+                onClick={() => {
+                  resetFilters();
+                  setQuickActionFeedback("Filtros limpos.");
+                }}
+              >
                 Limpar Filtros
               </button>
             </div>
@@ -892,12 +1150,20 @@ export function ProcurementControlCenter() {
             <section>
               <ModuleTitle title="Dashboard Executivo" subtitle="Visao tatica em tempo real" />
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-                <KpiCard label="VALOR TOTAL SC + OC" value={formatCompactCurrency(kpis.valorTotalSC + kpis.valorTotalOC)} note="Carteira financeira consolidada" color={GREEN} icon={BarChart3} />
-                <KpiCard label="APROVADAS" value={String(unifiedStatusCards.aprovada)} note="SC/OC aprovadas" color={GREEN} icon={Shield} />
-                <KpiCard label="EM ANALISE" value={String(unifiedStatusCards.emAnalise)} note="SC/OC aguardando decisao" color={AMBER} icon={Activity} />
-                <KpiCard label="REPROVADAS" value={String(unifiedStatusCards.reprovada)} note="SC/OC canceladas ou recusadas" color={RED} icon={AlertTriangle} />
-                <KpiCard label="LANCADAS" value={String(unifiedStatusCards.lancada)} note="SC/OC lancadas" color={BLUE} icon={ClipboardList} />
-                <KpiCard label="ATRASADAS" value={String(unifiedStatusCards.atrasada)} note="OCs com atraso" color={RED} icon={Truck} />
+                {premiumKpis.map((item) => (
+                  <KpiCard
+                    key={item.label}
+                    label={item.label}
+                    value={item.value}
+                    note={item.note}
+                    context={item.context}
+                    delta={item.delta}
+                    color={item.color}
+                    icon={item.icon}
+                    invertDelta={item.invertDelta}
+                    series={item.series}
+                  />
+                ))}
               </div>
 
               <div className="mt-4 grid gap-4 lg:grid-cols-2">
@@ -1008,21 +1274,25 @@ export function ProcurementControlCenter() {
 
               <div className="mt-4">
                 <Panel title="Ultimas Movimentacoes SC / OC">
-                  <div className="overflow-x-hidden">
+                  <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2 text-[11px] text-slate-300">
+                    <span className="uppercase tracking-[0.14em] text-cyan-200">Ultimos registros operacionais</span>
+                    <span>{latestRows.length} linhas exibidas</span>
+                  </div>
+                  <div className="overflow-hidden rounded-xl border border-slate-800/90 bg-slate-950/50">
                     <table className="w-full table-fixed text-xs md:text-sm">
-                      <thead className="text-left text-[11px] uppercase tracking-[0.14em] text-slate-500">
+                      <thead className="sticky top-0 z-10 bg-slate-950/95 text-left text-[10px] uppercase tracking-[0.14em] text-slate-400 backdrop-blur">
                         <tr>
-                          <th className="w-[6%] py-2">SC</th>
-                          <th className="w-[6%]">OC</th>
-                          <th className="w-[5%]">NF</th>
-                          <th className="w-[13%]">Solicitante</th>
-                          <th className="w-[14%]">Razao Social</th>
-                          <th className="w-[8%]">Unidade</th>
-                          <th className="w-[10%]">CNPJ</th>
-                          <th className="w-[12%]">Status</th>
-                          <th className="w-[10%] text-right">Valor</th>
-                          <th className="w-[8%]">Data</th>
-                          <th className="w-[8%]">Acoes</th>
+                          <th className="w-[8%] px-2 py-2">SC</th>
+                          <th className="w-[8%] px-2">OC</th>
+                          <th className="w-[8%] px-2">NF</th>
+                          <th className="w-[16%] px-2">Solicitante</th>
+                          <th className="hidden w-[15%] px-2 md:table-cell">Razao Social</th>
+                          <th className="hidden w-[10%] px-2 md:table-cell">Unidade</th>
+                          <th className="hidden w-[10%] px-2 lg:table-cell">CNPJ</th>
+                          <th className="w-[12%] px-2">Status</th>
+                          <th className="w-[10%] px-2 text-right">Valor</th>
+                          <th className="w-[8%] px-2">Data</th>
+                          <th className="w-[13%] px-2">Acoes</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1043,18 +1313,18 @@ export function ProcurementControlCenter() {
                           const fileInputId = `latest-nf-upload-${row.entity}-${row.id}`;
 
                           return (
-                            <tr key={`${row.entity}-${row.id}`} className="border-t border-slate-800/90 transition hover:bg-slate-900/60">
-                            <td className="truncate py-2 pr-2 font-medium text-cyan-100">{row.numeroSC}</td>
-                            <td className="truncate pr-2 text-slate-200">{row.numeroOC}</td>
-                            <td className="truncate pr-2">{nfValue || "-"}</td>
-                            <td className="truncate pr-2">{solicitante}</td>
-                            <td className="truncate pr-2">{razaoSocial}</td>
-                            <td className="truncate pr-2">{unidadeValue}</td>
-                            <td className="truncate pr-2">{cnpj}</td>
-                            <td className="pr-2">
+                            <tr key={`${row.entity}-${row.id}`} className="border-t border-slate-800/90 align-top transition even:bg-slate-900/30 hover:bg-slate-900/70">
+                            <td className="truncate px-2 py-2 font-medium text-cyan-100">{row.numeroSC}</td>
+                            <td className="truncate px-2 text-slate-200">{row.numeroOC}</td>
+                            <td className="truncate px-2">{nfValue || "-"}</td>
+                            <td className="truncate px-2">{solicitante}</td>
+                            <td className="hidden truncate px-2 md:table-cell">{razaoSocial}</td>
+                            <td className="hidden truncate px-2 md:table-cell">{unidadeValue}</td>
+                            <td className="hidden truncate px-2 lg:table-cell">{cnpj}</td>
+                            <td className="px-2">
                               {canWrite && row.entity === "SC" && scRecord ? (
                                 <select
-                                  className="field max-w-[125px] text-xs"
+                                  className="field w-full max-w-[132px] text-xs"
                                   value={scRecord.status}
                                   onChange={async (e) => {
                                     const nextStatus = e.target.value as SCStatus;
@@ -1075,7 +1345,7 @@ export function ProcurementControlCenter() {
 
                               {canWrite && row.entity === "OC" && ocRecord ? (
                                 <select
-                                  className="field max-w-[125px] text-xs"
+                                  className="field w-full max-w-[132px] text-xs"
                                   value={ocToPhase(ocRecord.status as OCStatus)}
                                   onChange={async (e) => {
                                     const phase = e.target.value as OcPhase;
@@ -1089,14 +1359,14 @@ export function ProcurementControlCenter() {
                                 </select>
                               ) : null}
 
-                              {!canWrite ? <span className={`rounded-md border px-2 py-0.5 text-[11px] font-medium ${businessStatusBadge(row.statusKey)}`}>{row.statusLabel}</span> : null}
+                              {!canWrite ? <span className={`inline-flex whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-medium ${businessStatusBadge(row.statusKey)}`}>{row.statusLabel}</span> : null}
                             </td>
-                            <td className="pr-2 font-medium text-right text-emerald-300">{formatCurrency(row.valor)}</td>
-                            <td className="pr-2">{rowDate}</td>
-                            <td className="pr-2">
-                              <div className="flex flex-wrap items-center justify-start gap-1">
+                            <td className="px-2 text-right font-medium text-emerald-300">{formatCurrency(row.valor)}</td>
+                            <td className="px-2 text-slate-300">{formatDatePtBr(rowDate)}</td>
+                            <td className="px-2 py-2">
+                              <div className="flex flex-col items-start gap-1 xl:flex-row xl:items-center">
                                 {canWrite ? (
-                                  <label className="cursor-pointer rounded border border-emerald-700 px-2 py-1 text-xs text-emerald-200">
+                                  <label className="cursor-pointer rounded border border-emerald-700 px-2 py-1 text-xs text-emerald-200 transition hover:bg-emerald-500/10">
                                     Upload NF
                                     <input
                                       id={fileInputId}
@@ -1132,7 +1402,7 @@ export function ProcurementControlCenter() {
                                 ) : null}
                                 {nfAttachment ? (
                                   <button
-                                    className="rounded border border-cyan-700 px-2 py-1 text-xs text-cyan-200"
+                                    className="rounded border border-cyan-700 px-2 py-1 text-xs text-cyan-200 transition hover:bg-cyan-500/10"
                                     onClick={() => {
                                       if (typeof window !== "undefined") {
                                         window.open(nfAttachment.dataUrl, "_blank", "noopener,noreferrer");
@@ -1426,24 +1696,62 @@ function KpiCard({
   value,
   color,
   note,
+  context,
+  delta,
   icon: Icon,
+  invertDelta,
+  series,
 }: {
   label: string;
   value: string;
   color: string;
   note?: string;
+  context?: string;
+  delta?: number;
   icon: React.ElementType;
+  invertDelta?: boolean;
+  series?: number[];
 }) {
+  const safeDelta = delta ?? 0;
+  const deltaPositive = invertDelta ? safeDelta <= 0 : safeDelta >= 0;
+  const DeltaIcon = deltaPositive ? ArrowUpRight : ArrowDownRight;
+  const trendColor = deltaPositive ? GREEN : RED;
+  const chartData = (series ?? [0]).map((valuePoint, index) => ({ index, value: valuePoint }));
+  const gradientId = `kpi-${label.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()}-gradient`;
+
   return (
-    <div className="h-[108px] rounded-2xl border bg-slate-950/88 p-3" style={{ borderColor: `${color}50`, boxShadow: `0 10px 24px rgba(2,6,23,.35)` }}>
+    <div className="h-[132px] rounded-2xl border bg-slate-950/88 p-3" style={{ borderColor: `${color}50`, boxShadow: `0 10px 24px rgba(2,6,23,.35)` }}>
       <div className="flex items-start justify-between gap-2">
         <p className="text-[10px] uppercase tracking-[0.16em] text-slate-400">{label}</p>
         <Icon size={14} style={{ color }} />
       </div>
-      <p className="mt-1 text-[28px] font-bold leading-none" style={{ color }}>
+      <p className="mt-1 text-[26px] font-bold leading-none" style={{ color }}>
         {value}
       </p>
+      <div className="mt-1 flex items-center justify-between gap-2">
+        <span
+          className="inline-flex items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold"
+          style={{ borderColor: `${trendColor}66`, color: trendColor, background: `${trendColor}1A` }}
+        >
+          <DeltaIcon size={11} />
+          {formatDelta(safeDelta)}
+        </span>
+        <div className="h-8 min-w-0 flex-1">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={chartData} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
+              <defs>
+                <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="5%" stopColor={color} stopOpacity={0.65} />
+                  <stop offset="95%" stopColor={color} stopOpacity={0.05} />
+                </linearGradient>
+              </defs>
+              <Area type="monotone" dataKey="value" stroke={color} strokeWidth={1.4} fill={`url(#${gradientId})`} />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
       {note ? <p className="mt-1 line-clamp-1 text-[10px] text-slate-500">{note}</p> : null}
+      {context ? <p className="mt-0.5 text-[10px] uppercase tracking-[0.14em] text-slate-600">{context}</p> : null}
     </div>
   );
 }
@@ -1457,11 +1765,19 @@ function MetricCell({ label, value }: { label: string; value: string }) {
   );
 }
 
-function FilterInput({ label, value, onChange, placeholder }: { label: string; value: string; onChange: (value: string) => void; placeholder: string }) {
+function FilterInput({ label, value, onChange, placeholder, inputRef }: { label: string; value: string; onChange: (value: string) => void; placeholder: string; inputRef?: React.MutableRefObject<HTMLInputElement | null> }) {
   return (
     <label className="rounded-lg border border-slate-700 bg-slate-900/90 px-2 py-2 text-xs transition focus-within:border-cyan-500/60 focus-within:shadow-[0_0_10px_rgba(0,210,255,0.15)]">
       <span className="text-[11px] uppercase tracking-[0.16em] text-slate-400">{label}</span>
-      <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className="mt-1 w-full bg-transparent text-sm text-slate-200 outline-none placeholder:text-slate-600" />
+      <input
+        ref={(node) => {
+          if (inputRef) inputRef.current = node;
+        }}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="mt-1 w-full bg-transparent text-sm text-slate-200 outline-none placeholder:text-slate-600"
+      />
     </label>
   );
 }
@@ -1522,6 +1838,9 @@ function UnifiedScOcModule({
 }) {
   const [message, setMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
+  const [bulkStatus, setBulkStatus] = useState<OcPhase | "">("");
+  const [isBulkRunning, setIsBulkRunning] = useState(false);
   const rows = useMemo(() => buildUnifiedRows(scs, ocs, setores, fornecedores), [scs, ocs, setores, fornecedores]);
   const [formEntry, setFormEntry] = useState({
     solicitante: "",
@@ -1536,6 +1855,159 @@ function UnifiedScOcModule({
     descricao: "",
     status: "EM_ANALISE" as SCStatus,
   });
+
+  const selectedRows = useMemo(() => {
+    const selectedSet = new Set(selectedKeys);
+    return rows.filter((row) => selectedSet.has(`${row.entity}:${row.id}`));
+  }, [rows, selectedKeys]);
+
+  useEffect(() => {
+    setSelectedKeys((prev) => {
+      const available = new Set(rows.map((row) => `${row.entity}:${row.id}`));
+      return prev.filter((key) => available.has(key));
+    });
+  }, [rows]);
+
+  const allRowsSelected = rows.length > 0 && selectedKeys.length === rows.length;
+
+  const toggleRowSelection = (key: string) => {
+    setSelectedKeys((prev) => (prev.includes(key) ? prev.filter((item) => item !== key) : [...prev, key]));
+  };
+
+  const toggleSelectAll = () => {
+    if (allRowsSelected) {
+      setSelectedKeys([]);
+      return;
+    }
+    setSelectedKeys(rows.map((row) => `${row.entity}:${row.id}`));
+  };
+
+  const applyBulkStatus = async () => {
+    if (!bulkStatus || selectedRows.length === 0) return;
+    setIsBulkRunning(true);
+
+    let success = 0;
+    let failures = 0;
+
+    try {
+      for (const row of selectedRows) {
+        try {
+          if (row.entity === "SC") {
+            const scRecord = scs.find((item) => item.id === row.id);
+            if (!scRecord) {
+              failures += 1;
+              continue;
+            }
+
+            await onUpdateSC(scRecord.id, {
+              status: bulkStatus,
+              dataAprovacao: bulkStatus === "APROVADA" ? new Date().toISOString().slice(0, 10) : scRecord.dataAprovacao,
+              dataReprovacao: bulkStatus === "REPROVADA" ? new Date().toISOString().slice(0, 10) : scRecord.dataReprovacao,
+              dataLancamento: bulkStatus === "LANCADA" ? new Date().toISOString().slice(0, 10) : scRecord.dataLancamento,
+            });
+            success += 1;
+            continue;
+          }
+
+          const ocRecord = ocs.find((item) => item.id === row.id);
+          if (!ocRecord) {
+            failures += 1;
+            continue;
+          }
+
+          await onUpdateOC(ocRecord.id, { status: phaseToOcStatus(bulkStatus, ocRecord.status as OCStatus) });
+          success += 1;
+        } catch {
+          failures += 1;
+        }
+      }
+
+      setMessage(`Acao em lote concluida: ${success} atualizados, ${failures} falhas.`);
+      if (success > 0) setSelectedKeys([]);
+    } finally {
+      setIsBulkRunning(false);
+    }
+  };
+
+  const clearBulkNf = async () => {
+    if (selectedRows.length === 0) return;
+    setIsBulkRunning(true);
+
+    let success = 0;
+    let failures = 0;
+
+    try {
+      for (const row of selectedRows) {
+        try {
+          if (row.entity === "SC") {
+            const scRecord = scs.find((item) => item.id === row.id);
+            if (!scRecord) {
+              failures += 1;
+              continue;
+            }
+
+            await onUpdateSC(scRecord.id, {
+              observacoes: setTaggedValue(scRecord.observacoes, "NF", ""),
+              anexos: (scRecord.anexos ?? []).filter((entry) => !entry.startsWith("NF_FILE:")),
+            });
+            success += 1;
+            continue;
+          }
+
+          const ocRecord = ocs.find((item) => item.id === row.id);
+          if (!ocRecord) {
+            failures += 1;
+            continue;
+          }
+
+          await onUpdateOC(ocRecord.id, {
+            observacoes: setTaggedValue(ocRecord.observacoes, "NF", ""),
+            anexos: (ocRecord.anexos ?? []).filter((entry) => !entry.startsWith("NF_FILE:")),
+          });
+          success += 1;
+        } catch {
+          failures += 1;
+        }
+      }
+
+      setMessage(`Limpeza de NF em lote: ${success} atualizados, ${failures} falhas.`);
+      if (success > 0) setSelectedKeys([]);
+    } finally {
+      setIsBulkRunning(false);
+    }
+  };
+
+  const deleteSelectedRows = async () => {
+    if (selectedRows.length === 0) return;
+    if (typeof window !== "undefined") {
+      const approved = window.confirm(`Excluir ${selectedRows.length} registros selecionados? Esta acao nao pode ser desfeita.`);
+      if (!approved) return;
+    }
+
+    setIsBulkRunning(true);
+    let success = 0;
+    let failures = 0;
+
+    try {
+      for (const row of selectedRows) {
+        try {
+          if (row.entity === "SC") {
+            await onDeleteSC(row.id);
+          } else {
+            await onDeleteOC(row.id);
+          }
+          success += 1;
+        } catch {
+          failures += 1;
+        }
+      }
+
+      setMessage(`Exclusao em lote concluida: ${success} excluidos, ${failures} falhas.`);
+      if (success > 0) setSelectedKeys([]);
+    } finally {
+      setIsBulkRunning(false);
+    }
+  };
 
   return (
     <section className="space-y-4">
@@ -1689,21 +2161,80 @@ function UnifiedScOcModule({
       ) : null}
 
       <Panel title="Lista de Acompanhamento SC / OC">
-        <div className="overflow-x-hidden">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-slate-800 bg-slate-900/50 px-3 py-2 text-[11px] text-slate-300">
+          <span className="uppercase tracking-[0.14em] text-cyan-200">Tabela operacional integrada</span>
+          <span>{rows.length} linhas monitoradas</span>
+        </div>
+
+        {canWrite ? (
+          <div className="mb-3 rounded-lg border border-cyan-500/25 bg-cyan-500/5 p-3">
+            <div className="flex flex-wrap items-center gap-2 text-xs">
+              <span className="rounded-md border border-cyan-500/35 px-2 py-1 text-cyan-200">Selecionados: {selectedRows.length}</span>
+              <select
+                className="field max-w-[170px] text-xs"
+                value={bulkStatus}
+                onChange={(e) => setBulkStatus(e.target.value as OcPhase | "")}
+                disabled={isBulkRunning}
+              >
+                <option value="">Status em lote</option>
+                <option value="EM_ANALISE">Em Analise</option>
+                <option value="APROVADA">Aprovada</option>
+                <option value="REPROVADA">Reprovada</option>
+                <option value="LANCADA">Lancada</option>
+              </select>
+              <button
+                className="rounded border border-emerald-700 px-2 py-1 text-emerald-200 transition hover:bg-emerald-500/10 disabled:opacity-50"
+                onClick={() => void applyBulkStatus()}
+                disabled={!bulkStatus || selectedRows.length === 0 || isBulkRunning}
+              >
+                Aplicar status
+              </button>
+              <button
+                className="rounded border border-amber-700 px-2 py-1 text-amber-200 transition hover:bg-amber-500/10 disabled:opacity-50"
+                onClick={() => void clearBulkNf()}
+                disabled={selectedRows.length === 0 || isBulkRunning}
+              >
+                Limpar NF
+              </button>
+              <button
+                className="rounded border border-rose-700 px-2 py-1 text-rose-200 transition hover:bg-rose-500/10 disabled:opacity-50"
+                onClick={() => void deleteSelectedRows()}
+                disabled={selectedRows.length === 0 || isBulkRunning}
+              >
+                Excluir selecionados
+              </button>
+              <button
+                className="rounded border border-slate-700 px-2 py-1 text-slate-300 transition hover:bg-slate-800/80 disabled:opacity-50"
+                onClick={() => setSelectedKeys([])}
+                disabled={selectedRows.length === 0 || isBulkRunning}
+              >
+                Limpar selecao
+              </button>
+              {isBulkRunning ? <span className="text-cyan-200">Processando lote...</span> : null}
+            </div>
+          </div>
+        ) : null}
+
+        <div className="overflow-hidden rounded-xl border border-slate-800/90 bg-slate-950/50">
           <table className="w-full table-fixed text-xs md:text-sm">
-            <thead className="text-left text-[11px] uppercase tracking-[0.14em] text-slate-500">
+            <thead className="sticky top-0 z-10 bg-slate-950/95 text-left text-[10px] uppercase tracking-[0.14em] text-slate-400 backdrop-blur">
               <tr>
-                <th className="w-[6%] py-2">SC</th>
-                <th className="w-[6%]">OC</th>
-                <th className="w-[5%]">NF</th>
-                <th className="w-[13%]">Solicitante</th>
-                <th className="w-[14%]">Razao Social</th>
-                <th className="w-[8%]">Unidade</th>
-                <th className="w-[10%]">CNPJ</th>
-                <th className="w-[12%]">Status</th>
-                <th className="w-[10%] text-right">Valor</th>
-                <th className="w-[8%]">Data</th>
-                <th className="w-[8%]">Acoes</th>
+                <th className="w-[4%] px-2 py-2">
+                  {canWrite ? (
+                    <input type="checkbox" checked={allRowsSelected} onChange={toggleSelectAll} className="h-3.5 w-3.5 accent-cyan-500" />
+                  ) : null}
+                </th>
+                <th className="w-[8%] px-2 py-2">SC</th>
+                <th className="w-[8%] px-2">OC</th>
+                <th className="w-[8%] px-2">NF</th>
+                <th className="w-[16%] px-2">Solicitante</th>
+                <th className="hidden w-[15%] px-2 md:table-cell">Razao Social</th>
+                <th className="hidden w-[10%] px-2 md:table-cell">Unidade</th>
+                <th className="hidden w-[10%] px-2 lg:table-cell">CNPJ</th>
+                <th className="w-[12%] px-2">Status</th>
+                <th className="w-[10%] px-2 text-right">Valor</th>
+                <th className="w-[8%] px-2">Data</th>
+                <th className="w-[13%] px-2">Acoes</th>
               </tr>
             </thead>
             <tbody>
@@ -1725,20 +2256,32 @@ function UnifiedScOcModule({
                 const solicitante = scRecord?.solicitante || ocRecord?.responsavel || "-";
                 const rowDate = scRecord?.dataCriacao || ocRecord?.dataOC || row.sortDate;
                 const fileInputId = `nf-upload-${row.entity}-${row.id}`;
+                const rowSelectionKey = `${row.entity}:${row.id}`;
+                const isSelected = selectedKeys.includes(rowSelectionKey);
 
                 return (
-                  <tr key={`${row.entity}-${row.id}`} className="border-t border-slate-800 transition hover:bg-slate-900/60">
-                    <td className="truncate py-2 pr-2 font-medium text-cyan-100">{row.numeroSC}</td>
-                    <td className="truncate pr-2 text-slate-200">{row.numeroOC}</td>
-                    <td className="truncate pr-2">{nfValue || "-"}</td>
-                    <td className="truncate pr-2">{solicitante}</td>
-                    <td className="truncate pr-2">{razaoSocial}</td>
-                    <td className="truncate pr-2">{unidadeValue}</td>
-                    <td className="truncate pr-2">{cnpj}</td>
-                    <td>
+                  <tr key={`${row.entity}-${row.id}`} className={`border-t border-slate-800/90 align-top transition even:bg-slate-900/30 hover:bg-slate-900/70 ${isSelected ? "bg-cyan-500/10" : ""}`}>
+                    <td className="px-2 py-2">
+                      {canWrite ? (
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => toggleRowSelection(rowSelectionKey)}
+                          className="h-3.5 w-3.5 accent-cyan-500"
+                        />
+                      ) : null}
+                    </td>
+                    <td className="truncate px-2 py-2 font-medium text-cyan-100">{row.numeroSC}</td>
+                    <td className="truncate px-2 text-slate-200">{row.numeroOC}</td>
+                    <td className="truncate px-2">{nfValue || "-"}</td>
+                    <td className="truncate px-2">{solicitante}</td>
+                    <td className="hidden truncate px-2 md:table-cell">{razaoSocial}</td>
+                    <td className="hidden truncate px-2 md:table-cell">{unidadeValue}</td>
+                    <td className="hidden truncate px-2 lg:table-cell">{cnpj}</td>
+                    <td className="px-2">
                       {canWrite && row.entity === "SC" && scRecord ? (
                         <select
-                          className="field max-w-[125px] text-xs"
+                          className="field w-full max-w-[132px] text-xs"
                           value={scRecord.status}
                           onChange={async (e) => {
                             const nextStatus = e.target.value as SCStatus;
@@ -1759,7 +2302,7 @@ function UnifiedScOcModule({
 
                       {canWrite && row.entity === "OC" && ocRecord ? (
                         <select
-                          className="field max-w-[125px] text-xs"
+                          className="field w-full max-w-[132px] text-xs"
                           value={ocToPhase(ocRecord.status as OCStatus)}
                           onChange={async (e) => {
                             const phase = e.target.value as OcPhase;
@@ -1773,19 +2316,19 @@ function UnifiedScOcModule({
                         </select>
                       ) : null}
 
-                      {!canWrite ? <span className={`whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-medium ${businessStatusBadge(row.statusKey)}`}>{row.statusLabel}</span> : null}
+                      {!canWrite ? <span className={`inline-flex whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-medium ${businessStatusBadge(row.statusKey)}`}>{row.statusLabel}</span> : null}
                     </td>
-                    <td className="pr-2 font-medium text-right text-emerald-300">{formatCurrency(row.valor)}</td>
-                    <td className="pr-2">{rowDate}</td>
-                    <td>
-                      <div className="flex flex-wrap items-center gap-1">
+                    <td className="px-2 text-right font-medium text-emerald-300">{formatCurrency(row.valor)}</td>
+                    <td className="px-2 text-slate-300">{formatDatePtBr(rowDate)}</td>
+                    <td className="px-2 py-2">
+                      <div className="flex flex-col items-start gap-1 xl:flex-row xl:items-center">
                         {scRecord ? (
-                          <button className="rounded border border-slate-700 px-2 py-1 text-xs" onClick={() => onPickTimeline(scRecord.id)}>
+                          <button className="rounded border border-slate-700 px-2 py-1 text-xs transition hover:bg-slate-800/80" onClick={() => onPickTimeline(scRecord.id)}>
                             Timeline
                           </button>
                         ) : null}
                         {canWrite ? (
-                          <label className="cursor-pointer rounded border border-emerald-700 px-2 py-1 text-xs text-emerald-200">
+                          <label className="cursor-pointer rounded border border-emerald-700 px-2 py-1 text-xs text-emerald-200 transition hover:bg-emerald-500/10">
                             Arquivo NF
                             <input
                               id={fileInputId}
@@ -1827,7 +2370,7 @@ function UnifiedScOcModule({
                         {nfArquivoLabel ? <span className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300">NF: {nfArquivoLabel}</span> : null}
                         {canWrite ? (
                           <button
-                            className="rounded border border-rose-700 px-2 py-1 text-xs"
+                            className="rounded border border-rose-700 px-2 py-1 text-xs transition hover:bg-rose-500/10"
                             onClick={async () => {
                               if (row.entity === "SC") {
                                 await onDeleteSC(row.id);
