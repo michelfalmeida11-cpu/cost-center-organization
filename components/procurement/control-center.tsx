@@ -686,7 +686,7 @@ export function ProcurementControlCenter() {
           </div>
         </aside>
 
-        <main className="flex-1 px-3 pb-24 pt-3 md:p-6 md:pb-6">
+        <main className="min-w-0 flex-1 px-3 pb-24 pt-3 md:p-6 md:pb-6">
           <header className="mb-4 rounded-2xl border border-cyan-400/25 bg-slate-950/75 p-3 shadow-[0_0_40px_rgba(53,243,255,0.09)] backdrop-blur-sm md:p-5">
             <div className="mb-3 flex items-center justify-between gap-2 md:hidden">
               <button onClick={() => setMobileMenuOpen(true)} className="rounded-lg border border-slate-700 bg-slate-900/80 p-2 text-slate-200">
@@ -909,21 +909,21 @@ export function ProcurementControlCenter() {
 
               <div className="mt-4">
                 <Panel title="Ultimas Movimentacoes SC / OC">
-                  <div className="overflow-auto">
+                  <div className="overflow-x-hidden">
                     <table className="w-full table-fixed text-xs md:text-sm">
                       <thead className="text-left text-[11px] uppercase tracking-[0.14em] text-slate-500">
                         <tr>
-                          <th className="w-[84px] py-2">SC</th>
-                          <th className="w-[84px]">OC</th>
-                          <th className="w-[70px]">NF</th>
-                          <th className="w-[150px]">Solicitante</th>
-                          <th className="w-[170px]">Razao Social</th>
-                          <th className="w-[100px]">Unidade</th>
-                          <th className="w-[130px]">CNPJ</th>
-                          <th className="w-[140px]">Status</th>
-                          <th className="w-[115px] text-right">Valor</th>
-                          <th className="w-[105px]">Data</th>
-                          <th className="w-[150px]">Acoes</th>
+                          <th className="w-[6%] py-2">SC</th>
+                          <th className="w-[6%]">OC</th>
+                          <th className="w-[5%]">NF</th>
+                          <th className="w-[13%]">Solicitante</th>
+                          <th className="w-[14%]">Razao Social</th>
+                          <th className="w-[8%]">Unidade</th>
+                          <th className="w-[10%]">CNPJ</th>
+                          <th className="w-[12%]">Status</th>
+                          <th className="w-[10%] text-right">Valor</th>
+                          <th className="w-[8%]">Data</th>
+                          <th className="w-[8%]">Acoes</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -955,7 +955,7 @@ export function ProcurementControlCenter() {
                             <td className="pr-2">
                               {canWrite && row.entity === "SC" && scRecord ? (
                                 <select
-                                  className="field max-w-[150px] text-xs"
+                                  className="field max-w-[125px] text-xs"
                                   value={scRecord.status}
                                   onChange={async (e) => {
                                     const nextStatus = e.target.value as SCStatus;
@@ -976,7 +976,7 @@ export function ProcurementControlCenter() {
 
                               {canWrite && row.entity === "OC" && ocRecord ? (
                                 <select
-                                  className="field max-w-[150px] text-xs"
+                                  className="field max-w-[125px] text-xs"
                                   value={ocToPhase(ocRecord.status as OCStatus)}
                                   onChange={async (e) => {
                                     const phase = e.target.value as OcPhase;
@@ -995,7 +995,7 @@ export function ProcurementControlCenter() {
                             <td className="pr-2 font-medium text-right text-emerald-300">{formatCurrency(row.valor)}</td>
                             <td className="pr-2">{rowDate}</td>
                             <td className="pr-2">
-                              <div className="flex flex-wrap items-center gap-1.5">
+                              <div className="flex flex-wrap items-center justify-start gap-1">
                                 {canWrite ? (
                                   <label className="cursor-pointer rounded border border-emerald-700 px-2 py-1 text-xs text-emerald-200">
                                     Upload NF
@@ -1547,21 +1547,21 @@ function UnifiedScOcModule({
       ) : null}
 
       <Panel title="Lista de Acompanhamento SC / OC">
-        <div className="overflow-auto">
-          <table className="min-w-[1280px] w-full text-sm">
+        <div className="overflow-x-hidden">
+          <table className="w-full table-fixed text-xs md:text-sm">
             <thead className="text-left text-[11px] uppercase tracking-[0.14em] text-slate-500">
               <tr>
-                <th className="py-2">SC</th>
-                <th>OC</th>
-                <th>NF</th>
-                <th>Solicitante</th>
-                <th>Razao Social</th>
-                <th>Unidade</th>
-                <th>CNPJ</th>
-                <th>Status</th>
-                <th>Valor</th>
-                <th>Data</th>
-                <th>Acoes</th>
+                <th className="w-[6%] py-2">SC</th>
+                <th className="w-[6%]">OC</th>
+                <th className="w-[5%]">NF</th>
+                <th className="w-[13%]">Solicitante</th>
+                <th className="w-[14%]">Razao Social</th>
+                <th className="w-[8%]">Unidade</th>
+                <th className="w-[10%]">CNPJ</th>
+                <th className="w-[12%]">Status</th>
+                <th className="w-[10%] text-right">Valor</th>
+                <th className="w-[8%]">Data</th>
+                <th className="w-[8%]">Acoes</th>
               </tr>
             </thead>
             <tbody>
@@ -1586,17 +1586,17 @@ function UnifiedScOcModule({
 
                 return (
                   <tr key={`${row.entity}-${row.id}`} className="border-t border-slate-800 transition hover:bg-slate-900/60">
-                    <td className="py-2 pr-2 font-medium text-cyan-100">{row.numeroSC}</td>
-                    <td className="pr-2 text-slate-200">{row.numeroOC}</td>
-                    <td className="pr-2">{nfValue || "-"}</td>
-                    <td className="pr-2">{solicitante}</td>
-                    <td className="pr-2">{razaoSocial}</td>
-                    <td className="pr-2">{unidadeValue}</td>
-                    <td className="pr-2">{cnpj}</td>
+                    <td className="truncate py-2 pr-2 font-medium text-cyan-100">{row.numeroSC}</td>
+                    <td className="truncate pr-2 text-slate-200">{row.numeroOC}</td>
+                    <td className="truncate pr-2">{nfValue || "-"}</td>
+                    <td className="truncate pr-2">{solicitante}</td>
+                    <td className="truncate pr-2">{razaoSocial}</td>
+                    <td className="truncate pr-2">{unidadeValue}</td>
+                    <td className="truncate pr-2">{cnpj}</td>
                     <td>
                       {canWrite && row.entity === "SC" && scRecord ? (
                         <select
-                          className="field max-w-[150px] text-xs"
+                          className="field max-w-[125px] text-xs"
                           value={scRecord.status}
                           onChange={async (e) => {
                             const nextStatus = e.target.value as SCStatus;
@@ -1617,7 +1617,7 @@ function UnifiedScOcModule({
 
                       {canWrite && row.entity === "OC" && ocRecord ? (
                         <select
-                          className="field max-w-[150px] text-xs"
+                          className="field max-w-[125px] text-xs"
                           value={ocToPhase(ocRecord.status as OCStatus)}
                           onChange={async (e) => {
                             const phase = e.target.value as OcPhase;
@@ -1636,7 +1636,7 @@ function UnifiedScOcModule({
                     <td className="pr-2 font-medium text-right text-emerald-300">{formatCurrency(row.valor)}</td>
                     <td className="pr-2">{rowDate}</td>
                     <td>
-                      <div className="flex flex-wrap gap-2">
+                      <div className="flex flex-wrap items-center gap-1">
                         {scRecord ? (
                           <button className="rounded border border-slate-700 px-2 py-1 text-xs" onClick={() => onPickTimeline(scRecord.id)}>
                             Timeline
