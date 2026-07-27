@@ -10,6 +10,17 @@ type Store = {
 
 let hydrationPromise: Promise<void> | null = null;
 let isHydrated = false;
+let hydrationSource: "supabase" | "supabase-empty-fallback" | "memory" = "memory";
+
+function createEmptyState(): AppState {
+  return {
+    setores: [],
+    fornecedores: [],
+    scs: [],
+    ocs: [],
+    auditoria: [],
+  };
+}
 
 function normalizedState(state: AppState): AppState {
   return {
@@ -86,7 +97,14 @@ export async function ensureStoreHydrated() {
         const loaded = await loadStateFromSupabase();
         if (loaded) {
           getStore().state = normalizedState(loaded);
+          hydrationSource = "supabase";
+        } else {
+          // In Supabase mode, never repopulate mock data after cold start.
+          getStore().state = createEmptyState();
+          hydrationSource = "supabase-empty-fallback";
         }
+      } else {
+        hydrationSource = "memory";
       }
       isHydrated = true;
     })();
@@ -98,6 +116,7 @@ export function getPersistenceInfo() {
   return {
     driver: getConfiguredDriver(),
     hydrated: isHydrated,
+    hydrationSource,
     supabase: getSupabaseDiagnostics(),
   };
 }
