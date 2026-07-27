@@ -1,6 +1,6 @@
 import { MOCK_STATE, MOCK_USERS, applyAutomaticOcStatus, buildAlerts, computeKpis, filterData, monthlySeries, sectorSeries, statusSeries, supplierRanking } from "@/lib/procurement/data";
 import { AppState, AuditLog, EntityType, OCStatus, PurchaseOrder, PurchaseRequest, Role, SCStatus, Sector, Supplier } from "@/lib/procurement/types";
-import { getConfiguredDriver, loadStateFromSupabase, saveStateToSupabase } from "@/lib/procurement/repository-supabase-ready";
+import { getConfiguredDriver, getSupabaseDiagnostics, loadStateFromSupabase, saveStateToSupabase } from "@/lib/procurement/repository-supabase-ready";
 
 const GLOBAL_KEY = "__cyberproc_store__";
 
@@ -98,6 +98,7 @@ export function getPersistenceInfo() {
   return {
     driver: getConfiguredDriver(),
     hydrated: isHydrated,
+    supabase: getSupabaseDiagnostics(),
   };
 }
 

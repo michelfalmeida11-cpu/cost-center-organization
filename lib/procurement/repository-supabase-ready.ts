@@ -4,6 +4,16 @@ import { AppState } from "@/lib/procurement/types";
 export type PersistenceDriver = "memory" | "supabase";
 type AnySupabaseClient = SupabaseClient<any, any, any, any, any>;
 
+let lastPersistenceError: string | null = null;
+
+function setLastPersistenceError(message: string | null) {
+  lastPersistenceError = message;
+}
+
+export function getLastPersistenceError() {
+  return lastPersistenceError;
+}
+
 function isValidHttpUrl(value: string) {
   try {
     const parsed = new URL(value);
@@ -14,34 +24,51 @@ function isValidHttpUrl(value: string) {
 }
 
 function getSupabaseConfig() {
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  const anonKey = process.env.SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
+
   const url =
     process.env.SUPABASE_URL ||
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
     "";
 
-  const key =
-    process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_ANON_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
-    "";
+  const key = serviceRoleKey || anonKey;
+  const keySource = serviceRoleKey ? "service_role" : anonKey ? "anon" : "none";
 
-  return { url, key };
+  return {
+    url,
+    key,
+    keySource,
+    hasServiceRoleKey: Boolean(serviceRoleKey),
+    hasAnonKey: Boolean(anonKey),
+  };
 }
 
 function getSupabaseClient(): AnySupabaseClient | null {
-  const { url, key } = getSupabaseConfig();
-  if (!url || !key) return null;
+  const { url, key, keySource } = getSupabaseConfig();
+  if (!url || !key) {
+    setLastPersistenceError("SUPABASE_URL/SUPABASE_KEY ausentes no ambiente de execucao.");
+    return null;
+  }
   if (!isValidHttpUrl(url)) {
     console.warn("Invalid SUPABASE_URL/NEXT_PUBLIC_SUPABASE_URL. Falling back to memory persistence.");
+    setLastPersistenceError("SUPABASE_URL invalida. Verifique URL completa com https://");
     return null;
   }
 
+  if (keySource !== "service_role") {
+    // Writes can be blocked by RLS when only anon key is configured.
+    console.warn("Using anon key for server persistence. Prefer SUPABASE_SERVICE_ROLE_KEY in production.");
+  }
+
   try {
+    setLastPersistenceError(null);
     return createClient(url, key, {
       auth: { persistSession: false, autoRefreshToken: false },
     }) as AnySupabaseClient;
   } catch {
     console.warn("Failed to initialize Supabase client. Falling back to memory persistence.");
+    setLastPersistenceError("Falha ao inicializar cliente Supabase.");
     return null;
   }
 }
@@ -59,6 +86,33 @@ export function getConfiguredDriver(): PersistenceDriver {
 
   // Auto-detect mode when the env var is missing.
   return isSupabaseAvailable() ? "supabase" : "memory";
+}
+
+export function getSupabaseDiagnostics() {
+  const rawMode = (process.env.PROCUREMENT_PERSISTENCE_DRIVER ?? "").trim().toLowerCase();
+  const mode = rawMode || "auto";
+  const { url, keySource, hasServiceRoleKey, hasAnonKey } = getSupabaseConfig();
+  const urlLooksValid = Boolean(url) && isValidHttpUrl(url);
+  const driver = getConfiguredDriver();
+
+  const advice: string[] = [];
+  if (!url) advice.push("Defina SUPABASE_URL no Vercel.");
+  if (!hasServiceRoleKey) advice.push("Defina SUPABASE_SERVICE_ROLE_KEY no Vercel para persistencia server-side.");
+  if (!urlLooksValid && url) advice.push("Corrija SUPABASE_URL para formato https://<project>.supabase.co");
+  if (mode === "memory") advice.push("PROCUREMENT_PERSISTENCE_DRIVER esta em memory; altere para supabase ou remova para auto.");
+  if (driver === "memory" && advice.length === 0) advice.push("Verifique permissoes RLS e migrations das tabelas de procurement.");
+
+  return {
+    mode,
+    driver,
+    hasSupabaseUrl: Boolean(url),
+    urlLooksValid,
+    keySource,
+    hasServiceRoleKey,
+    hasAnonKey,
+    lastPersistenceError,
+    advice,
+  };
 }
 
 export async function loadStateFromSupabase(): Promise<AppState | null> {
@@ -93,8 +147,20 @@ async function loadStateFromRelationalTables(client: AnySupabaseClient): Promise
   ]);
 
   if (setoresRes.error || fornecedoresRes.error || scRes.error || ocRes.error || auditRes.error) {
+    const message = [
+      setoresRes.error?.message,
+      fornecedoresRes.error?.message,
+      scRes.error?.message,
+      ocRes.error?.message,
+      auditRes.error?.message,
+    ]
+      .filter(Boolean)
+      .join(" | ");
+    setLastPersistenceError(message || "Falha ao carregar dados relacionais do Supabase.");
     return null;
   }
+
+  setLastPersistenceError(null);
 
   const setores = (setoresRes.data ?? []).map((r) => ({
     id: String(r.id),
@@ -294,6 +360,10 @@ async function saveStateToRelationalTables(client: AnySupabaseClient, state: App
   ]);
 
   if (r1.error || r2.error || r3.error || r4.error) {
+    const message = [r1.error?.message, r2.error?.message, r3.error?.message, r4.error?.message]
+      .filter(Boolean)
+      .join(" | ");
+    setLastPersistenceError(message || "Falha ao persistir dados no Supabase.");
     console.error("Supabase persistence failed", {
       sectorsError: r1.error?.message,
       suppliersError: r2.error?.message,
@@ -306,6 +376,8 @@ async function saveStateToRelationalTables(client: AnySupabaseClient, state: App
   if (r5.error) {
     console.warn("Supabase audit upsert failed (non-blocking):", r5.error.message);
   }
+
+  setLastPersistenceError(null);
 
   return true;
 }
