@@ -5,6 +5,10 @@ import { NextRequest } from "next/server";
 export async function POST(req: NextRequest) {
   await ensureStoreHydrated();
 
+  if (process.env.NODE_ENV === "production" && process.env.ALLOW_PRODUCTION_SEED !== "true") {
+    return fail("Endpoint de seed bloqueado em producao.", 403);
+  }
+
   const auth = await requireActor(req);
   if ("error" in auth) return auth.error;
 
