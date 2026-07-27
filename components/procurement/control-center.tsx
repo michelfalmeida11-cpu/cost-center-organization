@@ -165,6 +165,21 @@ type PremiumKpiCard = {
   series: number[];
 };
 
+type AssistantFacts = {
+  totalSc: number;
+  totalOc: number;
+  totalScOcValue: number;
+  pendingSc: number;
+  openOc: number;
+  delayedOc: number;
+  topSupplier: string;
+  topSector: string;
+  activeSuppliers: number;
+  onTimeRate: number;
+  leadTime: number;
+  approvalTime: number;
+};
+
 function ocToPhase(status: OCStatus): OcPhase {
   if (status === "CANCELADA") return "REPROVADA";
   if (status === "CONFIRMADA" || status === "EM_PRODUCAO" || status === "EM_TRANSPORTE" || status === "ENTREGUE" || status === "ATRASADA") return "APROVADA";
@@ -178,12 +193,6 @@ function phaseToOcStatus(phase: OcPhase, current: OCStatus): OCStatus {
   if (phase === "EM_ANALISE") return "CRIADA";
   if (current === "ENTREGUE" || current === "ATRASADA") return current;
   return "CONFIRMADA";
-}
-
-function formatCompactCurrency(value: number) {
-  if (value >= 1000000) return `R$ ${(value / 1000000).toFixed(2)} Mi`;
-  if (value >= 1000) return `R$ ${(value / 1000).toFixed(1)} mil`;
-  return formatCurrency(value);
 }
 
 function phaseColor(label: string) {
@@ -296,6 +305,59 @@ function normalizeName(value: string) {
   return value.trim().toLowerCase();
 }
 
+function answerProcurementQuestion(rawQuestion: string, facts: AssistantFacts) {
+  const q = normalizeName(rawQuestion);
+  if (!q) {
+    return "Pergunte sobre SC, OC, valores, atrasos, fornecedores, setores, prazos, lead time, aprovacao, ranking ou uso dos modulos.";
+  }
+
+  if (q.includes("total") && q.includes("sc") && q.includes("oc")) {
+    return `Total atual: ${facts.totalSc} SC e ${facts.totalOc} OC. Valor consolidado: ${formatCurrency(facts.totalScOcValue)}.`;
+  }
+
+  if (q.includes("valor") || q.includes("financeiro") || q.includes("gasto")) {
+    return `Valor consolidado SC + OC: ${formatCurrency(facts.totalScOcValue)}.`;
+  }
+
+  if (q.includes("atras") || q.includes("atrasada") || q.includes("atraso")) {
+    return `Existem ${facts.delayedOc} OCs atrasadas e ${facts.openOc} OCs em aberto.`;
+  }
+
+  if (q.includes("pendente") || q.includes("analise") || q.includes("aprova")) {
+    return `Temos ${facts.pendingSc} SC em analise. Tempo medio de aprovacao: ${facts.approvalTime} dias.`;
+  }
+
+  if (q.includes("fornecedor") && (q.includes("lider") || q.includes("top") || q.includes("melhor"))) {
+    return `Fornecedor lider atual: ${facts.topSupplier}. Fornecedores ativos: ${facts.activeSuppliers}.`;
+  }
+
+  if (q.includes("setor") && (q.includes("lider") || q.includes("top") || q.includes("maior"))) {
+    return `Setor lider atual: ${facts.topSector}.`;
+  }
+
+  if (q.includes("prazo") || q.includes("sla")) {
+    return `Taxa de entregas no prazo: ${facts.onTimeRate}%.`;
+  }
+
+  if (q.includes("lead") || q.includes("entrega")) {
+    return `Lead time medio atual: ${facts.leadTime} dias.`;
+  }
+
+  if (q.includes("kpi") || q.includes("analytics")) {
+    return "Use a aba KPIs & Analytics para tempo medio de aprovacao, lead time, taxa no prazo, ticket medio e evolucao financeira mensal.";
+  }
+
+  if (q.includes("excel") || q.includes("import") || q.includes("export")) {
+    return "Use a aba Exportacao Excel para exportar dashboard completo e importar abas SC, OC, FORNECEDORES e SETORES com validacao.";
+  }
+
+  if (q.includes("como") || q.includes("onde") || q.includes("modulo")) {
+    return "Fluxo recomendado: 1) Central SC/OC para lancamentos e edicoes. 2) Acompanhamento para Kanban e timeline. 3) KPIs & Analytics para analise executiva.";
+  }
+
+  return "Nao encontrei uma resposta direta para essa pergunta. Tente: total de SC/OC, valor total, atrasos, fornecedor lider, setor lider, taxa no prazo ou lead time.";
+}
+
 function ModuleTitle({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <div className="mb-4">
@@ -315,7 +377,7 @@ function LoginCard() {
     return (
       <div className="mx-auto mt-20 w-full max-w-md rounded-2xl border border-slate-800 bg-slate-950/90 p-8 text-center shadow-[0_20px_40px_rgba(2,6,23,0.55)]">
         <div className="mx-auto mb-4 h-12 w-44 opacity-90">
-          <Image src="/avg-logo.png" alt="Grupo AVG Emesa" width={176} height={48} className="h-full w-full object-contain" priority />
+          <Image src="/avg-logo.svg" alt="Grupo AVG Emesa" width={176} height={48} className="h-full w-full object-contain" priority />
         </div>
         <p className="text-sm text-slate-300">Carregando sessao segura...</p>
       </div>
@@ -325,7 +387,7 @@ function LoginCard() {
   return (
     <div className="mx-auto mt-16 w-full max-w-md rounded-2xl border border-slate-800 bg-slate-950/92 p-8 shadow-[0_24px_50px_rgba(2,6,23,0.65)]">
       <div className="mb-5 h-14 w-56">
-        <Image src="/avg-logo.png" alt="Grupo AVG Emesa" width={224} height={56} className="h-full w-full object-contain object-left" priority />
+        <Image src="/avg-logo.svg" alt="Grupo AVG Emesa" width={224} height={56} className="h-full w-full object-contain object-left" priority />
       </div>
       <h1 className="font-orbitron text-2xl text-slate-100">SC / OC ENTERPRISE COMMAND</h1>
       <p className="mt-2 text-sm text-slate-400">Acesso corporativo para gestao de procurement, aprovacoes e inteligencia operacional.</p>
@@ -385,6 +447,9 @@ export function ProcurementControlCenter() {
   const [commandOpen, setCommandOpen] = useState(false);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [quickActionFeedback, setQuickActionFeedback] = useState("");
+  const [aiQuestion, setAiQuestion] = useState("");
+  const [aiAnswer, setAiAnswer] = useState("Pergunte sobre SC, OC, valores, atrasos, fornecedores e indicadores.");
+  const [movementDetail, setMovementDetail] = useState<{ title: string; description: string; details: string } | null>(null);
   const commandInputRef = useRef<HTMLInputElement | null>(null);
   const scFilterInputRef = useRef<HTMLInputElement | null>(null);
   const responsibleFilterInputRef = useRef<HTMLInputElement | null>(null);
@@ -394,6 +459,22 @@ export function ProcurementControlCenter() {
   const monthly = useMemo(() => monthlySeries(state, filters), [state, filters]);
   const ranking = useMemo(() => supplierRanking(state, filters), [state, filters]);
   const statuses = useMemo(() => statusSeries(state, filters), [state, filters]);
+  const kpisGlobal = useMemo(() => computeKpis(state, EMPTY_FILTERS), [state]);
+  const monthlyGlobal = useMemo(() => monthlySeries(state, EMPTY_FILTERS), [state]);
+  const statusesGlobal = useMemo(() => statusSeries(state, EMPTY_FILTERS), [state]);
+  const rankingGlobal = useMemo(() => supplierRanking(state, EMPTY_FILTERS), [state]);
+  const rankingPerformance = useMemo(
+    () => rankingGlobal.filter((item) => item.totalOC > 0 || item.valorTotal > 0),
+    [rankingGlobal],
+  );
+  const analyticsValuePerOc = useMemo(
+    () => (kpisGlobal.totalOC > 0 ? kpisGlobal.valorTotalOC / kpisGlobal.totalOC : 0),
+    [kpisGlobal.totalOC, kpisGlobal.valorTotalOC],
+  );
+  const analyticsScToOcConversion = useMemo(
+    () => (kpisGlobal.totalSC > 0 ? Number(((kpisGlobal.totalOC / kpisGlobal.totalSC) * 100).toFixed(2)) : 0),
+    [kpisGlobal.totalOC, kpisGlobal.totalSC],
+  );
   const unifiedRows = useMemo(() => buildUnifiedRows(dataset.scFiltered, dataset.ocFiltered as PurchaseOrder[], state.setores, state.fornecedores), [dataset.scFiltered, dataset.ocFiltered, state.setores, state.fornecedores]);
   const scOcBySector = useMemo(() => {
     const map = new Map<string, { setor: string; total: number; valor: number }>();
@@ -413,6 +494,20 @@ export function ProcurementControlCenter() {
     });
     return Array.from(map.values()).sort((a, b) => b.total - a.total);
   }, [dataset.scFiltered, dataset.ocFiltered, state.setores]);
+  const assistantFacts = useMemo<AssistantFacts>(() => ({
+    totalSc: kpisGlobal.totalSC,
+    totalOc: kpisGlobal.totalOC,
+    totalScOcValue: kpisGlobal.valorTotalSC + kpisGlobal.valorTotalOC,
+    pendingSc: kpisGlobal.emAnalise,
+    openOc: kpisGlobal.entregasPendentes,
+    delayedOc: kpisGlobal.entregasAtrasadas,
+    topSupplier: rankingPerformance[0]?.fornecedor ?? "Sem fornecedor lider",
+    topSector: scOcBySector[0]?.setor ?? "Sem setor lider",
+    activeSuppliers: kpisGlobal.fornecedoresAtivos,
+    onTimeRate: kpisGlobal.taxaEntregaNoPrazo,
+    leadTime: kpisGlobal.leadTimeMedioDias,
+    approvalTime: kpisGlobal.tempoMedioAprovacaoDias,
+  }), [kpisGlobal, rankingPerformance, scOcBySector]);
   const ocByPhase = useMemo(() => {
     const order: OcPhase[] = ["EM_ANALISE", "APROVADA", "LANCADA", "REPROVADA"];
     const map = new Map<OcPhase, number>();
@@ -564,7 +659,7 @@ export function ProcurementControlCenter() {
     return [
       {
         label: "VALOR TOTAL SC + OC",
-        value: formatCompactCurrency(kpis.valorTotalSC + kpis.valorTotalOC),
+        value: formatCurrency(kpis.valorTotalSC + kpis.valorTotalOC),
         note: "Carteira financeira consolidada",
         context: "vs. periodo anterior",
         delta: deltaFrom(valueSeries),
@@ -701,6 +796,10 @@ export function ProcurementControlCenter() {
       : (index - 1 + NAV.length) % NAV.length;
     setModule(NAV[nextIndex].id);
   }, [module]);
+
+  const submitAiQuestion = useCallback((question: string) => {
+    setAiAnswer(answerProcurementQuestion(question, assistantFacts));
+  }, [assistantFacts]);
 
   useEffect(() => {
     const handleShortcut = (event: KeyboardEvent) => {
@@ -887,11 +986,11 @@ export function ProcurementControlCenter() {
             <div className="flex items-center justify-between">
               {!collapsedSidebar ? (
                 <div className="h-12 w-[180px]">
-                  <Image src="/avg-logo.png" alt="Grupo AVG Emesa" width={180} height={48} className="h-full w-full object-contain object-left" priority />
+                  <Image src="/avg-logo.svg" alt="Grupo AVG Emesa" width={180} height={48} className="h-full w-full object-contain object-left" priority />
                 </div>
               ) : (
                 <div className="h-10 w-10 overflow-hidden rounded-lg border border-[#1A3445] bg-[#05080D]">
-                  <Image src="/avg-logo.png" alt="Grupo AVG Emesa" width={40} height={40} className="h-full w-full object-cover object-left" priority />
+                  <Image src="/avg-logo.svg" alt="Grupo AVG Emesa" width={40} height={40} className="h-full w-full object-cover object-left" priority />
                 </div>
               )}
               <button onClick={() => setCollapsedSidebar(!collapsedSidebar)} className="rounded-md border border-slate-700 p-1 hover:border-cyan-400/70">
@@ -944,6 +1043,29 @@ export function ProcurementControlCenter() {
                 </button>
               </div>
               <button onClick={logout} className="mt-3 w-full rounded-md border border-rose-500/40 bg-rose-500/10 py-2 text-rose-200">Sair</button>
+
+              <div className="mt-3 rounded-lg border border-cyan-500/25 bg-cyan-500/5 p-2">
+                <p className="text-[10px] uppercase tracking-[0.18em] text-cyan-200">IA de Perguntas</p>
+                <input
+                  value={aiQuestion}
+                  onChange={(e) => setAiQuestion(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      submitAiQuestion(aiQuestion);
+                    }
+                  }}
+                  placeholder="Pergunte sobre SC, OC, KPI..."
+                  className="mt-2 w-full rounded border border-slate-700 bg-slate-900/90 px-2 py-1.5 text-xs text-slate-100 outline-none"
+                />
+                <button
+                  onClick={() => submitAiQuestion(aiQuestion)}
+                  className="mt-2 w-full rounded border border-cyan-500/40 bg-cyan-500/10 px-2 py-1.5 text-xs text-cyan-100 transition hover:bg-cyan-500/20"
+                >
+                  Responder
+                </button>
+                <div className="mt-2 rounded border border-slate-800 bg-slate-900/70 p-2 text-[11px] text-slate-300">{aiAnswer}</div>
+              </div>
             </div>
           ) : null}
         </aside>
@@ -956,7 +1078,7 @@ export function ProcurementControlCenter() {
           <div className="mb-6 rounded-xl border border-[#1A3445] bg-[#0C1420]/90 p-3">
             <div className="flex items-center justify-between">
               <div className="h-11 w-[170px]">
-                <Image src="/avg-logo.png" alt="Grupo AVG Emesa" width={170} height={44} className="h-full w-full object-contain object-left" priority />
+                <Image src="/avg-logo.svg" alt="Grupo AVG Emesa" width={170} height={44} className="h-full w-full object-contain object-left" priority />
               </div>
               <button onClick={() => setMobileMenuOpen(false)} className="rounded-md border border-slate-700 p-1 text-slate-300">
                 <X size={16} />
@@ -1010,6 +1132,29 @@ export function ProcurementControlCenter() {
               </button>
             </div>
             <button onClick={logout} className="mt-3 w-full rounded-md border border-rose-500/40 bg-rose-500/10 py-2 text-rose-200">Sair</button>
+
+            <div className="mt-3 rounded-lg border border-cyan-500/25 bg-cyan-500/5 p-2">
+              <p className="text-[10px] uppercase tracking-[0.18em] text-cyan-200">IA de Perguntas</p>
+              <input
+                value={aiQuestion}
+                onChange={(e) => setAiQuestion(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    submitAiQuestion(aiQuestion);
+                  }
+                }}
+                placeholder="Pergunte sobre SC, OC, KPI..."
+                className="mt-2 w-full rounded border border-slate-700 bg-slate-900/90 px-2 py-1.5 text-xs text-slate-100 outline-none"
+              />
+              <button
+                onClick={() => submitAiQuestion(aiQuestion)}
+                className="mt-2 w-full rounded border border-cyan-500/40 bg-cyan-500/10 px-2 py-1.5 text-xs text-cyan-100 transition hover:bg-cyan-500/20"
+              >
+                Responder
+              </button>
+              <div className="mt-2 rounded border border-slate-800 bg-slate-900/70 p-2 text-[11px] text-slate-300">{aiAnswer}</div>
+            </div>
           </div>
         </aside>
 
@@ -1142,7 +1287,7 @@ export function ProcurementControlCenter() {
           <div className="mb-4 grid grid-cols-2 gap-2 md:hidden">
             <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2">
               <p className="text-[10px] uppercase tracking-[0.16em] text-emerald-200/90">SC + OC</p>
-              <p className="text-lg font-bold text-emerald-200">{formatCompactCurrency(kpis.valorTotalSC + kpis.valorTotalOC)}</p>
+              <p className="text-lg font-bold text-emerald-200">{formatCurrency(kpis.valorTotalSC + kpis.valorTotalOC)}</p>
             </div>
             <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-2">
               <p className="text-[10px] uppercase tracking-[0.16em] text-rose-200/90">Atrasadas</p>
@@ -1311,17 +1456,40 @@ export function ProcurementControlCenter() {
                           const nfAttachment = parseNfAttachment(nfAttachmentEntry);
                           const unidadeValue = getTaggedValue(currentObservacoes, "UNIDADE") || row.setor;
                           const supplierName = supplier?.nomeFantasia || supplier?.razaoSocial || row.fornecedor || "-";
-                          const cnpj = supplier?.cnpj || "";
+                          const cnpj = supplier?.cnpj?.trim() || "-";
                           const solicitante = scRecord?.solicitante || ocRecord?.responsavel || "-";
                           const rowDate = scRecord?.dataCriacao || ocRecord?.dataOC || row.sortDate;
                           const fileInputId = `latest-nf-upload-${row.entity}-${row.id}`;
+                          const fullDescription = scRecord?.descricao || getTaggedValue(currentObservacoes, "DESCRICAO") || "Sem descricao detalhada.";
+                          const detailedNotes = currentObservacoes || "Sem observacoes adicionais.";
 
                           return (
                             <tr key={`${row.entity}-${row.id}`} className="border-t border-slate-800/90 align-top transition even:bg-slate-900/30 hover:bg-slate-900/70">
-                            <td className="truncate px-2 py-2 font-medium text-cyan-100">{row.numeroSC}</td>
-                            <td className="truncate px-2 text-slate-200">{row.numeroOC}</td>
+                            <td className="truncate px-2 py-2 font-medium text-cyan-100">
+                              <button
+                                className="truncate text-left underline decoration-dotted underline-offset-2 hover:text-cyan-300"
+                                onClick={() => setMovementDetail({ title: `${row.numeroSC} / ${row.numeroOC}`, description: fullDescription, details: detailedNotes })}
+                              >
+                                {row.numeroSC}
+                              </button>
+                            </td>
+                            <td className="truncate px-2 text-slate-200">
+                              <button
+                                className="truncate text-left underline decoration-dotted underline-offset-2 hover:text-cyan-300"
+                                onClick={() => setMovementDetail({ title: `${row.numeroSC} / ${row.numeroOC}`, description: fullDescription, details: detailedNotes })}
+                              >
+                                {row.numeroOC}
+                              </button>
+                            </td>
                             <td className="truncate px-2">{nfValue || "-"}</td>
-                            <td className="truncate px-2">{solicitante}</td>
+                            <td className="truncate px-2">
+                              <button
+                                className="truncate text-left underline decoration-dotted underline-offset-2 hover:text-cyan-300"
+                                onClick={() => setMovementDetail({ title: `${row.numeroSC} / ${row.numeroOC}`, description: fullDescription, details: detailedNotes })}
+                              >
+                                {solicitante}
+                              </button>
+                            </td>
                             <td className="hidden truncate px-2 md:table-cell">{supplierName}</td>
                             <td className="hidden truncate px-2 md:table-cell">{unidadeValue}</td>
                             <td className="hidden truncate px-2 lg:table-cell">{cnpj}</td>
@@ -1424,6 +1592,19 @@ export function ProcurementControlCenter() {
                       </tbody>
                     </table>
                   </div>
+
+                  {movementDetail ? (
+                    <div className="mt-3 rounded-xl border border-cyan-500/25 bg-slate-900/70 p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-semibold text-cyan-200">Detalhe da Solicitacao • {movementDetail.title}</p>
+                        <button className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300" onClick={() => setMovementDetail(null)}>
+                          Fechar
+                        </button>
+                      </div>
+                      <p className="mt-2 text-sm text-slate-200">{movementDetail.description}</p>
+                      <p className="mt-2 whitespace-pre-wrap rounded border border-slate-800 bg-slate-950/70 p-2 text-xs text-slate-400">{movementDetail.details}</p>
+                    </div>
+                  ) : null}
                 </Panel>
               </div>
 
@@ -1463,7 +1644,7 @@ export function ProcurementControlCenter() {
           ) : null}
 
           {module === "FORNECEDORES" ? (
-            <SupplierModule fornecedores={dataset.fornecedoresAtivos} ranking={ranking} canWrite={canWrite} onCreate={createSupplier} onUpdate={updateSupplier} onDelete={deleteSupplier} />
+            <SupplierModule fornecedores={dataset.fornecedoresAtivos} ranking={rankingPerformance} canWrite={canWrite} onCreate={createSupplier} onUpdate={updateSupplier} onDelete={deleteSupplier} />
           ) : null}
 
           {module === "SETORES" ? (
@@ -1484,10 +1665,14 @@ export function ProcurementControlCenter() {
             <section>
               <ModuleTitle title="KPIs e Analytics" subtitle="Volume, Financeiro, Eficiencia e Fornecedores" />
               <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-                <MetricCell label="Tempo medio aprovacao" value={`${kpis.tempoMedioAprovacaoDias} dias`} />
-                <MetricCell label="Tempo medio SC -> OC" value={`${kpis.tempoMedioSCparaOCDias} dias`} />
-                <MetricCell label="Lead time medio" value={`${kpis.leadTimeMedioDias} dias`} />
-                <MetricCell label="Taxa no prazo" value={`${kpis.taxaEntregaNoPrazo}%`} />
+                <MetricCell label="Tempo medio aprovacao" value={`${kpisGlobal.tempoMedioAprovacaoDias} dias`} />
+                <MetricCell label="Tempo medio SC -> OC" value={`${kpisGlobal.tempoMedioSCparaOCDias} dias`} />
+                <MetricCell label="Lead time medio" value={`${kpisGlobal.leadTimeMedioDias} dias`} />
+                <MetricCell label="Taxa no prazo" value={`${kpisGlobal.taxaEntregaNoPrazo}%`} />
+                <MetricCell label="Valor total OC" value={formatCurrency(kpisGlobal.valorTotalOC)} />
+                <MetricCell label="Ticket medio OC" value={formatCurrency(analyticsValuePerOc)} />
+                <MetricCell label="Backlog aberto" value={String(kpisGlobal.entregasPendentes)} />
+                <MetricCell label="Conversao SC->OC" value={`${analyticsScToOcConversion}%`} />
               </div>
               <div className="mt-4 grid gap-4 lg:grid-cols-2">
                 <Panel title="Ranking de Fornecedores">
@@ -1499,16 +1684,22 @@ export function ProcurementControlCenter() {
                         <th>Valor</th>
                         <th>Atrasos</th>
                         <th>Prazo %</th>
+                        <th>Indice</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {ranking.map((r) => (
+                      {rankingPerformance.length === 0 ? (
+                        <tr className="border-t border-slate-800">
+                          <td colSpan={6} className="py-3 text-center text-slate-500">Sem dados de OCs para calcular performance.</td>
+                        </tr>
+                      ) : rankingPerformance.map((r) => (
                         <tr key={r.fornecedorId} className="border-t border-slate-800">
                           <td className="py-2">{r.fornecedor}</td>
                           <td>{r.totalOC}</td>
                           <td>{formatCurrency(r.valorTotal)}</td>
                           <td className={r.atrasos > 0 ? "text-rose-300" : "text-emerald-300"}>{r.atrasos}</td>
                           <td>{r.taxaPrazo}%</td>
+                          <td className="font-semibold text-cyan-200">{r.indicePerformance}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1516,13 +1707,26 @@ export function ProcurementControlCenter() {
                 </Panel>
                 <Panel title="Status OC">
                   <ResponsiveContainer width="100%" height={260}>
-                    <BarChart data={statuses.ocByStatus}>
+                    <BarChart data={statusesGlobal.ocByStatus}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
                       <XAxis dataKey="status" stroke="#94a3b8" interval={0} angle={-20} textAnchor="end" height={70} />
                       <YAxis stroke="#94a3b8" />
                       <Tooltip />
                       <Bar dataKey="total" fill={CYAN} />
                     </BarChart>
+                  </ResponsiveContainer>
+                </Panel>
+              </div>
+              <div className="mt-4">
+                <Panel title="Evolucao Financeira (SC + OC)">
+                  <ResponsiveContainer width="100%" height={280}>
+                    <LineChart data={monthlyGlobal}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+                      <XAxis dataKey="mes" stroke="#94a3b8" />
+                      <YAxis stroke="#94a3b8" />
+                      <Tooltip formatter={(value) => formatCurrency(Number(value))} />
+                      <Line type="monotone" dataKey="valorTotal" stroke={CYAN} strokeWidth={2} />
+                    </LineChart>
                   </ResponsiveContainer>
                 </Panel>
               </div>
@@ -1885,12 +2089,11 @@ function UnifiedScOcModule({
     if (existing) return existing.id;
 
     const suffix = Date.now().toString().slice(-6);
-    const generatedCnpj = `99${Date.now().toString().padStart(12, "0").slice(-12)}`;
     const createdSupplier = await onCreateSupplierWithResult({
       codigo: `AUTO-${suffix}`,
       razaoSocial: typedName,
       nomeFantasia: typedName,
-      cnpj: generatedCnpj,
+        cnpj: "-",
       contato: formEntry.solicitante || "Cadastro automatico",
       telefone: "",
       email: "",
@@ -2347,7 +2550,7 @@ function UnifiedScOcModule({
                     .split("|")[0] ?? "";
                 const unidadeValue = getTaggedValue(currentObservacoes, "UNIDADE") || row.setor;
                 const supplierName = supplier?.nomeFantasia || supplier?.razaoSocial || row.fornecedor || "-";
-                const cnpj = supplier?.cnpj || "";
+                const cnpj = supplier?.cnpj?.trim() || "-";
                 const solicitante = scRecord?.solicitante || ocRecord?.responsavel || "-";
                 const rowDate = scRecord?.dataCriacao || ocRecord?.dataOC || row.sortDate;
                 const fileInputId = `nf-upload-${row.entity}-${row.id}`;
@@ -2897,7 +3100,7 @@ function SupplierModule({
                   codigo: `F${Math.round(Math.random() * 9999)}`,
                   razaoSocial: nome,
                   nomeFantasia: nome,
-                  cnpj: "00.000.000/0001-00",
+                  cnpj: "-",
                   contato: "",
                   telefone: "",
                   email: "",

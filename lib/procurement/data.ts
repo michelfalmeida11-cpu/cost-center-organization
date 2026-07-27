@@ -484,16 +484,19 @@ export function computeKpis(state: AppState, filters: GlobalFilters): KpiSnapsho
 export function monthlySeries(state: AppState, filters: GlobalFilters) {
   const { scFiltered, ocFiltered } = filterData(state, filters);
 
-  const buckets = new Map<string, { mes: string; totalSC: number; totalOC: number; valorOC: number }>();
+  const buckets = new Map<string, { mes: string; totalSC: number; totalOC: number; valorSC: number; valorOC: number; valorTotal: number }>();
 
   const add = (key: string) => {
-    if (!buckets.has(key)) buckets.set(key, { mes: key, totalSC: 0, totalOC: 0, valorOC: 0 });
+    if (!buckets.has(key)) buckets.set(key, { mes: key, totalSC: 0, totalOC: 0, valorSC: 0, valorOC: 0, valorTotal: 0 });
     return buckets.get(key)!;
   };
 
   scFiltered.forEach((sc) => {
     const key = sc.dataCriacao.slice(0, 7);
-    add(key).totalSC += 1;
+    const b = add(key);
+    b.totalSC += 1;
+    b.valorSC += sc.valorEstimado;
+    b.valorTotal += sc.valorEstimado;
   });
 
   ocFiltered.forEach((oc) => {
@@ -501,6 +504,7 @@ export function monthlySeries(state: AppState, filters: GlobalFilters) {
     const b = add(key);
     b.totalOC += 1;
     b.valorOC += oc.valorOC;
+    b.valorTotal += oc.valorOC;
   });
 
   return Array.from(buckets.values()).sort((a, b) => a.mes.localeCompare(b.mes));
@@ -529,7 +533,7 @@ export function sectorSeries(state: AppState, filters: GlobalFilters) {
 export function supplierRanking(state: AppState, filters: GlobalFilters) {
   const { ocFiltered, fornecedoresAtivos } = filterData(state, filters);
 
-  return fornecedoresAtivos
+  const base = fornecedoresAtivos
     .map((fornecedor) => {
       const ocs = ocFiltered.filter((oc) => oc.fornecedorId === fornecedor.id);
       const entregasAtrasadas = ocs.filter((oc) => oc.status === "ATRASADA").length;
@@ -555,8 +559,26 @@ export function supplierRanking(state: AppState, filters: GlobalFilters) {
         taxaPrazo: taxa,
         leadTimeMedio: lead,
       };
+    });
+
+  const maxValor = base.reduce((max, item) => Math.max(max, item.valorTotal), 0);
+
+  return base
+    .map((item) => {
+      const prazoScore = item.taxaPrazo;
+      const atrasoScore = item.totalOC > 0 ? (1 - item.atrasos / item.totalOC) * 100 : 0;
+      const volumeScore = maxValor > 0 ? (item.valorTotal / maxValor) * 100 : 0;
+      const indicePerformance = Number((prazoScore * 0.5 + atrasoScore * 0.3 + volumeScore * 0.2).toFixed(1));
+
+      return {
+        ...item,
+        indicePerformance,
+      };
     })
-    .sort((a, b) => b.valorTotal - a.valorTotal);
+    .sort((a, b) => {
+      if (b.indicePerformance !== a.indicePerformance) return b.indicePerformance - a.indicePerformance;
+      return b.valorTotal - a.valorTotal;
+    });
 }
 
 export function buildAlerts(state: AppState, filters: GlobalFilters): AlertItem[] {
@@ -616,7 +638,7 @@ export function buildAlerts(state: AppState, filters: GlobalFilters): AlertItem[
 }
 
 export function formatCurrency(value: number) {
-  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(value);
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value);
 }
 
 export function buildScTimeline(sc: PurchaseRequest, ocs: PurchaseOrder[]) {

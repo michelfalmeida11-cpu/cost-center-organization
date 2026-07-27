@@ -52,7 +52,7 @@ export function DashboardHeader() {
           <div className="relative h-10 w-24 shrink-0">
             <div className="relative w-full h-full">
               <Image
-                src="/avg-logo.png"
+                src="/avg-logo.svg"
                 alt="Grupo AVG"
                 fill
                 sizes="(max-width: 640px) 96px, 96px"
