@@ -289,6 +289,12 @@ function relativeTimePtBr(dateValue: string) {
   return `ha ${days} d`;
 }
 
+function healthStatusTone(status?: string) {
+  if (status === "HEALTHY") return "text-emerald-300";
+  if (status === "ATENCAO") return "text-amber-300";
+  return "text-rose-300";
+}
+
 function buildUnifiedRows(
   scs: PurchaseRequest[],
   ocs: PurchaseOrder[],
@@ -687,6 +693,10 @@ export function ProcurementControlCenter() {
     const data = [...scOcBySector].sort((a, b) => (financialSort === "desc" ? b.valor - a.valor : a.valor - b.valor));
     return data;
   }, [scOcBySector, financialSort]);
+  const maxFinancialValue = useMemo(() => {
+    const values = financialBySector.map((item) => item.valor);
+    return Math.max(1, ...values);
+  }, [financialBySector]);
   const agingData = useMemo(() => {
     const buckets = new Map<string, number>([["0-7", 0], ["8-15", 0], ["16-30", 0], ["31-60", 0], ["+60", 0]]);
     dataset.scFiltered.forEach((sc) => {
@@ -1006,6 +1016,31 @@ export function ProcurementControlCenter() {
       when: relativeTimePtBr(row.sortDate),
     }));
   }, [state.auditoria, latestRows]);
+  const executiveSnapshot = useMemo(
+    () => [
+      {
+        label: "Conversao SC->OC",
+        value: `${analyticsScToOcConversion}%`,
+        tone: "border-cyan-500/35 bg-cyan-500/10 text-cyan-100",
+      },
+      {
+        label: "Lead Time Medio",
+        value: `${kpis.leadTimeMedioDias} dias`,
+        tone: "border-blue-500/35 bg-blue-500/10 text-blue-100",
+      },
+      {
+        label: "No Prazo",
+        value: `${kpis.taxaEntregaNoPrazo}%`,
+        tone: "border-emerald-500/35 bg-emerald-500/10 text-emerald-100",
+      },
+      {
+        label: "Saude",
+        value: `${operationalHealth?.score ?? 0}`,
+        tone: "border-amber-500/35 bg-amber-500/10 text-amber-100",
+      },
+    ],
+    [analyticsScToOcConversion, kpis.leadTimeMedioDias, kpis.taxaEntregaNoPrazo, operationalHealth?.score],
+  );
   const openOcCount = useMemo(() => dataset.ocFiltered.filter((oc) => !["ENTREGUE", "CANCELADA"].includes(oc.status)).length, [dataset.ocFiltered]);
   const alerts = useMemo(() => buildAlerts(state, filters), [state, filters]);
   const delayedOcs = useMemo(() => dataset.ocFiltered.filter((oc) => oc.status === "ATRASADA"), [dataset.ocFiltered]);
@@ -1615,7 +1650,7 @@ export function ProcurementControlCenter() {
           {module === "DASHBOARD" ? (
             <section>
               <ModuleTitle title="Dashboard Executivo" subtitle="Visao tatica em tempo real" />
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+              <div className="dashboard-rise grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6" style={{ animationDelay: "40ms" }}>
                 {premiumKpis.map((item) => (
                   <KpiCard
                     key={item.label}
@@ -1632,14 +1667,23 @@ export function ProcurementControlCenter() {
                 ))}
               </div>
 
-              <div className="mt-4">
+              <div className="dashboard-rise mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-4" style={{ animationDelay: "90ms" }}>
+                {executiveSnapshot.map((item) => (
+                  <div key={`snapshot-${item.label}`} className={`rounded-xl border px-3 py-2 ${item.tone}`}>
+                    <p className="text-[10px] uppercase tracking-[0.15em] opacity-85">{item.label}</p>
+                    <p className="mt-0.5 text-lg font-semibold">{item.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              <div className="dashboard-rise mt-4" style={{ animationDelay: "120ms" }}>
                 <Panel title="Procurement Pipeline">
                   <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
                     {pipelineStages.map((stage, index) => (
                       <button
                         key={stage.key}
                         onClick={stage.action}
-                        className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-left transition hover:border-cyan-500/45 hover:bg-slate-900"
+                        className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-left transition duration-200 hover:-translate-y-0.5 hover:border-cyan-500/45 hover:bg-slate-900"
                       >
                         <p className="text-[10px] uppercase tracking-[0.16em] text-slate-400">{stage.label}</p>
                         <p className="mt-1 text-2xl font-bold text-cyan-100">{stage.count}</p>
@@ -1648,13 +1692,14 @@ export function ProcurementControlCenter() {
                           <div className="h-full rounded-full" style={{ width: `${stage.percent}%`, backgroundColor: [CYAN, AMBER, GREEN, BLUE, PURPLE, RED][index % 6] }} />
                         </div>
                         <p className="mt-2 text-[11px] text-slate-300">{formatCurrency(stage.value)}</p>
+                        <p className="mt-1 text-[10px] uppercase tracking-[0.14em] text-slate-500">Clique para abrir</p>
                       </button>
                     ))}
                   </div>
                 </Panel>
               </div>
 
-              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              <div className="dashboard-rise mt-4 grid gap-4 lg:grid-cols-2" style={{ animationDelay: "160ms" }}>
                 <Panel title="Distribuicao do Pipeline">
                   <ResponsiveContainer width="100%" height={250}>
                     <BarChart data={pipelineDistribution} layout="vertical" margin={{ left: 8, right: 14 }}>
@@ -1699,7 +1744,7 @@ export function ProcurementControlCenter() {
                 </Panel>
               </div>
 
-              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              <div className="dashboard-rise mt-4 grid gap-4 lg:grid-cols-2" style={{ animationDelay: "200ms" }}>
                 <Panel title="Aging de Processos (SC + OC)">
                   <ResponsiveContainer width="100%" height={250}>
                     <BarChart data={agingData}>
@@ -1730,11 +1775,11 @@ export function ProcurementControlCenter() {
                   </div>
                   <div className="space-y-2">
                     {financialBySector.slice(0, 8).map((item) => {
-                      const width = Math.max(8, toPercent(item.valor, Math.max(1, financialBySector[0]?.valor ?? 1)));
+                      const width = Math.max(8, toPercent(item.valor, maxFinancialValue));
                       return (
                         <button
                           key={`fin-${item.setor}`}
-                          className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-left"
+                          className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-left transition duration-200 hover:-translate-y-0.5 hover:border-cyan-500/35"
                           onClick={() => {
                             const sector = state.setores.find((x) => x.nome === item.setor);
                             if (sector?.id) openCentralWithFilters({ setorId: sector.id });
@@ -1754,7 +1799,7 @@ export function ProcurementControlCenter() {
                 </Panel>
               </div>
 
-              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              <div className="dashboard-rise mt-4 grid gap-4 lg:grid-cols-2" style={{ animationDelay: "240ms" }}>
                 <Panel title="Performance de Fornecedores">
                   <div className="overflow-hidden rounded-lg border border-slate-800">
                     <table className="w-full text-xs">
@@ -1800,7 +1845,7 @@ export function ProcurementControlCenter() {
                       <p className="text-3xl font-bold text-cyan-100">{operationalHealth?.score ?? 0}</p>
                     </div>
                     <p className="mt-1 text-xs text-slate-300">Quanto maior o indice, melhor o fluxo de procurement no periodo filtrado.</p>
-                    <p className="mt-1 text-xs text-slate-400">Status: {operationalHealth?.status ?? "SEM DADOS"}</p>
+                    <p className={`mt-1 text-xs ${healthStatusTone(operationalHealth?.status)}`}>Status: {operationalHealth?.status ?? "SEM DADOS"}</p>
                     <button className="mt-2 rounded border border-slate-700 px-2 py-1 text-xs text-slate-300" onClick={() => setHealthExpanded((v) => !v)}>
                       {healthExpanded ? "Ocultar fatores" : "Ver fatores"}
                     </button>
@@ -1818,13 +1863,13 @@ export function ProcurementControlCenter() {
                 </Panel>
               </div>
 
-              <div className="mt-4 grid gap-4 lg:grid-cols-2">
+              <div className="dashboard-rise mt-4 grid gap-4 lg:grid-cols-2" style={{ animationDelay: "280ms" }}>
                 <Panel title="Atencao Necessaria">
                   <div className="space-y-2">
                     {attentionItems.length === 0 ? (
                       <p className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">Sem pendencias criticas no momento.</p>
                     ) : attentionItems.map((item) => (
-                      <button key={item.id} onClick={item.onClick} className="w-full rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-left">
+                      <button key={item.id} onClick={item.onClick} className="w-full rounded-lg border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-left transition duration-200 hover:-translate-y-0.5 hover:border-rose-400/55">
                         <p className="text-sm font-medium text-rose-100">{item.label}</p>
                         <p className="text-xs text-rose-200/85">{item.detail}</p>
                       </button>
@@ -1843,6 +1888,22 @@ export function ProcurementControlCenter() {
                   </div>
                 </Panel>
               </div>
+
+              <style jsx global>{`
+                @keyframes dashboardRise {
+                  0% {
+                    opacity: 0;
+                    transform: translateY(10px);
+                  }
+                  100% {
+                    opacity: 1;
+                    transform: translateY(0);
+                  }
+                }
+                .dashboard-rise {
+                  animation: dashboardRise 480ms ease-out both;
+                }
+              `}</style>
 
               <div className="mt-4">
                 <Panel title="Ultimas Movimentacoes SC / OC">
