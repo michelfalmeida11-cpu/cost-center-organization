@@ -231,6 +231,13 @@ function toPercent(value: number, total: number) {
   return Number(((value / total) * 100).toFixed(2));
 }
 
+function diffDaysBetween(start: string, end: string) {
+  const s = new Date(start).getTime();
+  const e = new Date(end).getTime();
+  if (Number.isNaN(s) || Number.isNaN(e)) return 0;
+  return Math.max(0, Math.floor((e - s) / (1000 * 60 * 60 * 24)));
+}
+
 function agingBucketLabel(days: number) {
   if (days <= 7) return "0-7";
   if (days <= 15) return "8-15";
@@ -529,6 +536,9 @@ export function ProcurementControlCenter() {
   const [movementDetail, setMovementDetail] = useState<{ title: string; description: string; details: string } | null>(null);
   const [filterDraft, setFilterDraft] = useState(filters);
   const [financialSort, setFinancialSort] = useState<"desc" | "asc">("desc");
+  const [sectorViewMode, setSectorViewMode] = useState<"quantidade" | "valor">("quantidade");
+  const [sectorSortMode, setSectorSortMode] = useState<"desc" | "asc">("desc");
+  const [financialViewMode, setFinancialViewMode] = useState<"setor" | "status">("setor");
   const [healthExpanded, setHealthExpanded] = useState(false);
   const [agingDrilldown, setAgingDrilldown] = useState<string>("");
   const [centralPreset, setCentralPreset] = useState<"" | "SC_SEM_FORNECEDOR" | "SC_SEM_OC">("");
@@ -685,14 +695,124 @@ export function ProcurementControlCenter() {
       { status: "Lancada", total: lancada, percent: toPercent(lancada, total), filter: "LANCADA" },
     ];
   }, [dataset.scFiltered, dataset.ocFiltered]);
+  const pipelineStatusData = useMemo(() => {
+    const totalProcessos = pipelineDistribution.reduce((sum, item) => sum + item.total, 0);
+    const byFilter = new Map(pipelineDistribution.map((item) => [item.filter, item]));
+    const scValueByStatus = {
+      APROVADA: 0,
+      EM_ANALISE: 0,
+      REPROVADA: 0,
+      LANCADA: 0,
+    };
+
+    dataset.scFiltered.forEach((sc) => {
+      if (sc.status in scValueByStatus) {
+        scValueByStatus[sc.status as keyof typeof scValueByStatus] += sc.valorEstimado;
+      }
+    });
+
+    const ocValueByPhase = {
+      APROVADA: 0,
+      EM_ANALISE: 0,
+      REPROVADA: 0,
+      LANCADA: 0,
+    };
+
+    dataset.ocFiltered.forEach((oc) => {
+      const phase = ocToPhase(oc.status as OCStatus);
+      ocValueByPhase[phase] += oc.valorOC;
+    });
+
+    return [
+      {
+        key: "APROVADA",
+        label: "APROVADAS",
+        total: byFilter.get("APROVADA")?.total ?? 0,
+        percent: toPercent(byFilter.get("APROVADA")?.total ?? 0, totalProcessos),
+        color: GREEN,
+        value: scValueByStatus.APROVADA + ocValueByPhase.APROVADA,
+        filter: "APROVADA",
+      },
+      {
+        key: "EM_ANALISE",
+        label: "EM ANALISE",
+        total: byFilter.get("EM_ANALISE")?.total ?? 0,
+        percent: toPercent(byFilter.get("EM_ANALISE")?.total ?? 0, totalProcessos),
+        color: AMBER,
+        value: scValueByStatus.EM_ANALISE + ocValueByPhase.EM_ANALISE,
+        filter: "EM_ANALISE",
+      },
+      {
+        key: "REPROVADA",
+        label: "REPROVADAS",
+        total: byFilter.get("REPROVADA")?.total ?? 0,
+        percent: toPercent(byFilter.get("REPROVADA")?.total ?? 0, totalProcessos),
+        color: RED,
+        value: scValueByStatus.REPROVADA + ocValueByPhase.REPROVADA,
+        filter: "REPROVADA",
+      },
+      {
+        key: "LANCADA",
+        label: "LANCADAS",
+        total: byFilter.get("LANCADA")?.total ?? 0,
+        percent: toPercent(byFilter.get("LANCADA")?.total ?? 0, totalProcessos),
+        color: BLUE,
+        value: scValueByStatus.LANCADA + ocValueByPhase.LANCADA,
+        filter: "LANCADA",
+      },
+    ];
+  }, [pipelineDistribution, dataset.scFiltered, dataset.ocFiltered]);
+  const pipelineTotals = useMemo(() => {
+    const totalProcessos = pipelineStatusData.reduce((sum, item) => sum + item.total, 0);
+    const totalValor = pipelineStatusData.reduce((sum, item) => sum + item.value, 0);
+    return { totalProcessos, totalValor };
+  }, [pipelineStatusData]);
   const sectorDistribution = useMemo(() => {
     const total = scOcBySector.reduce((sum, item) => sum + item.total, 0);
     return scOcBySector.map((item) => ({ ...item, percent: toPercent(item.total, total) }));
   }, [scOcBySector]);
+  const sectorRankData = useMemo(() => {
+    const sorted = [...scOcBySector].sort((a, b) => {
+      const metricA = sectorViewMode === "valor" ? a.valor : a.total;
+      const metricB = sectorViewMode === "valor" ? b.valor : b.total;
+      return sectorSortMode === "desc" ? metricB - metricA : metricA - metricB;
+    });
+    return sorted;
+  }, [scOcBySector, sectorViewMode, sectorSortMode]);
+  const maxSectorRankMetric = useMemo(() => {
+    const values = sectorRankData.map((item) => (sectorViewMode === "valor" ? item.valor : item.total));
+    return Math.max(1, ...values);
+  }, [sectorRankData, sectorViewMode]);
   const financialBySector = useMemo(() => {
     const data = [...scOcBySector].sort((a, b) => (financialSort === "desc" ? b.valor - a.valor : a.valor - b.valor));
     return data;
   }, [scOcBySector, financialSort]);
+  const financialByStatus = useMemo(() => {
+    const statusValue = new Map<string, { label: string; value: number; filter: string; color: string }>([
+      ["APROVADA", { label: "APROVADO", value: 0, filter: "APROVADA", color: GREEN }],
+      ["EM_ANALISE", { label: "EM ANALISE", value: 0, filter: "EM_ANALISE", color: AMBER }],
+      ["REPROVADA", { label: "REPROVADO", value: 0, filter: "REPROVADA", color: RED }],
+      ["LANCADA", { label: "LANCADO", value: 0, filter: "LANCADA", color: BLUE }],
+    ]);
+
+    dataset.scFiltered.forEach((sc) => {
+      const row = statusValue.get(sc.status);
+      if (row) row.value += sc.valorEstimado;
+    });
+
+    dataset.ocFiltered.forEach((oc) => {
+      const phase = ocToPhase(oc.status as OCStatus);
+      const row = statusValue.get(phase);
+      if (row) row.value += oc.valorOC;
+    });
+
+    return Array.from(statusValue.values()).sort((a, b) => (financialSort === "desc" ? b.value - a.value : a.value - b.value));
+  }, [dataset.scFiltered, dataset.ocFiltered, financialSort]);
+  const financialIntelligenceData = useMemo(() => {
+    if (financialViewMode === "setor") return financialBySector.map((item) => ({ key: item.setor, label: item.setor, value: item.valor, meta: `${item.total} processos`, color: CYAN, type: "setor" as const }));
+    return financialByStatus.map((item) => ({ key: item.label, label: item.label, value: item.value, meta: item.filter, color: item.color, type: "status" as const }));
+  }, [financialViewMode, financialBySector, financialByStatus]);
+  const maxFinancialIntValue = useMemo(() => Math.max(1, ...financialIntelligenceData.map((item) => item.value)), [financialIntelligenceData]);
   const maxFinancialValue = useMemo(() => {
     const values = financialBySector.map((item) => item.valor);
     return Math.max(1, ...values);
@@ -756,6 +876,64 @@ export function ProcurementControlCenter() {
   const scWithoutOc = useMemo(() => dataset.scFiltered.filter((sc) => !sc.numeroOCRelacionada).length, [dataset.scFiltered]);
   const scWithoutSupplier = useMemo(() => dataset.scFiltered.filter((sc) => !sc.fornecedorSugeridoId).length, [dataset.scFiltered]);
   const longAgingCount = useMemo(() => agingData.find((x) => x.faixa === "+60")?.total ?? 0, [agingData]);
+  const agingOpenItems = useMemo(() => {
+    const scAges = dataset.scFiltered
+      .filter((sc) => !["APROVADA", "REPROVADA", "LANCADA"].includes(sc.status))
+      .map((sc) => diffDaysFromNow(sc.dataCriacao));
+    const ocAges = dataset.ocFiltered
+      .filter((oc) => !["ENTREGUE", "CANCELADA"].includes(oc.status))
+      .map((oc) => diffDaysFromNow(oc.dataOC));
+    return [...scAges, ...ocAges];
+  }, [dataset.scFiltered, dataset.ocFiltered]);
+  const averageAgingDays = useMemo(() => {
+    if (!agingOpenItems.length) return null;
+    return Number((agingOpenItems.reduce((sum, d) => sum + d, 0) / agingOpenItems.length).toFixed(1));
+  }, [agingOpenItems]);
+  const slaMetrics = useMemo(() => {
+    const openOcWithDeadline = dataset.ocFiltered.filter((oc) => !["ENTREGUE", "CANCELADA"].includes(oc.status) && !!oc.dataPrevistaEntrega);
+    if (!openOcWithDeadline.length) {
+      return {
+        hasData: false,
+        averageSlaDays: null as number | null,
+        statusLabel: "SEM HISTORICO SUFICIENTE",
+        noPrazoPercent: null as number | null,
+        riscoPercent: null as number | null,
+        atrasadoPercent: null as number | null,
+      };
+    }
+
+    const now = new Date().toISOString().slice(0, 10);
+    let noPrazo = 0;
+    let emRisco = 0;
+    let atrasados = 0;
+    const slaSamples = openOcWithDeadline
+      .map((oc) => diffDaysBetween(oc.dataOC, oc.dataPrevistaEntrega))
+      .filter((value) => value > 0);
+
+    openOcWithDeadline.forEach((oc) => {
+      const remaining = diffDaysBetween(now, oc.dataPrevistaEntrega);
+      if (now > oc.dataPrevistaEntrega) {
+        atrasados += 1;
+      } else if (remaining <= 2) {
+        emRisco += 1;
+      } else {
+        noPrazo += 1;
+      }
+    });
+
+    const total = openOcWithDeadline.length;
+    const averageSlaDays = slaSamples.length ? Number((slaSamples.reduce((sum, d) => sum + d, 0) / slaSamples.length).toFixed(1)) : null;
+    const statusLabel = atrasados > 0 ? "FORA DO SLA" : emRisco > 0 ? "EM RISCO" : "DENTRO DO SLA";
+
+    return {
+      hasData: true,
+      averageSlaDays,
+      statusLabel,
+      noPrazoPercent: toPercent(noPrazo, total),
+      riscoPercent: toPercent(emRisco, total),
+      atrasadoPercent: toPercent(atrasados, total),
+    };
+  }, [dataset.ocFiltered]);
   const operationalHealth = useMemo(
     () => calculateOperationalHealth({
       totalSc: kpis.totalSC,
@@ -787,6 +965,46 @@ export function ProcurementControlCenter() {
     if (longAgingCount > 0) items.push({ id: "att-aging", label: "Processos +60 dias", detail: `${longAgingCount} processos`, onClick: () => openAgingDrilldown("+60") });
     return items;
   }, [kpis.emAnalise, kpis.entregasAtrasadas, scWithoutSupplier, scWithoutOc, longAgingCount]);
+  const executiveInsights = useMemo(() => {
+    const insights: Array<{ id: string; tone: "ok" | "warn" | "risk"; title: string; detail: string }> = [];
+    const total = Math.max(1, pipelineTotals.totalProcessos);
+    const approvedCount = pipelineDistribution.find((item) => item.filter === "APROVADA")?.total ?? 0;
+    const approvedRate = toPercent(approvedCount, total);
+    const avgValue = pipelineTotals.totalValor > 0 ? pipelineTotals.totalValor / total : 0;
+    const hasHighPending = dataset.scFiltered.some((sc) => sc.status === "EM_ANALISE" && sc.valorEstimado > avgValue && avgValue > 0);
+
+    if (pipelineTotals.totalProcessos === 0) {
+      insights.push({ id: "ins-empty", tone: "warn", title: "SEM HISTORICO SUFICIENTE", detail: "Nao ha processos no periodo filtrado para gerar leitura executiva." });
+      return insights;
+    }
+
+    if (kpis.entregasAtrasadas === 0 && kpis.emAnalise <= 1) {
+      insights.push({ id: "ins-stable", tone: "ok", title: "OPERACAO ESTAVEL", detail: `${approvedRate}% dos processos estao aprovados e nao ha OCs atrasadas.` });
+    } else if (kpis.entregasAtrasadas > 0) {
+      insights.push({ id: "ins-delay", tone: "risk", title: "PONTO DE ATENCAO", detail: `${kpis.entregasAtrasadas} OCs atrasadas exigem acao imediata da equipe de compras.` });
+    }
+
+    if (hasHighPending) {
+      insights.push({ id: "ins-high-value", tone: "warn", title: "PENDENCIA DE ALTO IMPACTO", detail: "Existe SC em analise com valor acima da media dos processos filtrados." });
+    }
+
+    if (slaMetrics.hasData && slaMetrics.atrasadoPercent !== null) {
+      insights.push({ id: "ins-sla", tone: slaMetrics.atrasadoPercent > 0 ? "risk" : "ok", title: "STATUS OPERACIONAL", detail: `SLA atual: ${slaMetrics.statusLabel}. No prazo: ${slaMetrics.noPrazoPercent ?? 0}% | Em risco: ${slaMetrics.riscoPercent ?? 0}% | Atrasados: ${slaMetrics.atrasadoPercent ?? 0}%.` });
+    }
+
+    return insights.slice(0, 3);
+  }, [pipelineTotals.totalProcessos, pipelineTotals.totalValor, pipelineDistribution, dataset.scFiltered, kpis.entregasAtrasadas, kpis.emAnalise, slaMetrics]);
+  const operationalSnapshotItems = useMemo(
+    () => [
+      { id: "snap-sc-analise", label: "SCs em analise", value: kpis.emAnalise, onClick: () => openCentralWithFilters({ status: "EM_ANALISE" }) },
+      { id: "snap-oc-curso", label: "OCs em curso", value: kpis.entregasPendentes, onClick: () => openCentralWithFilters({ status: "" }) },
+      { id: "snap-oc-atrasada", label: "OCs atrasadas", value: kpis.entregasAtrasadas, onClick: () => openCentralWithFilters({ status: "ATRASADA" }) },
+      { id: "snap-sc-sem-oc", label: "SCs sem OC", value: scWithoutOc, onClick: () => openCentralWithPreset("SC_SEM_OC") },
+      { id: "snap-sc-sem-forn", label: "SCs sem fornecedor", value: scWithoutSupplier, onClick: () => openCentralWithPreset("SC_SEM_FORNECEDOR") },
+      { id: "snap-criticos", label: "Processos criticos", value: longAgingCount + kpis.entregasAtrasadas, onClick: () => openAgingDrilldown("+60") },
+    ],
+    [kpis.emAnalise, kpis.entregasPendentes, kpis.entregasAtrasadas, scWithoutOc, scWithoutSupplier, longAgingCount],
+  );
   const ocByPhase = useMemo(() => {
     const order: OcPhase[] = ["EM_ANALISE", "APROVADA", "LANCADA", "REPROVADA"];
     const map = new Map<OcPhase, number>();
@@ -1700,52 +1918,110 @@ export function ProcurementControlCenter() {
               </div>
 
               <div className="dashboard-rise mt-4 grid gap-4 lg:grid-cols-2" style={{ animationDelay: "160ms" }}>
-                <Panel title="Distribuicao do Pipeline">
-                  <ResponsiveContainer width="100%" height={250}>
-                    <BarChart data={pipelineDistribution} layout="vertical" margin={{ left: 8, right: 14 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-                      <XAxis type="number" stroke="#94a3b8" />
-                      <YAxis dataKey="status" type="category" stroke="#94a3b8" width={96} />
-                      <Tooltip formatter={(value, _name, item) => [`${value} (${item?.payload?.percent ?? 0}%)`, "Total"]} />
-                      <Bar
-                        dataKey="total"
-                        fill={CYAN}
-                        radius={[0, 8, 8, 0]}
-                        onClick={(data) => {
-                          if (data && typeof data === "object" && "filter" in data) {
-                            openCentralWithFilters({ status: String(data.filter) });
-                          }
-                        }}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
+                <Panel title="Status do Pipeline">
+                  {pipelineTotals.totalProcessos === 0 ? (
+                    <p className="rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-5 text-center text-sm text-slate-400">SEM HISTORICO SUFICIENTE</p>
+                  ) : (
+                    <div className="grid gap-3 md:grid-cols-[1.05fr_.95fr]">
+                      <div className="relative h-[280px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie data={pipelineStatusData} dataKey="total" nameKey="label" innerRadius={72} outerRadius={104} paddingAngle={2}>
+                              {pipelineStatusData.map((entry) => (
+                                <Cell key={`pipeline-donut-${entry.key}`} fill={entry.color} onClick={() => openCentralWithFilters({ status: entry.filter })} style={{ cursor: "pointer" }} />
+                              ))}
+                            </Pie>
+                            <Tooltip
+                              contentStyle={{ background: "#0C1420", border: "1px solid #1A3445", borderRadius: 12, color: "#F4F7FA" }}
+                              formatter={(value: number, _name: string, item: { payload?: { percent?: number; value?: number } }) => [`${value} processos • ${item?.payload?.percent ?? 0}%`, "Volume"]}
+                              labelFormatter={(_, payload) => {
+                                const first = payload?.[0] as { payload?: { label?: string; value?: number } } | undefined;
+                                if (!first?.payload) return "";
+                                return `${first.payload.label} • ${formatCurrency(first.payload.value ?? 0)}`;
+                              }}
+                            />
+                          </PieChart>
+                        </ResponsiveContainer>
+                        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                          <p className="text-3xl font-bold text-cyan-100">{pipelineTotals.totalProcessos}</p>
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-slate-400">Processos</p>
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        {pipelineStatusData.map((item) => (
+                          <button
+                            key={`status-legend-${item.key}`}
+                            onClick={() => openCentralWithFilters({ status: item.filter })}
+                            className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-left transition hover:border-cyan-500/40"
+                          >
+                            <p className="text-xs font-semibold" style={{ color: item.color }}>{item.label} {item.total}</p>
+                            <p className="mt-0.5 text-[11px] text-slate-400">{item.percent}% do total • {formatCurrency(item.value)}</p>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg border border-slate-800 bg-slate-900/55 p-2 text-xs">
+                    <div>
+                      <p className="uppercase tracking-[0.12em] text-slate-500">Total de Processos</p>
+                      <p className="text-sm font-semibold text-cyan-100">{pipelineTotals.totalProcessos}</p>
+                    </div>
+                    <div>
+                      <p className="uppercase tracking-[0.12em] text-slate-500">Valor Total</p>
+                      <p className="text-sm font-semibold text-cyan-100">{formatCurrency(pipelineTotals.totalValor)}</p>
+                    </div>
+                  </div>
                 </Panel>
 
-                <Panel title="Distribuicao por Setor">
-                  <ResponsiveContainer width="100%" height={250}>
-                    <BarChart data={sectorDistribution} layout="vertical" margin={{ left: 10, right: 14 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-                      <XAxis type="number" stroke="#94a3b8" />
-                      <YAxis dataKey="setor" type="category" stroke="#94a3b8" width={120} />
-                      <Tooltip formatter={(value, _name, item) => [`${value} (${item?.payload?.percent ?? 0}%)`, "SC + OC"]} />
-                      <Bar
-                        dataKey="total"
-                        fill={BLUE}
-                        radius={[0, 8, 8, 0]}
-                        onClick={(data) => {
-                          if (data && typeof data === "object" && "setor" in data) {
-                            const sector = state.setores.find((x) => x.nome === String(data.setor));
-                            if (sector?.id) openCentralWithFilters({ setorId: sector.id });
-                          }
-                        }}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
+                <Panel title="SC + OC por Setor">
+                  <div className="mb-2 flex flex-wrap gap-2">
+                    <button className={`rounded-md border px-2 py-1 text-xs ${sectorViewMode === "quantidade" ? "border-cyan-500/50 bg-cyan-500/10 text-cyan-100" : "border-slate-700 text-slate-300"}`} onClick={() => setSectorViewMode("quantidade")}>Visao por Quantidade</button>
+                    <button className={`rounded-md border px-2 py-1 text-xs ${sectorViewMode === "valor" ? "border-cyan-500/50 bg-cyan-500/10 text-cyan-100" : "border-slate-700 text-slate-300"}`} onClick={() => setSectorViewMode("valor")}>Visao por Valor</button>
+                    <button className={`rounded-md border px-2 py-1 text-xs ${sectorSortMode === "desc" ? "border-blue-500/45 bg-blue-500/10 text-blue-100" : "border-slate-700 text-slate-300"}`} onClick={() => setSectorSortMode("desc")}>Maior</button>
+                    <button className={`rounded-md border px-2 py-1 text-xs ${sectorSortMode === "asc" ? "border-blue-500/45 bg-blue-500/10 text-blue-100" : "border-slate-700 text-slate-300"}`} onClick={() => setSectorSortMode("asc")}>Menor</button>
+                  </div>
+                  <div className="space-y-2">
+                    {sectorRankData.length === 0 ? (
+                      <p className="rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-4 text-center text-sm text-slate-400">DADOS INSUFICIENTES</p>
+                    ) : sectorRankData.map((item) => {
+                      const metric = sectorViewMode === "valor" ? item.valor : item.total;
+                      const width = Math.max(8, toPercent(metric, maxSectorRankMetric));
+                      return (
+                        <button key={`sector-rank-${item.setor}`} onClick={() => {
+                          const sector = state.setores.find((x) => x.nome === item.setor);
+                          if (sector?.id) openCentralWithFilters({ setorId: sector.id });
+                        }} className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-left transition hover:border-cyan-500/40">
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="font-semibold text-slate-100">{item.setor}</span>
+                            <span className="text-cyan-200">{sectorViewMode === "valor" ? formatCurrency(item.valor) : `${item.total} processos`}</span>
+                          </div>
+                          <p className="mt-0.5 text-[11px] text-slate-400">{item.total} processos • {formatCurrency(item.valor)}</p>
+                          <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-800">
+                            <div className="h-full rounded-full bg-blue-400" style={{ width: `${width}%` }} />
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
                 </Panel>
               </div>
 
               <div className="dashboard-rise mt-4 grid gap-4 lg:grid-cols-2" style={{ animationDelay: "200ms" }}>
-                <Panel title="Aging de Processos (SC + OC)">
+                <Panel title="Aging & SLA">
+                  <div className="mb-2 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                    <div className="rounded-lg border border-slate-800 bg-slate-900/65 px-2 py-1.5">
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Tempo Medio</p>
+                      <p className="text-sm font-semibold text-cyan-100">{averageAgingDays !== null ? `${averageAgingDays} dias` : "SEM HISTORICO SUFICIENTE"}</p>
+                    </div>
+                    <div className="rounded-lg border border-slate-800 bg-slate-900/65 px-2 py-1.5">
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">SLA Medio</p>
+                      <p className="text-sm font-semibold text-cyan-100">{slaMetrics.averageSlaDays !== null ? `${slaMetrics.averageSlaDays} dias` : "SEM HISTORICO SUFICIENTE"}</p>
+                    </div>
+                    <div className="rounded-lg border border-slate-800 bg-slate-900/65 px-2 py-1.5">
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-slate-500">Status</p>
+                      <p className={`text-sm font-semibold ${slaMetrics.statusLabel === "DENTRO DO SLA" ? "text-emerald-300" : slaMetrics.statusLabel === "EM RISCO" ? "text-amber-300" : "text-rose-300"}`}>{slaMetrics.statusLabel}</p>
+                    </div>
+                  </div>
                   <ResponsiveContainer width="100%" height={250}>
                     <BarChart data={agingData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
@@ -1755,11 +2031,35 @@ export function ProcurementControlCenter() {
                       <Bar dataKey="total" fill={AMBER} radius={[8, 8, 0, 0]} onClick={(data) => data?.faixa && openAgingDrilldown(String(data.faixa))} />
                     </BarChart>
                   </ResponsiveContainer>
-                  <p className="mt-2 text-xs text-slate-400">Clique em uma faixa para abrir a Central SC/OC com o recorte selecionado.</p>
+                  {slaMetrics.hasData ? (
+                    <div className="mt-2 grid grid-cols-3 gap-2 text-[11px]">
+                      <div className="rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-1.5 text-emerald-200">No prazo: {slaMetrics.noPrazoPercent}%</div>
+                      <div className="rounded border border-amber-500/30 bg-amber-500/10 px-2 py-1.5 text-amber-200">Em risco: {slaMetrics.riscoPercent}%</div>
+                      <div className="rounded border border-rose-500/30 bg-rose-500/10 px-2 py-1.5 text-rose-200">Atrasados: {slaMetrics.atrasadoPercent}%</div>
+                    </div>
+                  ) : (
+                    <p className="mt-2 text-xs text-slate-400">SEM HISTORICO SUFICIENTE para leitura de SLA.</p>
+                  )}
                 </Panel>
 
-                <Panel title="Financeiro por Setor">
+                <Panel title="Financial Intelligence">
+                  <div className="mb-2 rounded-lg border border-cyan-500/25 bg-cyan-500/8 px-3 py-2">
+                    <p className="text-[10px] uppercase tracking-[0.14em] text-cyan-300">Valor Total SC + OC</p>
+                    <p className="text-lg font-semibold text-cyan-100">{formatCurrency(kpis.valorTotalSC + kpis.valorTotalOC)}</p>
+                  </div>
                   <div className="mb-2 flex gap-2">
+                    <button
+                      className={`rounded-md border px-2 py-1 text-xs ${financialViewMode === "setor" ? "border-cyan-500/50 bg-cyan-500/10 text-cyan-100" : "border-slate-700 text-slate-300"}`}
+                      onClick={() => setFinancialViewMode("setor")}
+                    >
+                      Valor por Setor
+                    </button>
+                    <button
+                      className={`rounded-md border px-2 py-1 text-xs ${financialViewMode === "status" ? "border-cyan-500/50 bg-cyan-500/10 text-cyan-100" : "border-slate-700 text-slate-300"}`}
+                      onClick={() => setFinancialViewMode("status")}
+                    >
+                      Valor por Status
+                    </button>
                     <button
                       className={`rounded-md border px-2 py-1 text-xs ${financialSort === "desc" ? "border-cyan-500/50 bg-cyan-500/10 text-cyan-100" : "border-slate-700 text-slate-300"}`}
                       onClick={() => setFinancialSort("desc")}
@@ -1774,23 +2074,36 @@ export function ProcurementControlCenter() {
                     </button>
                   </div>
                   <div className="space-y-2">
-                    {financialBySector.slice(0, 8).map((item) => {
-                      const width = Math.max(8, toPercent(item.valor, maxFinancialValue));
+                    {financialIntelligenceData.length === 0 ? (
+                      <p className="rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-4 text-center text-sm text-slate-400">DADOS INSUFICIENTES</p>
+                    ) : financialIntelligenceData.slice(0, 8).map((item) => {
+                      const width = Math.max(8, toPercent(item.value, maxFinancialIntValue));
                       return (
                         <button
-                          key={`fin-${item.setor}`}
+                          key={`fin-${item.key}`}
                           className="w-full rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-left transition duration-200 hover:-translate-y-0.5 hover:border-cyan-500/35"
                           onClick={() => {
-                            const sector = state.setores.find((x) => x.nome === item.setor);
-                            if (sector?.id) openCentralWithFilters({ setorId: sector.id });
+                            if (item.type === "setor") {
+                              const sector = state.setores.find((x) => x.nome === item.label);
+                              if (sector?.id) openCentralWithFilters({ setorId: sector.id });
+                            } else {
+                              const statusMap: Record<string, string> = {
+                                APROVADO: "APROVADA",
+                                "EM ANALISE": "EM_ANALISE",
+                                REPROVADO: "REPROVADA",
+                                LANCADO: "LANCADA",
+                              };
+                              openCentralWithFilters({ status: statusMap[item.label] ?? "" });
+                            }
                           }}
                         >
                           <div className="flex items-center justify-between text-xs text-slate-300">
-                            <span>{item.setor}</span>
-                            <span className="text-cyan-200">{formatCurrency(item.valor)}</span>
+                            <span>{item.label}</span>
+                            <span className="text-cyan-200">{formatCurrency(item.value)}</span>
                           </div>
+                          <p className="mt-0.5 text-[11px] text-slate-400">{item.meta}</p>
                           <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-slate-800">
-                            <div className="h-full rounded-full bg-cyan-400" style={{ width: `${width}%` }} />
+                            <div className="h-full rounded-full" style={{ width: `${width}%`, backgroundColor: item.color }} />
                           </div>
                         </button>
                       );
@@ -1877,13 +2190,28 @@ export function ProcurementControlCenter() {
                   </div>
                 </Panel>
 
-                <Panel title="Atividade Recente">
+                <Panel title="Executive Insights">
                   <div className="space-y-2">
-                    {recentActivity.map((item) => (
-                      <div key={item.id} className="rounded-lg border border-slate-800 bg-slate-900/70 px-3 py-2">
-                        <p className="text-sm text-slate-100">{item.title}</p>
-                        <p className="text-xs text-slate-400">{item.when}</p>
+                    {executiveInsights.length === 0 ? (
+                      <p className="rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-4 text-center text-sm text-slate-400">DADOS INSUFICIENTES</p>
+                    ) : executiveInsights.map((insight) => (
+                      <div key={insight.id} className={`rounded-lg border px-3 py-2 ${insight.tone === "ok" ? "border-emerald-500/30 bg-emerald-500/10" : insight.tone === "warn" ? "border-amber-500/30 bg-amber-500/10" : "border-rose-500/30 bg-rose-500/10"}`}>
+                        <p className={`text-sm font-semibold ${insight.tone === "ok" ? "text-emerald-100" : insight.tone === "warn" ? "text-amber-100" : "text-rose-100"}`}>{insight.title}</p>
+                        <p className={`text-xs ${insight.tone === "ok" ? "text-emerald-200/90" : insight.tone === "warn" ? "text-amber-200/90" : "text-rose-200/90"}`}>{insight.detail}</p>
                       </div>
+                    ))}
+                  </div>
+                </Panel>
+              </div>
+
+              <div className="dashboard-rise mt-4" style={{ animationDelay: "320ms" }}>
+                <Panel title="Operational Snapshot">
+                  <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-6">
+                    {operationalSnapshotItems.map((item) => (
+                      <button key={item.id} onClick={item.onClick} className="rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-2 text-left transition hover:border-cyan-500/40">
+                        <p className="text-[10px] uppercase tracking-[0.14em] text-slate-400">{item.label}</p>
+                        <p className="mt-1 text-2xl font-semibold text-cyan-100">{item.value}</p>
+                      </button>
                     ))}
                   </div>
                 </Panel>
