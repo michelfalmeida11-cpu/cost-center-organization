@@ -82,9 +82,12 @@ export function getConfiguredDriver(): PersistenceDriver {
   const rawMode = (process.env.PROCUREMENT_PERSISTENCE_DRIVER ?? "").trim().toLowerCase();
 
   if (rawMode === "memory") return "memory";
-  if (rawMode === "supabase") return isSupabaseAvailable() ? "supabase" : "memory";
+  if (rawMode === "supabase") return "supabase";
 
-  // Auto-detect mode when the env var is missing.
+  // In production, prefer supabase semantics to avoid silent ephemeral memory writes.
+  if (process.env.NODE_ENV === "production") return "supabase";
+
+  // Auto-detect mode when the env var is missing (local/dev).
   return isSupabaseAvailable() ? "supabase" : "memory";
 }
 

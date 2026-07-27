@@ -580,7 +580,7 @@ export function ProcurementControlCenter() {
   ) : null;
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_15%_10%,rgba(53,243,255,.12),transparent_25%),radial-gradient(circle_at_85%_0%,rgba(159,122,255,.10),transparent_30%),#04060b] text-slate-200">
+    <div className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_15%_10%,rgba(53,243,255,.12),transparent_25%),radial-gradient(circle_at_85%_0%,rgba(159,122,255,.10),transparent_30%),#04060b] text-slate-200">
       <div className="flex min-h-screen">
         <aside className={`${collapsedSidebar ? "w-[84px]" : "w-[290px]"} sticky top-0 hidden h-screen border-r border-cyan-400/20 bg-slate-950/90 px-3 py-4 transition-all md:block`}>
           <div className="mb-6 flex items-center justify-between rounded-lg border border-cyan-400/30 bg-slate-900/60 px-3 py-2">
@@ -910,20 +910,20 @@ export function ProcurementControlCenter() {
               <div className="mt-4">
                 <Panel title="Ultimas Movimentacoes SC / OC">
                   <div className="overflow-auto">
-                    <table className="min-w-[1360px] w-full table-fixed text-sm">
+                    <table className="w-full table-fixed text-xs md:text-sm">
                       <thead className="text-left text-[11px] uppercase tracking-[0.14em] text-slate-500">
                         <tr>
-                          <th className="w-[100px] py-2">SC</th>
-                          <th className="w-[100px]">OC</th>
-                          <th className="w-[90px]">NF</th>
-                          <th className="w-[220px]">Solicitante</th>
-                          <th className="w-[220px]">Razao Social</th>
-                          <th className="w-[130px]">Unidade</th>
-                          <th className="w-[190px]">CNPJ</th>
-                          <th className="w-[170px]">Status</th>
-                          <th className="w-[150px] text-right">Valor</th>
-                          <th className="w-[120px]">Data</th>
-                          <th className="w-[200px]">Acoes</th>
+                          <th className="w-[84px] py-2">SC</th>
+                          <th className="w-[84px]">OC</th>
+                          <th className="w-[70px]">NF</th>
+                          <th className="w-[150px]">Solicitante</th>
+                          <th className="w-[170px]">Razao Social</th>
+                          <th className="w-[100px]">Unidade</th>
+                          <th className="w-[130px]">CNPJ</th>
+                          <th className="w-[140px]">Status</th>
+                          <th className="w-[115px] text-right">Valor</th>
+                          <th className="w-[105px]">Data</th>
+                          <th className="w-[150px]">Acoes</th>
                         </tr>
                       </thead>
                       <tbody>

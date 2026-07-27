@@ -15,6 +15,12 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     throw new Error((data as { error?: string }).error ?? "Erro de requisicao");
   }
+
+  const persistenceMeta = data as T & { persisted?: boolean; warning?: string };
+  if (method !== "GET" && persistenceMeta.persisted === false) {
+    throw new Error(persistenceMeta.warning || "Dados atualizados apenas em memoria. Persistencia indisponivel.");
+  }
+
   return data;
 }
 
