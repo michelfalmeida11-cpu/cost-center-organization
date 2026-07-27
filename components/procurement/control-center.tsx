@@ -292,6 +292,10 @@ function parseNfAttachment(entry: string | undefined | null) {
   };
 }
 
+function normalizeName(value: string) {
+  return value.trim().toLowerCase();
+}
+
 function ModuleTitle({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <div className="mb-4">
@@ -1286,7 +1290,7 @@ export function ProcurementControlCenter() {
                           <th className="w-[8%] px-2">OC</th>
                           <th className="w-[8%] px-2">NF</th>
                           <th className="w-[16%] px-2">Solicitante</th>
-                          <th className="hidden w-[15%] px-2 md:table-cell">Razao Social</th>
+                          <th className="hidden w-[15%] px-2 md:table-cell">Fornecedor</th>
                           <th className="hidden w-[10%] px-2 md:table-cell">Unidade</th>
                           <th className="hidden w-[10%] px-2 lg:table-cell">CNPJ</th>
                           <th className="w-[12%] px-2">Status</th>
@@ -1306,7 +1310,7 @@ export function ProcurementControlCenter() {
                           const nfAttachmentEntry = (ocRecord?.anexos ?? scRecord?.anexos ?? []).find((entry) => entry.startsWith("NF_FILE:"));
                           const nfAttachment = parseNfAttachment(nfAttachmentEntry);
                           const unidadeValue = getTaggedValue(currentObservacoes, "UNIDADE") || row.setor;
-                          const razaoSocial = supplier?.razaoSocial || row.fornecedor || "-";
+                          const supplierName = supplier?.nomeFantasia || supplier?.razaoSocial || row.fornecedor || "-";
                           const cnpj = supplier?.cnpj || "";
                           const solicitante = scRecord?.solicitante || ocRecord?.responsavel || "-";
                           const rowDate = scRecord?.dataCriacao || ocRecord?.dataOC || row.sortDate;
@@ -1318,7 +1322,7 @@ export function ProcurementControlCenter() {
                             <td className="truncate px-2 text-slate-200">{row.numeroOC}</td>
                             <td className="truncate px-2">{nfValue || "-"}</td>
                             <td className="truncate px-2">{solicitante}</td>
-                            <td className="hidden truncate px-2 md:table-cell">{razaoSocial}</td>
+                            <td className="hidden truncate px-2 md:table-cell">{supplierName}</td>
                             <td className="hidden truncate px-2 md:table-cell">{unidadeValue}</td>
                             <td className="hidden truncate px-2 lg:table-cell">{cnpj}</td>
                             <td className="px-2">
@@ -1841,9 +1845,23 @@ function UnifiedScOcModule({
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
   const [bulkStatus, setBulkStatus] = useState<OcPhase | "">("");
   const [isBulkRunning, setIsBulkRunning] = useState(false);
+  const [editingRowKey, setEditingRowKey] = useState<string | null>(null);
+  const [editDraft, setEditDraft] = useState({
+    numeroSC: "",
+    numeroOC: "",
+    nf: "",
+    solicitante: "",
+    fornecedorNome: "",
+    unidade: "",
+    valor: 0,
+    data: "",
+    descricao: "",
+    setorId: "",
+  });
   const rows = useMemo(() => buildUnifiedRows(scs, ocs, setores, fornecedores), [scs, ocs, setores, fornecedores]);
   const [formEntry, setFormEntry] = useState({
     solicitante: "",
+    fornecedorNome: "",
     unidade: "",
     setorId: setores[0]?.id ?? "",
     area: "",
@@ -1855,6 +1873,35 @@ function UnifiedScOcModule({
     descricao: "",
     status: "EM_ANALISE" as SCStatus,
   });
+
+  const resolveSupplierId = useCallback(async (supplierName: string, fallbackSupplierId?: string | null) => {
+    const typedName = supplierName.trim();
+    if (!typedName) return fallbackSupplierId ?? null;
+
+    const normalized = normalizeName(typedName);
+    const existing = fornecedores.find((item) => {
+      return normalizeName(item.nomeFantasia) === normalized || normalizeName(item.razaoSocial) === normalized;
+    });
+    if (existing) return existing.id;
+
+    const suffix = Date.now().toString().slice(-6);
+    const generatedCnpj = `99${Date.now().toString().padStart(12, "0").slice(-12)}`;
+    const createdSupplier = await onCreateSupplierWithResult({
+      codigo: `AUTO-${suffix}`,
+      razaoSocial: typedName,
+      nomeFantasia: typedName,
+      cnpj: generatedCnpj,
+      contato: formEntry.solicitante || "Cadastro automatico",
+      telefone: "",
+      email: "",
+      cidade: "",
+      estado: "",
+      categoria: "Cadastro Automatico",
+      status: "ATIVO",
+      observacoes: "Fornecedor criado automaticamente pela Central SC/OC.",
+    });
+    return createdSupplier.id;
+  }, [fornecedores, onCreateSupplierWithResult, formEntry.solicitante]);
 
   const selectedRows = useMemo(() => {
     const selectedSet = new Set(selectedKeys);
@@ -2009,6 +2056,66 @@ function UnifiedScOcModule({
     }
   };
 
+  const openRowEditor = (row: UnifiedScOcRow, scRecord: PurchaseRequest | undefined, ocRecord: PurchaseOrder | undefined, supplierName: string, unidadeValue: string, nfValue: string, rowDate: string) => {
+    setEditingRowKey(`${row.entity}:${row.id}`);
+    setEditDraft({
+      numeroSC: row.numeroSC === "-" ? "" : row.numeroSC,
+      numeroOC: row.numeroOC === "-" ? "" : row.numeroOC,
+      nf: nfValue,
+      solicitante: scRecord?.solicitante || ocRecord?.responsavel || "",
+      fornecedorNome: supplierName === "-" ? "" : supplierName,
+      unidade: unidadeValue === "-" ? "" : unidadeValue,
+      valor: row.valor,
+      data: rowDate,
+      descricao: (scRecord?.descricao || ocRecord?.observacoes || "").slice(0, 500),
+      setorId: scRecord?.setorId || ocRecord?.setorId || "",
+    });
+  };
+
+  const cancelRowEditor = () => {
+    setEditingRowKey(null);
+  };
+
+  const saveRowEditor = async (row: UnifiedScOcRow, scRecord: PurchaseRequest | undefined, ocRecord: PurchaseOrder | undefined) => {
+    try {
+      const fallbackSupplierId = ocRecord?.fornecedorId ?? scRecord?.fornecedorSugeridoId ?? fornecedores[0]?.id ?? null;
+      const supplierId = await resolveSupplierId(editDraft.fornecedorNome, fallbackSupplierId);
+
+      if (scRecord) {
+        await onUpdateSC(scRecord.id, {
+          numeroSC: editDraft.numeroSC.trim() || scRecord.numeroSC,
+          solicitante: editDraft.solicitante.trim() || scRecord.solicitante,
+          responsavel: editDraft.solicitante.trim() || scRecord.responsavel,
+          setorId: editDraft.setorId || scRecord.setorId,
+          valorEstimado: Number(editDraft.valor || 0),
+          fornecedorSugeridoId: supplierId,
+          numeroOCRelacionada: editDraft.numeroOC.trim() || scRecord.numeroOCRelacionada,
+          dataCriacao: editDraft.data || scRecord.dataCriacao,
+          descricao: editDraft.descricao.trim() || scRecord.descricao,
+          observacoes: setTaggedValue(setTaggedValue(scRecord.observacoes, "NF", editDraft.nf), "UNIDADE", editDraft.unidade),
+        });
+      }
+
+      if (ocRecord) {
+        await onUpdateOC(ocRecord.id, {
+          numeroOC: editDraft.numeroOC.trim() || ocRecord.numeroOC,
+          responsavel: editDraft.solicitante.trim() || ocRecord.responsavel,
+          setorId: editDraft.setorId || ocRecord.setorId,
+          valorOC: Number(editDraft.valor || 0),
+          fornecedorId: supplierId ?? ocRecord.fornecedorId,
+          dataOC: editDraft.data || ocRecord.dataOC,
+          dataEmissao: editDraft.data || ocRecord.dataEmissao,
+          observacoes: setTaggedValue(setTaggedValue(ocRecord.observacoes, "NF", editDraft.nf), "UNIDADE", editDraft.unidade),
+        });
+      }
+
+      setMessage(`Registro ${row.numeroSC}/${row.numeroOC} atualizado com sucesso.`);
+      setEditingRowKey(null);
+    } catch (error) {
+      setMessage((error as Error).message || "Falha ao salvar alteracoes da linha.");
+    }
+  };
+
   return (
     <section className="space-y-4">
       <ModuleTitle title="Central SC / OC" subtitle="Criacao e controle em uma unica operacao" />
@@ -2017,6 +2124,7 @@ function UnifiedScOcModule({
         <Panel title="Criacao Integrada SC / OC">
           <div className="grid gap-2 md:grid-cols-5">
             <input className="field" placeholder="Solicitante" value={formEntry.solicitante} onChange={(e) => setFormEntry((prev) => ({ ...prev, solicitante: e.target.value }))} />
+            <input className="field" placeholder="Fornecedor (digite para cadastrar)" value={formEntry.fornecedorNome} onChange={(e) => setFormEntry((prev) => ({ ...prev, fornecedorNome: e.target.value }))} />
             <input className="field" placeholder="Unidade" value={formEntry.unidade} onChange={(e) => setFormEntry((prev) => ({ ...prev, unidade: e.target.value }))} />
             <select className="field" value={formEntry.setorId} onChange={(e) => setFormEntry((prev) => ({ ...prev, setorId: e.target.value }))}>
               <option value="">Setor</option>
@@ -2059,29 +2167,15 @@ function UnifiedScOcModule({
                   }
                 };
 
-                let supplierId = fornecedores[0]?.id ?? null;
-                if (!supplierId) {
-                  try {
-                    const digits = Date.now().toString();
-                    const createdSupplier = await onCreateSupplierWithResult({
-                      codigo: `AUTO-${digits.slice(-6)}`,
-                      razaoSocial: "Fornecedor Padrao",
-                      nomeFantasia: "Fornecedor Padrao",
-                      cnpj: "00000000000000",
-                      contato: formEntry.solicitante || "Cadastro automatico",
-                      telefone: "",
-                      email: "",
-                      cidade: "",
-                      estado: "",
-                      categoria: "Cadastro Automatico",
-                      status: "ATIVO",
-                      observacoes: "Fornecedor padrao criado automaticamente para manter fluxo SC/OC.",
-                    });
-                    supplierId = createdSupplier.id;
-                  } catch {
-                    setMessage("Nao foi possivel criar fornecedor padrao para concluir a OC.");
-                    return;
+                let supplierId: string | null = fornecedores[0]?.id ?? null;
+                try {
+                  supplierId = await resolveSupplierId(formEntry.fornecedorNome, supplierId);
+                  if (!supplierId) {
+                    supplierId = await resolveSupplierId("Fornecedor Padrao", supplierId);
                   }
+                } catch {
+                  setMessage("Nao foi possivel cadastrar/associar fornecedor para concluir a OC.");
+                  return;
                 }
 
                 const now = new Date().toISOString().slice(0, 10);
@@ -2135,6 +2229,7 @@ function UnifiedScOcModule({
                   setFormEntry((prev) => ({
                     ...prev,
                     solicitante: "",
+                    fornecedorNome: "",
                     unidade: "",
                     setorId: setores[0]?.id ?? "",
                     area: "",
@@ -2228,7 +2323,7 @@ function UnifiedScOcModule({
                 <th className="w-[8%] px-2">OC</th>
                 <th className="w-[8%] px-2">NF</th>
                 <th className="w-[16%] px-2">Solicitante</th>
-                <th className="hidden w-[15%] px-2 md:table-cell">Razao Social</th>
+                <th className="hidden w-[15%] px-2 md:table-cell">Fornecedor</th>
                 <th className="hidden w-[10%] px-2 md:table-cell">Unidade</th>
                 <th className="hidden w-[10%] px-2 lg:table-cell">CNPJ</th>
                 <th className="w-[12%] px-2">Status</th>
@@ -2251,13 +2346,14 @@ function UnifiedScOcModule({
                     ?.replace("NF_FILE:", "")
                     .split("|")[0] ?? "";
                 const unidadeValue = getTaggedValue(currentObservacoes, "UNIDADE") || row.setor;
-                const razaoSocial = supplier?.razaoSocial || row.fornecedor || "-";
+                const supplierName = supplier?.nomeFantasia || supplier?.razaoSocial || row.fornecedor || "-";
                 const cnpj = supplier?.cnpj || "";
                 const solicitante = scRecord?.solicitante || ocRecord?.responsavel || "-";
                 const rowDate = scRecord?.dataCriacao || ocRecord?.dataOC || row.sortDate;
                 const fileInputId = `nf-upload-${row.entity}-${row.id}`;
                 const rowSelectionKey = `${row.entity}:${row.id}`;
                 const isSelected = selectedKeys.includes(rowSelectionKey);
+                const isEditing = editingRowKey === rowSelectionKey;
 
                 return (
                   <tr key={`${row.entity}-${row.id}`} className={`border-t border-slate-800/90 align-top transition even:bg-slate-900/30 hover:bg-slate-900/70 ${isSelected ? "bg-cyan-500/10" : ""}`}>
@@ -2271,15 +2367,52 @@ function UnifiedScOcModule({
                         />
                       ) : null}
                     </td>
-                    <td className="truncate px-2 py-2 font-medium text-cyan-100">{row.numeroSC}</td>
-                    <td className="truncate px-2 text-slate-200">{row.numeroOC}</td>
-                    <td className="truncate px-2">{nfValue || "-"}</td>
-                    <td className="truncate px-2">{solicitante}</td>
-                    <td className="hidden truncate px-2 md:table-cell">{razaoSocial}</td>
-                    <td className="hidden truncate px-2 md:table-cell">{unidadeValue}</td>
+                    <td className="truncate px-2 py-2 font-medium text-cyan-100">
+                      {isEditing ? (
+                        <input className="field w-full text-xs" value={editDraft.numeroSC} onChange={(e) => setEditDraft((prev) => ({ ...prev, numeroSC: e.target.value }))} />
+                      ) : row.numeroSC}
+                    </td>
+                    <td className="truncate px-2 text-slate-200">
+                      {isEditing ? (
+                        <input className="field w-full text-xs" value={editDraft.numeroOC} onChange={(e) => setEditDraft((prev) => ({ ...prev, numeroOC: e.target.value }))} />
+                      ) : row.numeroOC}
+                    </td>
+                    <td className="truncate px-2">
+                      {isEditing ? (
+                        <input className="field w-full text-xs" value={editDraft.nf} onChange={(e) => setEditDraft((prev) => ({ ...prev, nf: e.target.value }))} />
+                      ) : (nfValue || "-")}
+                    </td>
+                    <td className="truncate px-2">
+                      {isEditing ? (
+                        <input className="field w-full text-xs" value={editDraft.solicitante} onChange={(e) => setEditDraft((prev) => ({ ...prev, solicitante: e.target.value }))} />
+                      ) : solicitante}
+                    </td>
+                    <td className="hidden truncate px-2 md:table-cell">
+                      {isEditing ? (
+                        <input className="field w-full text-xs" value={editDraft.fornecedorNome} onChange={(e) => setEditDraft((prev) => ({ ...prev, fornecedorNome: e.target.value }))} />
+                      ) : supplierName}
+                    </td>
+                    <td className="hidden truncate px-2 md:table-cell">
+                      {isEditing ? (
+                        <input className="field w-full text-xs" value={editDraft.unidade} onChange={(e) => setEditDraft((prev) => ({ ...prev, unidade: e.target.value }))} />
+                      ) : unidadeValue}
+                    </td>
                     <td className="hidden truncate px-2 lg:table-cell">{cnpj}</td>
                     <td className="px-2">
-                      {canWrite && row.entity === "SC" && scRecord ? (
+                      {isEditing ? (
+                        <select
+                          className="field w-full max-w-[132px] text-xs"
+                          value={editDraft.setorId}
+                          onChange={(e) => setEditDraft((prev) => ({ ...prev, setorId: e.target.value }))}
+                        >
+                          <option value="">Setor</option>
+                          {setores.map((setor) => (
+                            <option key={`edit-setor-${setor.id}`} value={setor.id}>{setor.nome}</option>
+                          ))}
+                        </select>
+                      ) : null}
+
+                      {!isEditing && canWrite && row.entity === "SC" && scRecord ? (
                         <select
                           className="field w-full max-w-[132px] text-xs"
                           value={scRecord.status}
@@ -2300,7 +2433,7 @@ function UnifiedScOcModule({
                         </select>
                       ) : null}
 
-                      {canWrite && row.entity === "OC" && ocRecord ? (
+                      {!isEditing && canWrite && row.entity === "OC" && ocRecord ? (
                         <select
                           className="field w-full max-w-[132px] text-xs"
                           value={ocToPhase(ocRecord.status as OCStatus)}
@@ -2318,16 +2451,43 @@ function UnifiedScOcModule({
 
                       {!canWrite ? <span className={`inline-flex whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-medium ${businessStatusBadge(row.statusKey)}`}>{row.statusLabel}</span> : null}
                     </td>
-                    <td className="px-2 text-right font-medium text-emerald-300">{formatCurrency(row.valor)}</td>
-                    <td className="px-2 text-slate-300">{formatDatePtBr(rowDate)}</td>
+                    <td className="px-2 text-right font-medium text-emerald-300">
+                      {isEditing ? (
+                        <input className="field w-full text-right text-xs" type="number" value={editDraft.valor} onChange={(e) => setEditDraft((prev) => ({ ...prev, valor: Number(e.target.value || 0) }))} />
+                      ) : formatCurrency(row.valor)}
+                    </td>
+                    <td className="px-2 text-slate-300">
+                      {isEditing ? (
+                        <input className="field w-full text-xs" type="date" value={editDraft.data} onChange={(e) => setEditDraft((prev) => ({ ...prev, data: e.target.value }))} />
+                      ) : formatDatePtBr(rowDate)}
+                    </td>
                     <td className="px-2 py-2">
                       <div className="flex flex-col items-start gap-1 xl:flex-row xl:items-center">
+                        {canWrite ? (
+                          isEditing ? (
+                            <>
+                              <button className="rounded border border-emerald-700 px-2 py-1 text-xs text-emerald-200 transition hover:bg-emerald-500/10" onClick={() => void saveRowEditor(row, scRecord, ocRecord)}>
+                                Salvar
+                              </button>
+                              <button className="rounded border border-slate-700 px-2 py-1 text-xs transition hover:bg-slate-800/80" onClick={cancelRowEditor}>
+                                Cancelar
+                              </button>
+                            </>
+                          ) : (
+                            <button
+                              className="rounded border border-cyan-700 px-2 py-1 text-xs text-cyan-200 transition hover:bg-cyan-500/10"
+                              onClick={() => openRowEditor(row, scRecord, ocRecord, supplierName, unidadeValue, nfValue, rowDate)}
+                            >
+                              Editar
+                            </button>
+                          )
+                        ) : null}
                         {scRecord ? (
                           <button className="rounded border border-slate-700 px-2 py-1 text-xs transition hover:bg-slate-800/80" onClick={() => onPickTimeline(scRecord.id)}>
                             Timeline
                           </button>
                         ) : null}
-                        {canWrite ? (
+                        {canWrite && !isEditing ? (
                           <label className="cursor-pointer rounded border border-emerald-700 px-2 py-1 text-xs text-emerald-200 transition hover:bg-emerald-500/10">
                             Arquivo NF
                             <input
@@ -2367,8 +2527,8 @@ function UnifiedScOcModule({
                             />
                           </label>
                         ) : null}
-                        {nfArquivoLabel ? <span className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300">NF: {nfArquivoLabel}</span> : null}
-                        {canWrite ? (
+                        {nfArquivoLabel && !isEditing ? <span className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300">NF: {nfArquivoLabel}</span> : null}
+                        {canWrite && !isEditing ? (
                           <button
                             className="rounded border border-rose-700 px-2 py-1 text-xs transition hover:bg-rose-500/10"
                             onClick={async () => {
@@ -2384,6 +2544,14 @@ function UnifiedScOcModule({
                           </button>
                         ) : null}
                       </div>
+                      {isEditing ? (
+                        <textarea
+                          className="field mt-1 min-h-[56px] w-full text-xs"
+                          placeholder="Descricao / observacoes"
+                          value={editDraft.descricao}
+                          onChange={(e) => setEditDraft((prev) => ({ ...prev, descricao: e.target.value }))}
+                        />
+                      ) : null}
                     </td>
                   </tr>
                 );
