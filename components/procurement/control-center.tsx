@@ -237,6 +237,21 @@ async function fileToDataUrl(file: File): Promise<string> {
   });
 }
 
+function parseNfAttachment(entry: string | undefined | null) {
+  if (!entry || !entry.startsWith("NF_FILE:")) return null;
+  const payload = entry.replace("NF_FILE:", "");
+  const [name, mime, size, ts, ...dataParts] = payload.split("|");
+  const dataUrl = dataParts.join("|");
+  if (!dataUrl) return null;
+  return {
+    name: name || "NF",
+    mime: mime || "application/octet-stream",
+    size: Number(size || 0),
+    ts: Number(ts || 0),
+    dataUrl,
+  };
+}
+
 function ModuleTitle({ title, subtitle }: { title: string; subtitle: string }) {
   return (
     <div className="mb-4">
@@ -895,19 +910,20 @@ export function ProcurementControlCenter() {
               <div className="mt-4">
                 <Panel title="Ultimas Movimentacoes SC / OC">
                   <div className="overflow-auto">
-                    <table className="min-w-[1180px] w-full text-sm">
+                    <table className="min-w-[1360px] w-full table-fixed text-sm">
                       <thead className="text-left text-[11px] uppercase tracking-[0.14em] text-slate-500">
                         <tr>
-                          <th className="py-2">SC</th>
-                          <th>OC</th>
-                          <th>NF</th>
-                          <th>Solicitante</th>
-                          <th>Razao Social</th>
-                          <th>Unidade</th>
-                          <th>CNPJ</th>
-                          <th>Status</th>
-                          <th>Valor</th>
-                          <th>Data</th>
+                          <th className="w-[100px] py-2">SC</th>
+                          <th className="w-[100px]">OC</th>
+                          <th className="w-[90px]">NF</th>
+                          <th className="w-[220px]">Solicitante</th>
+                          <th className="w-[220px]">Razao Social</th>
+                          <th className="w-[130px]">Unidade</th>
+                          <th className="w-[190px]">CNPJ</th>
+                          <th className="w-[170px]">Status</th>
+                          <th className="w-[150px] text-right">Valor</th>
+                          <th className="w-[120px]">Data</th>
+                          <th className="w-[200px]">Acoes</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -918,26 +934,117 @@ export function ProcurementControlCenter() {
                           const supplier = supplierId ? state.fornecedores.find((item) => item.id === supplierId) : null;
                           const currentObservacoes = ocRecord?.observacoes ?? scRecord?.observacoes ?? "";
                           const nfValue = getTaggedValue(currentObservacoes, "NF");
+                          const nfAttachmentEntry = (ocRecord?.anexos ?? scRecord?.anexos ?? []).find((entry) => entry.startsWith("NF_FILE:"));
+                          const nfAttachment = parseNfAttachment(nfAttachmentEntry);
                           const unidadeValue = getTaggedValue(currentObservacoes, "UNIDADE") || row.setor;
                           const razaoSocial = supplier?.razaoSocial || row.fornecedor || "-";
-                          const cnpj = supplier?.cnpj || "-";
+                          const cnpj = supplier?.cnpj || "";
                           const solicitante = scRecord?.solicitante || ocRecord?.responsavel || "-";
                           const rowDate = scRecord?.dataCriacao || ocRecord?.dataOC || row.sortDate;
+                          const fileInputId = `latest-nf-upload-${row.entity}-${row.id}`;
 
                           return (
-                          <tr key={`${row.entity}-${row.id}`} className="border-t border-slate-800/90 transition hover:bg-slate-900/60">
-                            <td className="py-2 pr-2 font-medium text-cyan-100">{row.numeroSC}</td>
-                            <td className="pr-2 text-slate-200">{row.numeroOC}</td>
-                            <td className="pr-2">{nfValue || "-"}</td>
-                            <td className="pr-2">{solicitante}</td>
-                            <td className="pr-2">{razaoSocial}</td>
-                            <td className="pr-2">{unidadeValue}</td>
-                            <td className="pr-2">{cnpj}</td>
+                            <tr key={`${row.entity}-${row.id}`} className="border-t border-slate-800/90 transition hover:bg-slate-900/60">
+                            <td className="truncate py-2 pr-2 font-medium text-cyan-100">{row.numeroSC}</td>
+                            <td className="truncate pr-2 text-slate-200">{row.numeroOC}</td>
+                            <td className="truncate pr-2">{nfValue || "-"}</td>
+                            <td className="truncate pr-2">{solicitante}</td>
+                            <td className="truncate pr-2">{razaoSocial}</td>
+                            <td className="truncate pr-2">{unidadeValue}</td>
+                            <td className="truncate pr-2">{cnpj}</td>
                             <td className="pr-2">
-                              <span className={`rounded-md border px-2 py-0.5 text-[11px] font-medium ${businessStatusBadge(row.statusKey)}`}>{row.statusLabel}</span>
+                              {canWrite && row.entity === "SC" && scRecord ? (
+                                <select
+                                  className="field max-w-[150px] text-xs"
+                                  value={scRecord.status}
+                                  onChange={async (e) => {
+                                    const nextStatus = e.target.value as SCStatus;
+                                    await updateSC(scRecord.id, {
+                                      status: nextStatus,
+                                      dataAprovacao: nextStatus === "APROVADA" ? new Date().toISOString().slice(0, 10) : scRecord.dataAprovacao,
+                                      dataReprovacao: nextStatus === "REPROVADA" ? new Date().toISOString().slice(0, 10) : scRecord.dataReprovacao,
+                                      dataLancamento: nextStatus === "LANCADA" ? new Date().toISOString().slice(0, 10) : scRecord.dataLancamento,
+                                    });
+                                  }}
+                                >
+                                  <option value="EM_ANALISE">Em Analise</option>
+                                  <option value="APROVADA">Aprovado</option>
+                                  <option value="REPROVADA">Reprovado</option>
+                                  <option value="LANCADA">Lancado</option>
+                                </select>
+                              ) : null}
+
+                              {canWrite && row.entity === "OC" && ocRecord ? (
+                                <select
+                                  className="field max-w-[150px] text-xs"
+                                  value={ocToPhase(ocRecord.status as OCStatus)}
+                                  onChange={async (e) => {
+                                    const phase = e.target.value as OcPhase;
+                                    await updateOC(ocRecord.id, { status: phaseToOcStatus(phase, ocRecord.status as OCStatus) });
+                                  }}
+                                >
+                                  <option value="EM_ANALISE">Em Analise</option>
+                                  <option value="APROVADA">Aprovado</option>
+                                  <option value="REPROVADA">Reprovado</option>
+                                  <option value="LANCADA">Lancado</option>
+                                </select>
+                              ) : null}
+
+                              {!canWrite ? <span className={`rounded-md border px-2 py-0.5 text-[11px] font-medium ${businessStatusBadge(row.statusKey)}`}>{row.statusLabel}</span> : null}
                             </td>
                             <td className="pr-2 font-medium text-right text-emerald-300">{formatCurrency(row.valor)}</td>
                             <td className="pr-2">{rowDate}</td>
+                            <td className="pr-2">
+                              <div className="flex flex-wrap items-center gap-1.5">
+                                {canWrite ? (
+                                  <label className="cursor-pointer rounded border border-emerald-700 px-2 py-1 text-xs text-emerald-200">
+                                    Upload NF
+                                    <input
+                                      id={fileInputId}
+                                      type="file"
+                                      accept=".pdf,.png,.jpg,.jpeg,.webp"
+                                      className="hidden"
+                                      onChange={async (e) => {
+                                        const file = e.target.files?.[0];
+                                        if (!file) return;
+                                        if (file.size > 1_500_000) {
+                                          e.currentTarget.value = "";
+                                          return;
+                                        }
+
+                                        try {
+                                          const encoded = await fileToDataUrl(file);
+                                          const fileEntry = `NF_FILE:${file.name}|${file.type}|${file.size}|${Date.now()}|${encoded}`;
+                                          if (row.entity === "OC" && ocRecord) {
+                                            await updateOC(ocRecord.id, {
+                                              anexos: [...(ocRecord.anexos ?? []).filter((entry) => !entry.startsWith("NF_FILE:")), fileEntry],
+                                            });
+                                          } else if (row.entity === "SC" && scRecord) {
+                                            await updateSC(scRecord.id, {
+                                              anexos: [...(scRecord.anexos ?? []).filter((entry) => !entry.startsWith("NF_FILE:")), fileEntry],
+                                            });
+                                          }
+                                        } finally {
+                                          e.currentTarget.value = "";
+                                        }
+                                      }}
+                                    />
+                                  </label>
+                                ) : null}
+                                {nfAttachment ? (
+                                  <button
+                                    className="rounded border border-cyan-700 px-2 py-1 text-xs text-cyan-200"
+                                    onClick={() => {
+                                      if (typeof window !== "undefined") {
+                                        window.open(nfAttachment.dataUrl, "_blank", "noopener,noreferrer");
+                                      }
+                                    }}
+                                  >
+                                    Ver NF
+                                  </button>
+                                ) : null}
+                              </div>
+                            </td>
                           </tr>
                           );
                         })}
@@ -1472,7 +1579,7 @@ function UnifiedScOcModule({
                     .split("|")[0] ?? "";
                 const unidadeValue = getTaggedValue(currentObservacoes, "UNIDADE") || row.setor;
                 const razaoSocial = supplier?.razaoSocial || row.fornecedor || "-";
-                const cnpj = supplier?.cnpj || "-";
+                const cnpj = supplier?.cnpj || "";
                 const solicitante = scRecord?.solicitante || ocRecord?.responsavel || "-";
                 const rowDate = scRecord?.dataCriacao || ocRecord?.dataOC || row.sortDate;
                 const fileInputId = `nf-upload-${row.entity}-${row.id}`;
