@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import Image from "next/image";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Activity,
   AlertTriangle,
@@ -70,6 +71,13 @@ const NAV: Array<{ id: AppModule; label: string; icon: React.ElementType }> = [
   { id: "RELATORIOS", label: "Relatorios", icon: BarChart3 },
   { id: "EXCEL", label: "Exportacao Excel", icon: FileSpreadsheet },
   { id: "CONFIGURACOES", label: "Configuracoes", icon: Settings },
+];
+
+const NAV_GROUPS: Array<{ title: string; items: AppModule[] }> = [
+  { title: "Overview", items: ["DASHBOARD", "SC"] },
+  { title: "Procurement", items: ["FORNECEDORES", "SETORES", "ACOMPANHAMENTO"] },
+  { title: "Intelligence", items: ["KPIS_ANALYTICS", "RELATORIOS", "EXCEL"] },
+  { title: "System", items: ["CONFIGURACOES"] },
 ];
 
 const MOBILE_NAV: Array<{ id: AppModule; label: string; icon: React.ElementType }> = [
@@ -268,25 +276,35 @@ function LoginCard() {
   const [erro, setErro] = useState("");
 
   if (!hydrated) {
-    return <div className="text-slate-300">Carregando sessao...</div>;
+    return (
+      <div className="mx-auto mt-20 w-full max-w-md rounded-2xl border border-slate-800 bg-slate-950/90 p-8 text-center shadow-[0_20px_40px_rgba(2,6,23,0.55)]">
+        <div className="mx-auto mb-4 h-12 w-44 opacity-90">
+          <Image src="/avg-logo.png" alt="Grupo AVG Emesa" width={176} height={48} className="h-full w-full object-contain" priority />
+        </div>
+        <p className="text-sm text-slate-300">Carregando sessao segura...</p>
+      </div>
+    );
   }
 
   return (
-    <div className="mx-auto mt-20 w-full max-w-md rounded-2xl border border-cyan-400/30 bg-slate-950/90 p-8 shadow-[0_0_40px_rgba(53,243,255,0.15)]">
-      <h1 className="font-orbitron text-2xl text-cyan-200">PROCUREMENT CONTROL CENTER</h1>
-      <p className="mt-2 text-sm text-slate-400">Login seguro por perfil para operacao do sistema.</p>
+    <div className="mx-auto mt-16 w-full max-w-md rounded-2xl border border-slate-800 bg-slate-950/92 p-8 shadow-[0_24px_50px_rgba(2,6,23,0.65)]">
+      <div className="mb-5 h-14 w-56">
+        <Image src="/avg-logo.png" alt="Grupo AVG Emesa" width={224} height={56} className="h-full w-full object-contain object-left" priority />
+      </div>
+      <h1 className="font-orbitron text-2xl text-slate-100">SC / OC ENTERPRISE COMMAND</h1>
+      <p className="mt-2 text-sm text-slate-400">Acesso corporativo para gestao de procurement, aprovacoes e inteligencia operacional.</p>
       <div className="mt-6 space-y-3">
-        <input value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-900 p-3 text-slate-200" placeholder="Email" />
-        <input value={senha} type="password" onChange={(e) => setSenha(e.target.value)} className="w-full rounded-lg border border-slate-700 bg-slate-900 p-3 text-slate-200" placeholder="Senha" />
+        <input value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-900 p-3 text-slate-200" placeholder="Email corporativo" />
+        <input value={senha} type="password" onChange={(e) => setSenha(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-900 p-3 text-slate-200" placeholder="Senha" />
         {erro ? <p className="text-xs text-rose-400">{erro}</p> : null}
         <button
-          className="w-full rounded-lg bg-cyan-400/90 p-3 font-semibold text-slate-950 transition hover:bg-cyan-300"
+          className="w-full rounded-xl border border-cyan-400/40 bg-cyan-400/15 p-3 font-semibold text-cyan-100 transition hover:bg-cyan-400/25"
           onClick={async () => {
             const result = await login(email, senha);
             if (!result.ok) setErro(result.message);
           }}
         >
-          Entrar
+          Acessar Command Center
         </button>
       </div>
       <p className="mt-4 text-xs text-slate-500">Perfis de teste: admin/compras/gestor/solicitante/viewer.</p>
@@ -326,6 +344,9 @@ export function ProcurementControlCenter() {
   const [selectedSC, setSelectedSC] = useState<string>(state.scs[0]?.id ?? "");
   const [importReport, setImportReport] = useState<string[]>([]);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [globalQuery, setGlobalQuery] = useState("");
+  const [commandOpen, setCommandOpen] = useState(false);
+  const commandInputRef = useRef<HTMLInputElement | null>(null);
 
   const dataset = useMemo(() => filterData(state, filters), [state, filters]);
   const kpis = useMemo(() => computeKpis(state, filters), [state, filters]);
@@ -482,12 +503,61 @@ export function ProcurementControlCenter() {
 
   const selectedScRecord = useMemo(() => dataset.scFiltered.find((x) => x.id === selectedSC) ?? dataset.scFiltered[0], [dataset.scFiltered, selectedSC]);
   const timeline = useMemo(() => (selectedScRecord ? buildScTimeline(selectedScRecord, state.ocs) : []), [selectedScRecord, state.ocs]);
+  const commandResults = useMemo(() => {
+    const q = globalQuery.trim().toLowerCase();
+    if (!q) return [] as Array<{ type: "SC" | "OC" | "FORNECEDOR"; id: string; label: string; subtitle: string }>;
+
+    const scMatches = state.scs
+      .filter((sc) => [sc.numeroSC, sc.solicitante, sc.descricao, sc.observacoes].some((part) => (part || "").toLowerCase().includes(q)))
+      .slice(0, 6)
+      .map((sc) => ({ type: "SC" as const, id: sc.id, label: sc.numeroSC, subtitle: `${sc.solicitante} • ${sc.descricao}` }));
+
+    const ocMatches = state.ocs
+      .filter((oc) => {
+        const linkedSc = state.scs.find((sc) => sc.id === oc.scId);
+        const supplier = state.fornecedores.find((f) => f.id === oc.fornecedorId);
+        return [oc.numeroOC, oc.observacoes, oc.responsavel, linkedSc?.numeroSC, supplier?.nomeFantasia, supplier?.cnpj].some((part) => (part || "").toLowerCase().includes(q));
+      })
+      .slice(0, 6)
+      .map((oc) => ({ type: "OC" as const, id: oc.id, label: oc.numeroOC, subtitle: `${oc.responsavel || "Sem responsavel"} • ${oc.status}` }));
+
+    const supplierMatches = state.fornecedores
+      .filter((f) => [f.nomeFantasia, f.razaoSocial, f.cnpj].some((part) => (part || "").toLowerCase().includes(q)))
+      .slice(0, 6)
+      .map((f) => ({ type: "FORNECEDOR" as const, id: f.id, label: f.nomeFantasia, subtitle: `${f.razaoSocial} • ${f.cnpj}` }));
+
+    return [...scMatches, ...ocMatches, ...supplierMatches].slice(0, 14);
+  }, [globalQuery, state.scs, state.ocs, state.fornecedores]);
+
+  useEffect(() => {
+    const handleShortcut = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setCommandOpen((prev) => !prev);
+      }
+      if (event.key === "Escape") {
+        setCommandOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, []);
+
+  useEffect(() => {
+    if (commandOpen) {
+      window.setTimeout(() => commandInputRef.current?.focus(), 0);
+    }
+  }, [commandOpen]);
 
   if (!currentUser) {
     return <LoginCard />;
   }
 
   const canWrite = canEdit;
+  const nowStamp = new Date();
+  const currentDate = nowStamp.toLocaleDateString("pt-BR");
+  const currentTime = nowStamp.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
   const exportExcel = () => {
     const wb = XLSX.utils.book_new();
@@ -582,53 +652,66 @@ export function ProcurementControlCenter() {
   return (
     <div className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_12%_8%,rgba(14,165,233,.10),transparent_28%),radial-gradient(circle_at_88%_6%,rgba(16,185,129,.08),transparent_24%),#060b14] text-slate-100">
       <div className="flex min-h-screen">
-        <aside className={`${collapsedSidebar ? "w-[84px]" : "w-[290px]"} sticky top-0 hidden h-screen border-r border-cyan-400/20 bg-slate-950/90 px-3 py-4 transition-all md:block`}>
-          <div className="mb-6 flex items-center justify-between rounded-lg border border-cyan-400/30 bg-slate-900/60 px-3 py-2">
-            {!collapsedSidebar ? (
-              <div>
-                <p className="font-orbitron text-sm tracking-widest text-cyan-300">GRUPO AVG EMESA</p>
-                <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Control Center</p>
-              </div>
-            ) : null}
-            <button onClick={() => setCollapsedSidebar(!collapsedSidebar)} className="rounded-md border border-slate-700 p-1 hover:border-cyan-400/70">
-              {collapsedSidebar ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
-            </button>
+        <aside className={`${collapsedSidebar ? "w-[92px]" : "w-[310px]"} sticky top-0 hidden h-screen border-r border-[#1A3445] bg-[#080E17]/95 px-3 py-4 transition-all md:block`}>
+          <div className="mb-6 rounded-xl border border-[#1A3445] bg-[#0C1420]/90 p-3">
+            <div className="flex items-center justify-between">
+              {!collapsedSidebar ? (
+                <div className="h-12 w-[180px]">
+                  <Image src="/avg-logo.png" alt="Grupo AVG Emesa" width={180} height={48} className="h-full w-full object-contain object-left" priority />
+                </div>
+              ) : (
+                <div className="h-10 w-10 overflow-hidden rounded-lg border border-[#1A3445] bg-[#05080D]">
+                  <Image src="/avg-logo.png" alt="Grupo AVG Emesa" width={40} height={40} className="h-full w-full object-cover object-left" priority />
+                </div>
+              )}
+              <button onClick={() => setCollapsedSidebar(!collapsedSidebar)} className="rounded-md border border-slate-700 p-1 hover:border-cyan-400/70">
+                {collapsedSidebar ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
+              </button>
+            </div>
+            {!collapsedSidebar ? <p className="mt-2 text-[11px] uppercase tracking-[0.24em] text-slate-400">Enterprise Command</p> : null}
           </div>
 
-          <nav className="space-y-1">
-            {NAV.map((item) => {
-              const Icon = item.icon;
-              const active = module === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setModule(item.id)}
-                  className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition ${
-                    active
-                      ? "border-cyan-300/70 bg-cyan-400/15 text-cyan-200"
-                      : "border-transparent bg-slate-900/40 text-slate-300 hover:border-slate-700 hover:bg-slate-900"
-                  }`}
-                >
-                  <Icon size={16} />
-                  {!collapsedSidebar ? <span className="text-sm">{item.label}</span> : null}
-                </button>
-              );
-            })}
+          <nav className="space-y-4">
+            {NAV_GROUPS.map((group) => (
+              <div key={group.title}>
+                {!collapsedSidebar ? <p className="mb-2 px-2 text-[10px] uppercase tracking-[0.22em] text-slate-500">{group.title}</p> : null}
+                <div className="space-y-1">
+                  {group.items.map((moduleId) => {
+                    const item = NAV.find((entry) => entry.id === moduleId);
+                    if (!item) return null;
+                    const Icon = item.icon;
+                    const active = module === item.id;
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => setModule(item.id)}
+                        className={`group flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left transition ${
+                          active
+                            ? "border-cyan-300/55 bg-cyan-400/12 text-cyan-100 shadow-[inset_2px_0_0_rgba(34,211,238,0.9)]"
+                            : "border-transparent bg-slate-900/30 text-slate-300 hover:border-slate-700 hover:bg-slate-900/70"
+                        }`}
+                      >
+                        <Icon size={16} className={active ? "text-cyan-200" : "text-slate-400 group-hover:text-slate-200"} />
+                        {!collapsedSidebar ? <span className="text-sm font-medium">{item.label}</span> : null}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </nav>
 
           {!collapsedSidebar ? (
-            <div className="mt-6 rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-xs text-slate-400">
-              <p className="text-cyan-300">Usuario: {currentUser.nome}</p>
-              <p>Perfil: {currentUser.role}</p>
+            <div className="mt-6 rounded-xl border border-[#1A3445] bg-[#0C1420]/85 p-3 text-xs text-slate-400">
+              <div className="flex items-center gap-2 text-emerald-300">
+                <span className="h-2 w-2 rounded-full bg-emerald-400" />
+                <span>Sistema Online</span>
+              </div>
+              <p className="mt-1">{currentUser.role}</p>
               <div className="mt-3 space-y-2">
                 <button onClick={exportExcel} className="w-full rounded-md border border-cyan-500/35 bg-cyan-500/10 py-1.5 text-cyan-100">
                   <Download size={12} className="mr-1 inline" /> Exportar Snapshot
                 </button>
-              </div>
-              <div className="mt-3 rounded-lg border border-cyan-500/25 bg-slate-950/70 p-2 text-[11px] leading-relaxed text-slate-400">
-                <p className="text-cyan-200">Desenvolvido por Michel Almeida</p>
-                <p>Empresa: Mina do Brumado</p>
-                <p>Grupo AVG</p>
               </div>
               <button onClick={logout} className="mt-3 w-full rounded-md border border-rose-500/40 bg-rose-500/10 py-2 text-rose-200">Sair</button>
             </div>
@@ -638,45 +721,59 @@ export function ProcurementControlCenter() {
         {mobileMenuOpen ? <div className="fixed inset-0 z-40 bg-slate-950/70 md:hidden" onClick={() => setMobileMenuOpen(false)} /> : null}
 
         <aside
-          className={`fixed inset-y-0 left-0 z-50 w-[84%] max-w-[340px] border-r border-cyan-400/20 bg-slate-950/95 px-3 py-4 shadow-[0_0_40px_rgba(0,0,0,0.45)] transition-transform duration-200 md:hidden ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`}
+          className={`fixed inset-y-0 left-0 z-50 w-[84%] max-w-[340px] border-r border-[#1A3445] bg-[#080E17]/95 px-3 py-4 shadow-[0_0_40px_rgba(0,0,0,0.45)] transition-transform duration-200 md:hidden ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"}`}
         >
-          <div className="mb-6 flex items-center justify-between rounded-lg border border-cyan-400/30 bg-slate-900/60 px-3 py-2">
-            <div>
-              <p className="font-orbitron text-sm tracking-widest text-cyan-300">GRUPO AVG EMESA</p>
-              <p className="text-[11px] uppercase tracking-[0.2em] text-slate-500">Control Center</p>
+          <div className="mb-6 rounded-xl border border-[#1A3445] bg-[#0C1420]/90 p-3">
+            <div className="flex items-center justify-between">
+              <div className="h-11 w-[170px]">
+                <Image src="/avg-logo.png" alt="Grupo AVG Emesa" width={170} height={44} className="h-full w-full object-contain object-left" priority />
+              </div>
+              <button onClick={() => setMobileMenuOpen(false)} className="rounded-md border border-slate-700 p-1 text-slate-300">
+                <X size={16} />
+              </button>
             </div>
-            <button onClick={() => setMobileMenuOpen(false)} className="rounded-md border border-slate-700 p-1 text-slate-300">
-              <X size={16} />
-            </button>
+            <p className="mt-2 text-[11px] uppercase tracking-[0.24em] text-slate-500">Enterprise Command</p>
           </div>
 
-          <nav className="space-y-1">
-            {NAV.map((item) => {
-              const Icon = item.icon;
-              const active = module === item.id;
-              return (
-                <button
-                  key={`mobile-${item.id}`}
-                  onClick={() => {
-                    setModule(item.id);
-                    setMobileMenuOpen(false);
-                  }}
-                  className={`flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition ${
-                    active
-                      ? "border-cyan-300/70 bg-cyan-400/15 text-cyan-200"
-                      : "border-transparent bg-slate-900/40 text-slate-300 hover:border-slate-700 hover:bg-slate-900"
-                  }`}
-                >
-                  <Icon size={16} />
-                  <span className="text-sm">{item.label}</span>
-                </button>
-              );
-            })}
+          <nav className="space-y-4">
+            {NAV_GROUPS.map((group) => (
+              <div key={`mobile-${group.title}`}>
+                <p className="mb-2 px-2 text-[10px] uppercase tracking-[0.22em] text-slate-500">{group.title}</p>
+                <div className="space-y-1">
+                  {group.items.map((moduleId) => {
+                    const item = NAV.find((entry) => entry.id === moduleId);
+                    if (!item) return null;
+                    const Icon = item.icon;
+                    const active = module === item.id;
+                    return (
+                      <button
+                        key={`mobile-${item.id}`}
+                        onClick={() => {
+                          setModule(item.id);
+                          setMobileMenuOpen(false);
+                        }}
+                        className={`flex w-full items-center gap-3 rounded-xl border px-3 py-2 text-left transition ${
+                          active
+                            ? "border-cyan-300/55 bg-cyan-400/12 text-cyan-100 shadow-[inset_2px_0_0_rgba(34,211,238,0.9)]"
+                            : "border-transparent bg-slate-900/30 text-slate-300 hover:border-slate-700 hover:bg-slate-900/70"
+                        }`}
+                      >
+                        <Icon size={16} className={active ? "text-cyan-200" : "text-slate-400"} />
+                        <span className="text-sm font-medium">{item.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
           </nav>
 
-          <div className="mt-6 rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-xs text-slate-400">
-            <p className="text-cyan-300">Usuario: {currentUser.nome}</p>
-            <p>Perfil: {currentUser.role}</p>
+          <div className="mt-6 rounded-xl border border-[#1A3445] bg-[#0C1420]/85 p-3 text-xs text-slate-400">
+            <div className="flex items-center gap-2 text-emerald-300">
+              <span className="h-2 w-2 rounded-full bg-emerald-400" />
+              <span>Sistema Online</span>
+            </div>
+            <p className="mt-1">{currentUser.role}</p>
             <div className="mt-3 space-y-2">
               <button onClick={exportExcel} className="w-full rounded-md border border-cyan-500/35 bg-cyan-500/10 py-1.5 text-cyan-100">
                 <Download size={12} className="mr-1 inline" /> Exportar Snapshot
@@ -706,10 +803,11 @@ export function ProcurementControlCenter() {
               </div>
               <p className="hidden border-y border-cyan-500/25 px-3 py-1 text-[11px] uppercase tracking-[0.34em] text-cyan-300/90 md:block">Controle • Supervisao • Resultados</p>
               <div className="flex items-center gap-2">
-                <div className="hidden items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-1.5 text-xs text-slate-400 md:flex">
+                <button onClick={() => setCommandOpen(true)} className="hidden items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/80 px-3 py-1.5 text-xs text-slate-400 transition hover:border-cyan-400/50 md:flex">
                   <Search size={13} />
-                  <span>Buscar SC, OC, Fornecedor...</span>
-                </div>
+                  <span>Buscar SC, OC, Fornecedor, CNPJ, NF...</span>
+                  <span className="rounded border border-slate-600 px-1.5 py-0.5 text-[10px] text-slate-500">CTRL + K</span>
+                </button>
                 <button className="rounded-lg border border-slate-700 bg-slate-900/80 p-2 text-slate-300">
                   <Bell size={13} />
                 </button>
@@ -724,6 +822,7 @@ export function ProcurementControlCenter() {
               <div>
                 <p className="text-xs uppercase tracking-[0.32em] text-cyan-300">GRUPO AVG EMESA</p>
                 <h1 className="font-orbitron text-2xl text-white md:text-3xl">SC / OC Enterprise Command</h1>
+                <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-400">Enterprise Procurement Intelligence • {currentDate} • {currentTime}</p>
               </div>
               <div className="flex items-center gap-2 text-xs">
                 <span className={`rounded-full border px-3 py-1 ${canWrite ? "border-emerald-400/45 bg-emerald-500/10 text-emerald-200" : "border-amber-400/45 bg-amber-500/10 text-amber-200"}`}>
@@ -1235,6 +1334,56 @@ export function ProcurementControlCenter() {
               </Panel>
             </section>
           ) : null}
+
+          {commandOpen ? (
+            <div className="fixed inset-0 z-[70] flex items-start justify-center bg-slate-950/75 px-3 pt-20" onClick={() => setCommandOpen(false)}>
+              <div className="w-full max-w-2xl rounded-2xl border border-[#1A3445] bg-[#0C1420] shadow-[0_30px_70px_rgba(2,6,23,0.75)]" onClick={(e) => e.stopPropagation()}>
+                <div className="border-b border-slate-800 px-4 py-3">
+                  <div className="flex items-center gap-2 rounded-lg border border-slate-700 bg-slate-900/70 px-3 py-2">
+                    <Search size={14} className="text-slate-400" />
+                    <input
+                      ref={commandInputRef}
+                      value={globalQuery}
+                      onChange={(e) => setGlobalQuery(e.target.value)}
+                      placeholder="Pesquisar SC, OC, Fornecedor, CNPJ, NF, Solicitante, Descricao..."
+                      className="w-full bg-transparent text-sm text-slate-100 outline-none placeholder:text-slate-500"
+                    />
+                    <span className="rounded border border-slate-600 px-1.5 py-0.5 text-[10px] text-slate-500">ESC</span>
+                  </div>
+                </div>
+                <div className="max-h-[52vh] overflow-auto p-2">
+                  {commandResults.length === 0 ? (
+                    <p className="px-3 py-3 text-sm text-slate-500">Nenhum resultado encontrado.</p>
+                  ) : (
+                    commandResults.map((result) => (
+                      <button
+                        key={`${result.type}-${result.id}`}
+                        className="mb-1 w-full rounded-lg border border-transparent px-3 py-2 text-left transition hover:border-slate-700 hover:bg-slate-900/80"
+                        onClick={() => {
+                          if (result.type === "SC") {
+                            setSelectedSC(result.id);
+                            setModule("SC");
+                          } else if (result.type === "OC") {
+                            setModule("SC");
+                          } else {
+                            setModule("FORNECEDORES");
+                          }
+                          setCommandOpen(false);
+                        }}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="rounded border border-cyan-600/40 bg-cyan-600/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.15em] text-cyan-200">{result.type}</span>
+                          <p className="text-sm font-medium text-slate-100">{result.label}</p>
+                        </div>
+                        <p className="mt-1 line-clamp-1 text-xs text-slate-400">{result.subtitle}</p>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          ) : null}
+
           <footer className="mt-6 rounded-lg border border-cyan-500/20 bg-slate-950/70 px-4 py-2 text-center text-[10px] uppercase tracking-[0.18em] text-cyan-300/80 md:text-[11px] md:tracking-[0.24em]">
             Dados hoje • Decisoes melhores • Resultados amanha
           </footer>
