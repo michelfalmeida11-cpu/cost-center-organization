@@ -416,6 +416,11 @@ function getValueByAliases(row: Record<string, unknown>, aliases: string[]) {
   return undefined;
 }
 
+function getValueByPositionFallback(row: Record<string, unknown>, columnIndex: number) {
+  const values = Object.values(row);
+  return values[columnIndex];
+}
+
 function parseMoneyValue(value: unknown) {
   if (typeof value === "number") return Number.isFinite(value) ? value : 0;
   if (value === null || value === undefined) return 0;
@@ -1662,15 +1667,15 @@ export function ProcurementControlCenter() {
       });
 
       rawRows.forEach((row, index) => {
-        const numeroOCRaw = getValueByAliases(row, OC_IMPORT_ALIASES.numeroOC);
+        const numeroOCRaw = getValueByAliases(row, OC_IMPORT_ALIASES.numeroOC) ?? getValueByPositionFallback(row, 0);
         const setorRaw = getValueByAliases(row, OC_IMPORT_ALIASES.setor);
-        const fornecedorCodigoRaw = getValueByAliases(row, ["fornecedor", "codigo fornecedor", "cod fornecedor"]);
-        const fornecedorRaw = getValueByAliases(row, OC_IMPORT_ALIASES.fornecedorNome);
+        const fornecedorCodigoRaw = getValueByAliases(row, ["fornecedor", "codigo fornecedor", "cod fornecedor"]) ?? getValueByPositionFallback(row, 4);
+        const fornecedorRaw = getValueByAliases(row, OC_IMPORT_ALIASES.fornecedorNome) ?? getValueByPositionFallback(row, 5);
         const cnpjRaw = getValueByAliases(row, ["cnpj", "cnpj fornecedor"]);
-        const compradorRaw = getValueByAliases(row, OC_IMPORT_ALIASES.comprador);
-        const statusRaw = getValueByAliases(row, OC_IMPORT_ALIASES.status);
-        const valorRaw = getValueByAliases(row, OC_IMPORT_ALIASES.valor);
-        const dataOcRaw = getValueByAliases(row, OC_IMPORT_ALIASES.dataOC);
+        const compradorRaw = getValueByAliases(row, OC_IMPORT_ALIASES.comprador) ?? getValueByPositionFallback(row, 6);
+        const statusRaw = getValueByAliases(row, OC_IMPORT_ALIASES.status) ?? getValueByPositionFallback(row, 2);
+        const valorRaw = getValueByAliases(row, OC_IMPORT_ALIASES.valor) ?? getValueByPositionFallback(row, 3);
+        const dataOcRaw = getValueByAliases(row, OC_IMPORT_ALIASES.dataOC) ?? getValueByPositionFallback(row, 1);
         const dataPrevistaRaw = getValueByAliases(row, ["data prevista entrega", "previsao entrega", "prazo entrega"]);
         const numeroOCText = String(numeroOCRaw ?? "").trim();
 
