@@ -649,6 +649,7 @@ export function ProcurementControlCenter() {
     deleteSector,
     moveTrackingItem,
     importAllData,
+    hydrated,
   } = useProcurement();
 
   const [module, setModule] = useState<AppModule>("DASHBOARD");
@@ -1458,6 +1459,17 @@ export function ProcurementControlCenter() {
     setFilterDraft(filters);
   }, [filters]);
 
+  if (!hydrated) {
+    return (
+      <div className="mx-auto mt-20 w-full max-w-md rounded-2xl border border-slate-800 bg-slate-950/90 p-8 text-center shadow-[0_20px_40px_rgba(2,6,23,0.55)]">
+        <div className="mx-auto mb-4 h-12 w-44 opacity-90">
+          <Image src="/avg-logo.svg" alt="Grupo AVG Emesa" width={176} height={48} className="h-full w-full object-contain" priority />
+        </div>
+        <p className="text-sm text-slate-300">Carregando dados reais...</p>
+      </div>
+    );
+  }
+
   if (!currentUser) {
     return <LoginCard />;
   }
@@ -1862,7 +1874,7 @@ export function ProcurementControlCenter() {
                 {collapsedSidebar ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
               </button>
             </div>
-            {!collapsedSidebar ? <p className="mt-2 text-[11px] uppercase tracking-[0.24em] text-slate-400">Desenvolvido por Michel Almeida</p> : null}
+            {!collapsedSidebar ? <p className="mt-2 text-center text-[11px] font-medium text-slate-300">Desenvolvido por Michel Almeida</p> : null}
           </div>
 
           <nav className="space-y-4">
@@ -1949,7 +1961,7 @@ export function ProcurementControlCenter() {
                 <X size={16} />
               </button>
             </div>
-            <p className="mt-2 text-[11px] uppercase tracking-[0.24em] text-slate-500">Desenvolvido por Michel Almeida</p>
+            <p className="mt-2 text-center text-[11px] font-medium text-slate-400">Desenvolvido por Michel Almeida</p>
           </div>
 
           <nav className="space-y-4">
@@ -2060,8 +2072,13 @@ export function ProcurementControlCenter() {
 
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
-                <p className="text-xs uppercase tracking-[0.32em] text-cyan-300">GRUPO AVG EMESA</p>
-                <h1 className="font-orbitron text-2xl text-white md:text-3xl">SC / OC Desenvolvido por Michel Almeida</h1>
+                <div className="mb-1 inline-flex flex-col leading-none">
+                  <span className="text-[10px] font-semibold uppercase tracking-[0.28em] text-cyan-300">Grupo</span>
+                  <span className="font-orbitron text-2xl text-cyan-100 md:text-3xl">AVG</span>
+                  <span className="font-orbitron text-3xl text-white md:text-4xl">EMESA</span>
+                </div>
+                <h1 className="font-orbitron text-2xl text-white md:text-3xl">SC / OC Command Center</h1>
+                <p className="mt-1 text-sm font-medium text-cyan-200">Desenvolvido por Michel Almeida</p>
                 <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-400">Enterprise Procurement Intelligence • {currentDate} • {currentTime}</p>
               </div>
               <div className="flex items-center gap-2 text-xs">

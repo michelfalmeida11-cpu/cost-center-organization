@@ -11,7 +11,7 @@ import {
   Sector,
   Supplier,
 } from "@/lib/procurement/types";
-import { EMPTY_FILTERS, MOCK_STATE } from "@/lib/procurement/data";
+import { EMPTY_FILTERS } from "@/lib/procurement/data";
 import {
   apiChangeSCStatus,
   apiCreateOC,
@@ -35,6 +35,7 @@ import {
 } from "@/lib/procurement/client-api";
 
 const LS_USER_KEY = "cyberproc-user-v1";
+const EMPTY_APP_STATE: AppState = { setores: [], fornecedores: [], scs: [], ocs: [], auditoria: [] };
 
 type LoginResult = { ok: true } | { ok: false; message: string };
 
@@ -76,7 +77,7 @@ function canEditByRole(role: CurrentUser["role"] | undefined) {
 }
 
 export function ProcurementProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<AppState>(MOCK_STATE);
+  const [state, setState] = useState<AppState>(EMPTY_APP_STATE);
   const [filters, setFiltersState] = useState<GlobalFilters>(EMPTY_FILTERS);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [collapsedSidebar, setCollapsedSidebar] = useState(false);
@@ -106,7 +107,7 @@ export function ProcurementProvider({ children }: { children: React.ReactNode })
         }
         await refreshState();
       } catch {
-        setState(MOCK_STATE);
+        setState(EMPTY_APP_STATE);
       } finally {
         setHydrated(true);
       }
