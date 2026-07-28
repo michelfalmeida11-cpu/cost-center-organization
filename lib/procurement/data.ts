@@ -20,28 +20,31 @@ export const SC_STATUS_LABEL: Record<SCStatus, string> = {
 };
 
 export const OC_STATUS_LABEL: Record<OCStatus, string> = {
-  CRIADA: "Criada",
-  ENVIADA_FORNECEDOR: "Enviada ao Fornecedor",
-  CONFIRMADA: "Confirmada",
-  EM_PRODUCAO: "Em Producao",
-  EM_TRANSPORTE: "Em Transporte",
-  ENTREGUE: "Entregue",
-  ATRASADA: "Atrasada",
+  ABERTO_TOTAL: "Aberto Total",
+  ABERTO_PARCIAL: "Aberto Parcial",
+  LIQUIDADO: "Liquidado",
+  NAO_FECHADO: "Nao Fechado",
   CANCELADA: "Cancelada",
 };
 
 export const SC_STATUS_FLOW: SCStatus[] = ["EM_ANALISE", "APROVADA", "REPROVADA", "LANCADA"];
 
 export const OC_STATUS_FLOW: OCStatus[] = [
-  "CRIADA",
-  "ENVIADA_FORNECEDOR",
-  "CONFIRMADA",
-  "EM_PRODUCAO",
-  "EM_TRANSPORTE",
-  "ENTREGUE",
-  "ATRASADA",
+  "ABERTO_TOTAL",
+  "ABERTO_PARCIAL",
+  "LIQUIDADO",
+  "NAO_FECHADO",
   "CANCELADA",
 ];
+
+export type OcExecutiveStatus = "ABERTAS" | "FINALIZADAS_LIQUIDADAS" | "NAO_FECHADAS" | "CANCELADAS";
+
+export function ocStatusToExecutive(status: OCStatus): OcExecutiveStatus {
+  if (status === "ABERTO_TOTAL") return "ABERTAS";
+  if (status === "ABERTO_PARCIAL" || status === "LIQUIDADO") return "FINALIZADAS_LIQUIDADAS";
+  if (status === "NAO_FECHADO") return "NAO_FECHADAS";
+  return "CANCELADAS";
+}
 
 export const APP_MENU = [
   "DASHBOARD",
@@ -296,7 +299,7 @@ export const MOCK_STATE: AppState = {
       valorOC: 123900,
       setorId: "setor-manutencao",
       responsavel: "Equipe Compras",
-      status: "ENTREGUE",
+      status: "LIQUIDADO",
       condicaoPagamento: "30/60",
       observacoes: "Entregue conforme planejamento",
       anexos: ["oc-0098.pdf"],
@@ -316,7 +319,7 @@ export const MOCK_STATE: AppState = {
       valorOC: 241000,
       setorId: "setor-projeto",
       responsavel: "Marcelo Sena",
-      status: "EM_PRODUCAO",
+      status: "ABERTO_TOTAL",
       condicaoPagamento: "45 dias",
       observacoes: "Fase de producao em andamento",
       anexos: [],
@@ -336,7 +339,7 @@ export const MOCK_STATE: AppState = {
       valorOC: 88000,
       setorId: "setor-operacao",
       responsavel: "Equipe Compras",
-      status: "EM_TRANSPORTE",
+      status: "NAO_FECHADO",
       condicaoPagamento: "28 dias",
       observacoes: "Carga aguardando janela de descarga",
       anexos: ["romaneio.pdf"],
@@ -349,15 +352,7 @@ export const MOCK_STATE: AppState = {
 };
 
 export function applyAutomaticOcStatus(oc: PurchaseOrder): PurchaseOrder {
-  const today = toIso(new Date());
-  if (oc.deletedAt) return oc;
-  if (oc.status === "ENTREGUE" || oc.status === "CANCELADA") return oc;
-  if (oc.dataRealEntrega && oc.dataRealEntrega <= today) {
-    return { ...oc, status: "ENTREGUE" };
-  }
-  if (oc.dataPrevistaEntrega < today) {
-    return { ...oc, status: "ATRASADA" };
-  }
+  // O status oficial da OC vem da planilha/importacao.
   return oc;
 }
 
@@ -366,7 +361,7 @@ export function enrichOcMetrics(oc: PurchaseOrder) {
   const fim = statusAjustado.dataRealEntrega ?? toIso(new Date());
   const diasEmAberto = diffDays(statusAjustado.dataEmissao, fim);
   const diasParaEntrega = Math.max(0, diffDays(toIso(new Date()), statusAjustado.dataPrevistaEntrega));
-  const diasAtraso = statusAjustado.status === "ATRASADA" || (statusAjustado.dataRealEntrega && statusAjustado.dataRealEntrega > statusAjustado.dataPrevistaEntrega)
+  const diasAtraso = statusAjustado.status === "NAO_FECHADO" || (statusAjustado.dataRealEntrega && statusAjustado.dataRealEntrega > statusAjustado.dataPrevistaEntrega)
     ? diffDays(statusAjustado.dataPrevistaEntrega, statusAjustado.dataRealEntrega ?? toIso(new Date()))
     : 0;
   const leadTime = diffDays(statusAjustado.dataOC, statusAjustado.dataRealEntrega ?? toIso(new Date()));
@@ -434,8 +429,8 @@ export function computeKpis(state: AppState, filters: GlobalFilters): KpiSnapsho
   const emAnalise = scFiltered.filter((s) => s.status === "EM_ANALISE").length;
   const reprovadas = scFiltered.filter((s) => s.status === "REPROVADA").length;
   const lancadas = scFiltered.filter((s) => s.status === "LANCADA").length;
-  const entregues = ocFiltered.filter((o) => o.status === "ENTREGUE").length;
-  const atrasadas = ocFiltered.filter((o) => o.status === "ATRASADA").length;
+  const entregues = ocFiltered.filter((o) => o.status === "LIQUIDADO" || o.status === "ABERTO_PARCIAL").length;
+  const atrasadas = ocFiltered.filter((o) => o.status === "NAO_FECHADO").length;
 
   const tempoAprovacao = scFiltered
     .filter((s) => s.dataAprovacao)
@@ -452,10 +447,10 @@ export function computeKpis(state: AppState, filters: GlobalFilters): KpiSnapsho
   const leadTimes = ocFiltered.map((oc) => diffDays(oc.dataOC, oc.dataRealEntrega ?? toIso(new Date())));
 
   const entregas = ocFiltered
-    .filter((oc) => oc.status === "ENTREGUE")
+    .filter((oc) => oc.status === "LIQUIDADO" || oc.status === "ABERTO_PARCIAL")
     .map((oc) => diffDays(oc.dataEmissao, oc.dataRealEntrega as string));
 
-  const noPrazo = ocFiltered.filter((oc) => oc.status === "ENTREGUE" && (oc.dataRealEntrega as string) <= oc.dataPrevistaEntrega).length;
+  const noPrazo = ocFiltered.filter((oc) => (oc.status === "LIQUIDADO" || oc.status === "ABERTO_PARCIAL") && (oc.dataRealEntrega as string) <= oc.dataPrevistaEntrega).length;
   const taxaEntregaNoPrazo = ocFiltered.length ? Number(((noPrazo / ocFiltered.length) * 100).toFixed(2)) : 0;
 
   const avg = (values: number[]) => (values.length ? Number((values.reduce((a, b) => a + b, 0) / values.length).toFixed(2)) : 0);
@@ -466,7 +461,7 @@ export function computeKpis(state: AppState, filters: GlobalFilters): KpiSnapsho
     valorTotalSC: scFiltered.reduce((sum, item) => sum + item.valorEstimado, 0),
     valorTotalOC: ocFiltered.reduce((sum, item) => sum + item.valorOC, 0),
     fornecedoresAtivos: fornecedoresAtivos.filter((f) => f.status === "ATIVO").length,
-    entregasPendentes: ocFiltered.filter((o) => o.status !== "ENTREGUE" && o.status !== "CANCELADA").length,
+    entregasPendentes: ocFiltered.filter((o) => o.status === "ABERTO_TOTAL" || o.status === "NAO_FECHADO").length,
     entregasAtrasadas: atrasadas,
     emAnalise,
     aprovadas,
@@ -496,7 +491,6 @@ export function monthlySeries(state: AppState, filters: GlobalFilters) {
     const b = add(key);
     b.totalSC += 1;
     b.valorSC += sc.valorEstimado;
-    b.valorTotal += sc.valorEstimado;
   });
 
   ocFiltered.forEach((oc) => {
@@ -536,15 +530,15 @@ export function supplierRanking(state: AppState, filters: GlobalFilters) {
   const base = fornecedoresAtivos
     .map((fornecedor) => {
       const ocs = ocFiltered.filter((oc) => oc.fornecedorId === fornecedor.id);
-      const entregasAtrasadas = ocs.filter((oc) => oc.status === "ATRASADA").length;
-      const entregasConcluidas = ocs.filter((oc) => oc.status === "ENTREGUE").length;
-      const noPrazo = ocs.filter((oc) => oc.status === "ENTREGUE" && (oc.dataRealEntrega as string) <= oc.dataPrevistaEntrega).length;
+      const entregasAtrasadas = ocs.filter((oc) => oc.status === "NAO_FECHADO").length;
+      const entregasConcluidas = ocs.filter((oc) => oc.status === "LIQUIDADO" || oc.status === "ABERTO_PARCIAL").length;
+      const noPrazo = ocs.filter((oc) => (oc.status === "LIQUIDADO" || oc.status === "ABERTO_PARCIAL") && (oc.dataRealEntrega as string) <= oc.dataPrevistaEntrega).length;
       const taxa = entregasConcluidas ? Number(((noPrazo / entregasConcluidas) * 100).toFixed(2)) : 0;
       const lead = entregasConcluidas
         ? Number(
             (
               ocs
-                .filter((oc) => oc.status === "ENTREGUE")
+                .filter((oc) => oc.status === "LIQUIDADO" || oc.status === "ABERTO_PARCIAL")
                 .reduce((sum, item) => sum + diffDays(item.dataOC, item.dataRealEntrega as string), 0) / entregasConcluidas
             ).toFixed(2),
           )
@@ -600,7 +594,7 @@ export function buildAlerts(state: AppState, filters: GlobalFilters): AlertItem[
     });
 
   ocFiltered
-    .filter((oc) => oc.status === "ATRASADA")
+    .filter((oc) => oc.status === "NAO_FECHADO")
     .forEach((oc) => {
       alerts.push({
         id: `alert-oc-atrasada-${oc.id}`,
@@ -612,7 +606,7 @@ export function buildAlerts(state: AppState, filters: GlobalFilters): AlertItem[
     });
 
   ocFiltered
-    .filter((oc) => oc.status !== "ENTREGUE" && oc.status !== "CANCELADA" && diffDays(today, oc.dataPrevistaEntrega) <= 3)
+    .filter((oc) => oc.status === "ABERTO_TOTAL" && diffDays(today, oc.dataPrevistaEntrega) <= 3)
     .forEach((oc) => {
       alerts.push({
         id: `alert-oc-vencimento-${oc.id}`,

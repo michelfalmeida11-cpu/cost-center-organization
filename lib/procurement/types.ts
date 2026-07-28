@@ -7,13 +7,10 @@ export type AlertLevel = "NORMAL" | "ATENCAO" | "CRITICO";
 export type SCStatus = "EM_ANALISE" | "APROVADA" | "REPROVADA" | "LANCADA";
 
 export type OCStatus =
-  | "CRIADA"
-  | "ENVIADA_FORNECEDOR"
-  | "CONFIRMADA"
-  | "EM_PRODUCAO"
-  | "EM_TRANSPORTE"
-  | "ENTREGUE"
-  | "ATRASADA"
+  | "ABERTO_TOTAL"
+  | "ABERTO_PARCIAL"
+  | "LIQUIDADO"
+  | "NAO_FECHADO"
   | "CANCELADA";
 
 export type EntityType = "SC" | "OC" | "FORNECEDOR" | "SETOR";

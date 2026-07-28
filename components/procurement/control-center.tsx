@@ -60,6 +60,7 @@ import {
   filterData,
   formatCurrency,
   monthlySeries,
+  ocStatusToExecutive,
   statusSeries,
   supplierRanking,
 } from "@/lib/procurement/data";
@@ -100,13 +101,18 @@ const PURPLE = "#9f7aff";
 const BLUE = "#5ba5ff";
 
 const OC_PHASE_LABEL: Record<OcPhase, string> = {
-  EM_ANALISE: "Em Analise",
-  APROVADA: "Aprovada",
-  REPROVADA: "Reprovada",
-  LANCADA: "Lancada",
+  ABERTO_TOTAL: "Aberto Total",
+  ABERTO_PARCIAL: "Aberto Parcial",
+  LIQUIDADO: "Liquidado",
+  NAO_FECHADO: "Nao Fechado",
+  CANCELADA: "Cancelado",
 };
 
 function businessStatusBadge(status: SCStatus | OcPhase) {
+  if (status === "ABERTO_TOTAL") return "border-cyan-500/40 bg-cyan-500/10 text-cyan-200";
+  if (status === "ABERTO_PARCIAL" || status === "LIQUIDADO") return "border-emerald-500/40 bg-emerald-500/10 text-emerald-200";
+  if (status === "NAO_FECHADO") return "border-amber-500/40 bg-amber-500/10 text-amber-200";
+  if (status === "CANCELADA") return "border-rose-500/40 bg-rose-500/10 text-rose-200";
   if (status === "APROVADA") return "border-emerald-500/40 bg-emerald-500/10 text-emerald-200";
   if (status === "REPROVADA") return "border-rose-500/40 bg-rose-500/10 text-rose-200";
   if (status === "LANCADA") return "border-blue-500/40 bg-blue-500/10 text-blue-200";
@@ -118,12 +124,13 @@ function scStatusBadge(status: SCStatus) {
 }
 
 function ocStatusBadge(status: OCStatus) {
-  if (status === "ATRASADA") return "border-rose-500/40 bg-rose-500/10 text-rose-200";
-  if (status === "ENTREGUE") return "border-emerald-500/40 bg-emerald-500/10 text-emerald-200";
+  if (status === "CANCELADA") return "border-rose-500/40 bg-rose-500/10 text-rose-200";
+  if (status === "ABERTO_PARCIAL" || status === "LIQUIDADO") return "border-emerald-500/40 bg-emerald-500/10 text-emerald-200";
+  if (status === "NAO_FECHADO") return "border-amber-500/40 bg-amber-500/10 text-amber-200";
   return "border-cyan-500/40 bg-cyan-500/10 text-cyan-200";
 }
 
-type OcPhase = "EM_ANALISE" | "APROVADA" | "REPROVADA" | "LANCADA";
+type OcPhase = OCStatus;
 
 type UnifiedScOcRow = {
   id: string;
@@ -181,25 +188,24 @@ type AssistantFacts = {
 };
 
 function ocToPhase(status: OCStatus): OcPhase {
-  if (status === "CANCELADA") return "REPROVADA";
-  if (status === "CONFIRMADA" || status === "EM_PRODUCAO" || status === "EM_TRANSPORTE" || status === "ENTREGUE" || status === "ATRASADA") return "APROVADA";
-  if (status === "ENVIADA_FORNECEDOR") return "LANCADA";
-  return "EM_ANALISE";
+  return status;
 }
 
-function phaseToOcStatus(phase: OcPhase, current: OCStatus): OCStatus {
-  if (phase === "REPROVADA") return "CANCELADA";
-  if (phase === "LANCADA") return "ENVIADA_FORNECEDOR";
-  if (phase === "EM_ANALISE") return "CRIADA";
-  if (current === "ENTREGUE" || current === "ATRASADA") return current;
-  return "CONFIRMADA";
+function phaseToOcStatus(phase: OcPhase): OCStatus {
+  return phase;
 }
 
 function phaseColor(label: string) {
-  if (label === "Aprovada") return GREEN;
-  if (label === "Em Analise") return AMBER;
-  if (label === "Reprovada") return RED;
+  if (label === "Liquidado" || label === "Aberto Parcial") return GREEN;
+  if (label === "Aberto Total") return CYAN;
+  if (label === "Nao Fechado") return AMBER;
+  if (label === "Cancelado") return RED;
   return BLUE;
+}
+
+function truncateSupplierName(value: string, max = 20) {
+  if (value.length <= max) return value;
+  return `${value.slice(0, max).trimEnd()}...`;
 }
 
 function toDeltaPercent(current: number, previous: number) {
@@ -389,6 +395,85 @@ function normalizeName(value: string) {
   return value.trim().toLowerCase();
 }
 
+function normalizeKey(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+function getValueByAliases(row: Record<string, unknown>, aliases: string[]) {
+  const normalizedMap = new Map<string, unknown>();
+  Object.entries(row).forEach(([key, value]) => {
+    normalizedMap.set(normalizeKey(key), value);
+  });
+
+  for (const alias of aliases) {
+    const value = normalizedMap.get(normalizeKey(alias));
+    if (value !== undefined && value !== null && String(value).trim() !== "") return value;
+  }
+  return undefined;
+}
+
+function parseMoneyValue(value: unknown) {
+  if (typeof value === "number") return Number.isFinite(value) ? value : 0;
+  if (value === null || value === undefined) return 0;
+  const normalized = String(value).replace(/R\$/gi, "").replace(/\s+/g, "").replace(/\./g, "").replace(/,/g, ".");
+  const parsed = Number(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function parseDateValue(value: unknown, fallbackDate: string) {
+  if (typeof value === "number" && Number.isFinite(value) && value > 20000 && value < 70000) {
+    const excelBase = new Date(Date.UTC(1899, 11, 30));
+    const parsed = new Date(excelBase.getTime() + value * 24 * 60 * 60 * 1000);
+    return parsed.toISOString().slice(0, 10);
+  }
+
+  if (value === null || value === undefined || String(value).trim() === "") return fallbackDate;
+  const text = String(value).trim();
+
+  const brMatch = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (brMatch) {
+    const day = brMatch[1].padStart(2, "0");
+    const month = brMatch[2].padStart(2, "0");
+    const year = brMatch[3].length === 2 ? `20${brMatch[3]}` : brMatch[3];
+    return `${year}-${month}-${day}`;
+  }
+
+  const date = new Date(text);
+  if (Number.isNaN(date.getTime())) return fallbackDate;
+  return date.toISOString().slice(0, 10);
+}
+
+function makeSafeId(prefix: string, seed: string, index: number) {
+  const compact = seed
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  return compact ? `${prefix}-${compact}` : `${prefix}-${index}`;
+}
+
+function toScStatus(value: unknown): SCStatus {
+  const v = normalizeKey(String(value ?? ""));
+  if (v.includes("reprov")) return "REPROVADA";
+  if (v.includes("lanc") || v.includes("enviad")) return "LANCADA";
+  if (v.includes("aprov")) return "APROVADA";
+  return "EM_ANALISE";
+}
+
+function toOcStatus(value: unknown): OCStatus {
+  const v = normalizeKey(String(value ?? ""));
+  if (v.includes("cancel")) return "CANCELADA";
+  if (v.includes("naofechado")) return "NAO_FECHADO";
+  if (v.includes("abertoparcial")) return "ABERTO_PARCIAL";
+  if (v.includes("liquid")) return "LIQUIDADO";
+  return "ABERTO_TOTAL";
+}
+
 function answerProcurementQuestion(rawQuestion: string, facts: AssistantFacts) {
   const q = normalizeName(rawQuestion);
   if (!q) {
@@ -539,6 +624,8 @@ export function ProcurementControlCenter() {
   const [sectorViewMode, setSectorViewMode] = useState<"quantidade" | "valor">("quantidade");
   const [sectorSortMode, setSectorSortMode] = useState<"desc" | "asc">("desc");
   const [financialViewMode, setFinancialViewMode] = useState<"setor" | "status">("setor");
+  const [supplierRankMode, setSupplierRankMode] = useState<"valor" | "quantidade">("valor");
+  const [buyerRankMode, setBuyerRankMode] = useState<"valor" | "quantidade">("quantidade");
   const [healthExpanded, setHealthExpanded] = useState(false);
   const [agingDrilldown, setAgingDrilldown] = useState<string>("");
   const [centralPreset, setCentralPreset] = useState<"" | "SC_SEM_FORNECEDOR" | "SC_SEM_OC">("");
@@ -592,6 +679,37 @@ export function ProcurementControlCenter() {
     () => rankingGlobal.filter((item) => item.totalOC > 0 || item.valorTotal > 0),
     [rankingGlobal],
   );
+  const supplierExecutiveRanking = useMemo(() => {
+    const sorted = [...rankingPerformance].sort((a, b) => {
+      if (supplierRankMode === "quantidade") {
+        if (b.totalOC !== a.totalOC) return b.totalOC - a.totalOC;
+        return b.valorTotal - a.valorTotal;
+      }
+      if (b.valorTotal !== a.valorTotal) return b.valorTotal - a.valorTotal;
+      return b.totalOC - a.totalOC;
+    });
+    return sorted.slice(0, 10);
+  }, [rankingPerformance, supplierRankMode]);
+  const buyerExecutiveRanking = useMemo(() => {
+    const map = new Map<string, { comprador: string; totalOC: number; valorTotal: number }>();
+    dataset.ocFiltered.forEach((oc) => {
+      const comprador = (oc.responsavel || "Nao informado").trim() || "Nao informado";
+      const row = map.get(comprador) ?? { comprador, totalOC: 0, valorTotal: 0 };
+      row.totalOC += 1;
+      row.valorTotal += oc.valorOC;
+      map.set(comprador, row);
+    });
+    const base = Array.from(map.values());
+    base.sort((a, b) => {
+      if (buyerRankMode === "quantidade") {
+        if (b.totalOC !== a.totalOC) return b.totalOC - a.totalOC;
+        return b.valorTotal - a.valorTotal;
+      }
+      if (b.valorTotal !== a.valorTotal) return b.valorTotal - a.valorTotal;
+      return b.totalOC - a.totalOC;
+    });
+    return base.slice(0, 10);
+  }, [dataset.ocFiltered, buyerRankMode]);
   const analyticsValuePerOc = useMemo(
     () => (kpisGlobal.totalOC > 0 ? kpisGlobal.valorTotalOC / kpisGlobal.totalOC : 0),
     [kpisGlobal.totalOC, kpisGlobal.valorTotalOC],
@@ -640,7 +758,7 @@ export function ProcurementControlCenter() {
   const assistantFacts = useMemo<AssistantFacts>(() => ({
     totalSc: kpisGlobal.totalSC,
     totalOc: kpisGlobal.totalOC,
-    totalScOcValue: kpisGlobal.valorTotalSC + kpisGlobal.valorTotalOC,
+    totalScOcValue: kpisGlobal.valorTotalOC,
     pendingSc: kpisGlobal.emAnalise,
     openOc: kpisGlobal.entregasPendentes,
     delayedOc: kpisGlobal.entregasAtrasadas,
@@ -651,117 +769,62 @@ export function ProcurementControlCenter() {
     leadTime: kpisGlobal.leadTimeMedioDias,
     approvalTime: kpisGlobal.tempoMedioAprovacaoDias,
   }), [kpisGlobal, rankingPerformance, scOcBySector]);
+  const ocExecutiveDistribution = useMemo(() => {
+    const groups = {
+      ABERTAS: { key: "ABERTAS", label: "ABERTAS", total: 0, value: 0, color: CYAN, filter: "ABERTO_TOTAL" },
+      FINALIZADAS_LIQUIDADAS: { key: "FINALIZADAS_LIQUIDADAS", label: "FINALIZADAS / LIQUIDADAS", total: 0, value: 0, color: GREEN, filter: "LIQUIDADO" },
+      NAO_FECHADAS: { key: "NAO_FECHADAS", label: "NAO FECHADAS", total: 0, value: 0, color: AMBER, filter: "NAO_FECHADO" },
+      CANCELADAS: { key: "CANCELADAS", label: "CANCELADAS", total: 0, value: 0, color: RED, filter: "CANCELADA" },
+    };
+
+    dataset.ocFiltered.forEach((oc) => {
+      const group = ocStatusToExecutive(oc.status as OCStatus);
+      groups[group].total += 1;
+      groups[group].value += oc.valorOC;
+    });
+
+    const total = dataset.ocFiltered.length;
+    return Object.values(groups).map((item) => ({
+      ...item,
+      percent: toPercent(item.total, total),
+    }));
+  }, [dataset.ocFiltered]);
   const pipelineStages = useMemo(() => {
-    const total = Math.max(1, kpis.totalSC + kpis.totalOC);
-    let phaseAprovada = dataset.scFiltered.filter((sc) => sc.status === "APROVADA").length;
-    let phaseEmAnalise = dataset.scFiltered.filter((sc) => sc.status === "EM_ANALISE").length;
-    let phaseReprovada = dataset.scFiltered.filter((sc) => sc.status === "REPROVADA").length;
-    let phaseLancada = dataset.scFiltered.filter((sc) => sc.status === "LANCADA").length;
-    dataset.ocFiltered.forEach((oc) => {
-      const phase = ocToPhase(oc.status as OCStatus);
-      if (phase === "APROVADA") phaseAprovada += 1;
-      else if (phase === "EM_ANALISE") phaseEmAnalise += 1;
-      else if (phase === "REPROVADA") phaseReprovada += 1;
-      else phaseLancada += 1;
-    });
-    const emittedOc = dataset.ocFiltered.length;
-    const deliveredOc = dataset.ocFiltered.filter((oc) => oc.status === "ENTREGUE").length;
+    const total = Math.max(1, dataset.ocFiltered.length);
+    const abertas = ocExecutiveDistribution.find((x) => x.key === "ABERTAS")?.total ?? 0;
+    const finalizadas = ocExecutiveDistribution.find((x) => x.key === "FINALIZADAS_LIQUIDADAS")?.total ?? 0;
+    const naoFechadas = ocExecutiveDistribution.find((x) => x.key === "NAO_FECHADAS")?.total ?? 0;
+    const canceladas = ocExecutiveDistribution.find((x) => x.key === "CANCELADAS")?.total ?? 0;
     return [
-      { key: "SC_CRIADA", label: "SC Criada", count: kpis.totalSC, percent: toPercent(kpis.totalSC, total), value: kpis.valorTotalSC, action: () => openCentralWithFilters({ status: "" }) },
-      { key: "EM_ANALISE", label: "Em Analise", count: phaseEmAnalise, percent: toPercent(phaseEmAnalise, total), value: 0, action: () => openCentralWithFilters({ status: "EM_ANALISE" }) },
-      { key: "APROVADA", label: "Aprovada", count: phaseAprovada, percent: toPercent(phaseAprovada, total), value: 0, action: () => openCentralWithFilters({ status: "APROVADA" }) },
-      { key: "OC_EMITIDA", label: "OC Emitida", count: emittedOc, percent: toPercent(emittedOc, total), value: kpis.valorTotalOC, action: () => openCentralWithFilters({ oc: "OC-" }) },
-      { key: "LANCADA", label: "Lancada", count: phaseLancada, percent: toPercent(phaseLancada, total), value: 0, action: () => openCentralWithFilters({ status: "LANCADA" }) },
-      { key: "RECEBIDA", label: "Recebida", count: deliveredOc, percent: toPercent(deliveredOc, total), value: dataset.ocFiltered.filter((oc) => oc.status === "ENTREGUE").reduce((sum, oc) => sum + oc.valorOC, 0), action: () => openCentralWithFilters({ status: "ENTREGUE" }) },
+      { key: "TOTAL_OC", label: "Total de OCs", count: dataset.ocFiltered.length, percent: 100, value: kpis.valorTotalOC, action: () => openCentralWithFilters({ status: "" }) },
+      { key: "ABERTAS", label: "Abertas", count: abertas, percent: toPercent(abertas, total), value: dataset.ocFiltered.filter((oc) => oc.status === "ABERTO_TOTAL").reduce((sum, oc) => sum + oc.valorOC, 0), action: () => openCentralWithFilters({ status: "ABERTO_TOTAL" }) },
+      { key: "FINALIZADAS", label: "Finalizadas/Liquidadas", count: finalizadas, percent: toPercent(finalizadas, total), value: dataset.ocFiltered.filter((oc) => oc.status === "LIQUIDADO" || oc.status === "ABERTO_PARCIAL").reduce((sum, oc) => sum + oc.valorOC, 0), action: () => openCentralWithFilters({ status: "LIQUIDADO" }) },
+      { key: "NAO_FECHADAS", label: "Nao Fechadas", count: naoFechadas, percent: toPercent(naoFechadas, total), value: dataset.ocFiltered.filter((oc) => oc.status === "NAO_FECHADO").reduce((sum, oc) => sum + oc.valorOC, 0), action: () => openCentralWithFilters({ status: "NAO_FECHADO" }) },
+      { key: "CANCELADAS", label: "Canceladas", count: canceladas, percent: toPercent(canceladas, total), value: dataset.ocFiltered.filter((oc) => oc.status === "CANCELADA").reduce((sum, oc) => sum + oc.valorOC, 0), action: () => openCentralWithFilters({ status: "CANCELADA" }) },
     ];
-  }, [kpis.totalSC, kpis.totalOC, kpis.valorTotalSC, kpis.valorTotalOC, dataset.scFiltered, dataset.ocFiltered]);
+  }, [dataset.ocFiltered, kpis.valorTotalOC, ocExecutiveDistribution]);
   const pipelineDistribution = useMemo(() => {
-    let aprovada = dataset.scFiltered.filter((sc) => sc.status === "APROVADA").length;
-    let emAnalise = dataset.scFiltered.filter((sc) => sc.status === "EM_ANALISE").length;
-    let reprovada = dataset.scFiltered.filter((sc) => sc.status === "REPROVADA").length;
-    let lancada = dataset.scFiltered.filter((sc) => sc.status === "LANCADA").length;
-    dataset.ocFiltered.forEach((oc) => {
-      const phase = ocToPhase(oc.status as OCStatus);
-      if (phase === "APROVADA") aprovada += 1;
-      else if (phase === "EM_ANALISE") emAnalise += 1;
-      else if (phase === "REPROVADA") reprovada += 1;
-      else lancada += 1;
-    });
-    const total = aprovada + emAnalise + reprovada + lancada;
-    return [
-      { status: "Aprovada", total: aprovada, percent: toPercent(aprovada, total), filter: "APROVADA" },
-      { status: "Em Analise", total: emAnalise, percent: toPercent(emAnalise, total), filter: "EM_ANALISE" },
-      { status: "Reprovada", total: reprovada, percent: toPercent(reprovada, total), filter: "REPROVADA" },
-      { status: "Lancada", total: lancada, percent: toPercent(lancada, total), filter: "LANCADA" },
-    ];
-  }, [dataset.scFiltered, dataset.ocFiltered]);
+    return ocExecutiveDistribution.map((item) => ({
+      status: item.label,
+      total: item.total,
+      percent: item.percent,
+      filter: item.filter,
+      value: item.value,
+      key: item.key,
+      color: item.color,
+    }));
+  }, [ocExecutiveDistribution]);
   const pipelineStatusData = useMemo(() => {
-    const totalProcessos = pipelineDistribution.reduce((sum, item) => sum + item.total, 0);
-    const byFilter = new Map(pipelineDistribution.map((item) => [item.filter, item]));
-    const scValueByStatus = {
-      APROVADA: 0,
-      EM_ANALISE: 0,
-      REPROVADA: 0,
-      LANCADA: 0,
-    };
-
-    dataset.scFiltered.forEach((sc) => {
-      if (sc.status in scValueByStatus) {
-        scValueByStatus[sc.status as keyof typeof scValueByStatus] += sc.valorEstimado;
-      }
-    });
-
-    const ocValueByPhase = {
-      APROVADA: 0,
-      EM_ANALISE: 0,
-      REPROVADA: 0,
-      LANCADA: 0,
-    };
-
-    dataset.ocFiltered.forEach((oc) => {
-      const phase = ocToPhase(oc.status as OCStatus);
-      ocValueByPhase[phase] += oc.valorOC;
-    });
-
-    return [
-      {
-        key: "APROVADA",
-        label: "APROVADAS",
-        total: byFilter.get("APROVADA")?.total ?? 0,
-        percent: toPercent(byFilter.get("APROVADA")?.total ?? 0, totalProcessos),
-        color: GREEN,
-        value: scValueByStatus.APROVADA + ocValueByPhase.APROVADA,
-        filter: "APROVADA",
-      },
-      {
-        key: "EM_ANALISE",
-        label: "EM ANALISE",
-        total: byFilter.get("EM_ANALISE")?.total ?? 0,
-        percent: toPercent(byFilter.get("EM_ANALISE")?.total ?? 0, totalProcessos),
-        color: AMBER,
-        value: scValueByStatus.EM_ANALISE + ocValueByPhase.EM_ANALISE,
-        filter: "EM_ANALISE",
-      },
-      {
-        key: "REPROVADA",
-        label: "REPROVADAS",
-        total: byFilter.get("REPROVADA")?.total ?? 0,
-        percent: toPercent(byFilter.get("REPROVADA")?.total ?? 0, totalProcessos),
-        color: RED,
-        value: scValueByStatus.REPROVADA + ocValueByPhase.REPROVADA,
-        filter: "REPROVADA",
-      },
-      {
-        key: "LANCADA",
-        label: "LANCADAS",
-        total: byFilter.get("LANCADA")?.total ?? 0,
-        percent: toPercent(byFilter.get("LANCADA")?.total ?? 0, totalProcessos),
-        color: BLUE,
-        value: scValueByStatus.LANCADA + ocValueByPhase.LANCADA,
-        filter: "LANCADA",
-      },
-    ];
-  }, [pipelineDistribution, dataset.scFiltered, dataset.ocFiltered]);
+    return pipelineDistribution.map((item) => ({
+      key: item.key,
+      label: item.status,
+      total: item.total,
+      percent: item.percent,
+      color: item.color,
+      value: item.value,
+      filter: item.filter,
+    }));
+  }, [pipelineDistribution]);
   const pipelineTotals = useMemo(() => {
     const totalProcessos = pipelineStatusData.reduce((sum, item) => sum + item.total, 0);
     const totalValor = pipelineStatusData.reduce((sum, item) => sum + item.value, 0);
@@ -789,25 +852,20 @@ export function ProcurementControlCenter() {
   }, [scOcBySector, financialSort]);
   const financialByStatus = useMemo(() => {
     const statusValue = new Map<string, { label: string; value: number; filter: string; color: string }>([
-      ["APROVADA", { label: "APROVADO", value: 0, filter: "APROVADA", color: GREEN }],
-      ["EM_ANALISE", { label: "EM ANALISE", value: 0, filter: "EM_ANALISE", color: AMBER }],
-      ["REPROVADA", { label: "REPROVADO", value: 0, filter: "REPROVADA", color: RED }],
-      ["LANCADA", { label: "LANCADO", value: 0, filter: "LANCADA", color: BLUE }],
+      ["ABERTO_TOTAL", { label: "ABERTO", value: 0, filter: "ABERTO_TOTAL", color: CYAN }],
+      ["FINALIZADAS", { label: "FINALIZADO / LIQUIDADO", value: 0, filter: "LIQUIDADO", color: GREEN }],
+      ["NAO_FECHADO", { label: "NAO FECHADO", value: 0, filter: "NAO_FECHADO", color: AMBER }],
+      ["CANCELADA", { label: "CANCELADO", value: 0, filter: "CANCELADA", color: RED }],
     ]);
 
-    dataset.scFiltered.forEach((sc) => {
-      const row = statusValue.get(sc.status);
-      if (row) row.value += sc.valorEstimado;
-    });
-
     dataset.ocFiltered.forEach((oc) => {
-      const phase = ocToPhase(oc.status as OCStatus);
-      const row = statusValue.get(phase);
+      const key = oc.status === "ABERTO_PARCIAL" || oc.status === "LIQUIDADO" ? "FINALIZADAS" : oc.status;
+      const row = statusValue.get(key);
       if (row) row.value += oc.valorOC;
     });
 
     return Array.from(statusValue.values()).sort((a, b) => (financialSort === "desc" ? b.value - a.value : a.value - b.value));
-  }, [dataset.scFiltered, dataset.ocFiltered, financialSort]);
+  }, [dataset.ocFiltered, financialSort]);
   const financialIntelligenceData = useMemo(() => {
     if (financialViewMode === "setor") return financialBySector.map((item) => ({ key: item.setor, label: item.setor, value: item.valor, meta: `${item.total} processos`, color: CYAN, type: "setor" as const }));
     return financialByStatus.map((item) => ({ key: item.label, label: item.label, value: item.value, meta: item.filter, color: item.color, type: "status" as const }));
@@ -825,7 +883,7 @@ export function ProcurementControlCenter() {
       buckets.set(agingBucketLabel(days), (buckets.get(agingBucketLabel(days)) ?? 0) + 1);
     });
     dataset.ocFiltered.forEach((oc) => {
-      if (["ENTREGUE", "CANCELADA"].includes(oc.status)) return;
+      if (["LIQUIDADO", "ABERTO_PARCIAL", "CANCELADA"].includes(oc.status)) return;
       const days = diffDaysFromNow(oc.dataOC);
       buckets.set(agingBucketLabel(days), (buckets.get(agingBucketLabel(days)) ?? 0) + 1);
     });
@@ -851,7 +909,7 @@ export function ProcurementControlCenter() {
     let scoped = dataset.ocFiltered as PurchaseOrder[];
     if (agingDrilldown) {
       scoped = scoped.filter((oc) => {
-        if (["ENTREGUE", "CANCELADA"].includes(oc.status)) return false;
+        if (["LIQUIDADO", "ABERTO_PARCIAL", "CANCELADA"].includes(oc.status)) return false;
         return agingBucketLabel(diffDaysFromNow(oc.dataOC)) === agingDrilldown;
       });
     }
@@ -881,7 +939,7 @@ export function ProcurementControlCenter() {
       .filter((sc) => !["APROVADA", "REPROVADA", "LANCADA"].includes(sc.status))
       .map((sc) => diffDaysFromNow(sc.dataCriacao));
     const ocAges = dataset.ocFiltered
-      .filter((oc) => !["ENTREGUE", "CANCELADA"].includes(oc.status))
+      .filter((oc) => !["LIQUIDADO", "ABERTO_PARCIAL", "CANCELADA"].includes(oc.status))
       .map((oc) => diffDaysFromNow(oc.dataOC));
     return [...scAges, ...ocAges];
   }, [dataset.scFiltered, dataset.ocFiltered]);
@@ -890,7 +948,7 @@ export function ProcurementControlCenter() {
     return Number((agingOpenItems.reduce((sum, d) => sum + d, 0) / agingOpenItems.length).toFixed(1));
   }, [agingOpenItems]);
   const slaMetrics = useMemo(() => {
-    const openOcWithDeadline = dataset.ocFiltered.filter((oc) => !["ENTREGUE", "CANCELADA"].includes(oc.status) && !!oc.dataPrevistaEntrega);
+    const openOcWithDeadline = dataset.ocFiltered.filter((oc) => !["LIQUIDADO", "ABERTO_PARCIAL", "CANCELADA"].includes(oc.status) && !!oc.dataPrevistaEntrega);
     if (!openOcWithDeadline.length) {
       return {
         hasData: false,
@@ -959,7 +1017,7 @@ export function ProcurementControlCenter() {
   const attentionItems = useMemo(() => {
     const items: Array<{ id: string; label: string; detail: string; onClick: () => void }> = [];
     if (kpis.emAnalise > 0) items.push({ id: "att-analise", label: "SC aguardando aprovacao", detail: `${kpis.emAnalise} em analise`, onClick: () => openCentralWithFilters({ status: "EM_ANALISE" }) });
-    if (kpis.entregasAtrasadas > 0) items.push({ id: "att-atrasadas", label: "OC atrasada", detail: `${kpis.entregasAtrasadas} atrasadas`, onClick: () => openCentralWithFilters({ status: "ATRASADA" }) });
+    if (kpis.entregasAtrasadas > 0) items.push({ id: "att-atrasadas", label: "OC nao fechada", detail: `${kpis.entregasAtrasadas} nao fechadas`, onClick: () => openCentralWithFilters({ status: "NAO_FECHADO" }) });
     if (scWithoutSupplier > 0) items.push({ id: "att-no-supplier", label: "SC sem fornecedor", detail: `${scWithoutSupplier} sem fornecedor`, onClick: () => openCentralWithPreset("SC_SEM_FORNECEDOR") });
     if (scWithoutOc > 0) items.push({ id: "att-no-oc", label: "SC sem OC", detail: `${scWithoutOc} sem OC`, onClick: () => openCentralWithPreset("SC_SEM_OC") });
     if (longAgingCount > 0) items.push({ id: "att-aging", label: "Processos +60 dias", detail: `${longAgingCount} processos`, onClick: () => openAgingDrilldown("+60") });
@@ -998,7 +1056,7 @@ export function ProcurementControlCenter() {
     () => [
       { id: "snap-sc-analise", label: "SCs em analise", value: kpis.emAnalise, onClick: () => openCentralWithFilters({ status: "EM_ANALISE" }) },
       { id: "snap-oc-curso", label: "OCs em curso", value: kpis.entregasPendentes, onClick: () => openCentralWithFilters({ status: "" }) },
-      { id: "snap-oc-atrasada", label: "OCs atrasadas", value: kpis.entregasAtrasadas, onClick: () => openCentralWithFilters({ status: "ATRASADA" }) },
+      { id: "snap-oc-nao-fechada", label: "OCs nao fechadas", value: kpis.entregasAtrasadas, onClick: () => openCentralWithFilters({ status: "NAO_FECHADO" }) },
       { id: "snap-sc-sem-oc", label: "SCs sem OC", value: scWithoutOc, onClick: () => openCentralWithPreset("SC_SEM_OC") },
       { id: "snap-sc-sem-forn", label: "SCs sem fornecedor", value: scWithoutSupplier, onClick: () => openCentralWithPreset("SC_SEM_FORNECEDOR") },
       { id: "snap-criticos", label: "Processos criticos", value: longAgingCount + kpis.entregasAtrasadas, onClick: () => openAgingDrilldown("+60") },
@@ -1006,7 +1064,7 @@ export function ProcurementControlCenter() {
     [kpis.emAnalise, kpis.entregasPendentes, kpis.entregasAtrasadas, scWithoutOc, scWithoutSupplier, longAgingCount],
   );
   const ocByPhase = useMemo(() => {
-    const order: OcPhase[] = ["EM_ANALISE", "APROVADA", "LANCADA", "REPROVADA"];
+    const order: OcPhase[] = ["ABERTO_TOTAL", "ABERTO_PARCIAL", "LIQUIDADO", "NAO_FECHADO", "CANCELADA"];
     const map = new Map<OcPhase, number>();
     dataset.ocFiltered.forEach((oc) => {
       const phase = ocToPhase(oc.status as OCStatus);
@@ -1015,109 +1073,47 @@ export function ProcurementControlCenter() {
     return order.map((phase) => ({ status: OC_PHASE_LABEL[phase], total: map.get(phase) ?? 0 }));
   }, [dataset.ocFiltered]);
   const unifiedStatusCards = useMemo(() => {
+    const finalizadas = dataset.ocFiltered.filter((oc) => oc.status === "LIQUIDADO" || oc.status === "ABERTO_PARCIAL").length;
+    const abertas = dataset.ocFiltered.filter((oc) => oc.status === "ABERTO_TOTAL").length;
+    const naoFechadas = dataset.ocFiltered.filter((oc) => oc.status === "NAO_FECHADO").length;
+    const canceladas = dataset.ocFiltered.filter((oc) => oc.status === "CANCELADA").length;
     const counts = {
-      aprovada: 0,
-      emAnalise: 0,
-      reprovada: 0,
-      lancada: 0,
-      atrasada: 0,
+      aprovada: finalizadas,
+      emAnalise: abertas,
+      reprovada: canceladas,
+      lancada: naoFechadas,
+      atrasada: naoFechadas,
     };
 
-    dataset.scFiltered.forEach((sc) => {
-      if (sc.status === "APROVADA") {
-        counts.aprovada += 1;
-        return;
-      }
-      if (sc.status === "EM_ANALISE") {
-        counts.emAnalise += 1;
-        return;
-      }
-      if (sc.status === "REPROVADA") {
-        counts.reprovada += 1;
-        return;
-      }
-      counts.lancada += 1;
-    });
-
-    dataset.ocFiltered.forEach((oc) => {
-      if (oc.status === "ATRASADA") {
-        counts.atrasada += 1;
-        return;
-      }
-      const phase = ocToPhase(oc.status as OCStatus);
-      if (phase === "REPROVADA") {
-        counts.reprovada += 1;
-      } else if (phase === "LANCADA") {
-        counts.lancada += 1;
-      } else if (phase === "EM_ANALISE") {
-        counts.emAnalise += 1;
-      } else {
-        counts.aprovada += 1;
-      }
-    });
-
     return counts;
-  }, [dataset.scFiltered, dataset.ocFiltered]);
+  }, [dataset.ocFiltered]);
   const unifiedStatusPie = useMemo(
     () => [
-      { status: "Aprovada", total: unifiedStatusCards.aprovada },
-      { status: "Em Analise", total: unifiedStatusCards.emAnalise },
-      { status: "Reprovada", total: unifiedStatusCards.reprovada },
-      { status: "Lancada", total: unifiedStatusCards.lancada },
+      { status: "Finalizadas / Liquidadas", total: unifiedStatusCards.aprovada },
+      { status: "Abertas", total: unifiedStatusCards.emAnalise },
+      { status: "Nao Fechadas", total: unifiedStatusCards.lancada },
+      { status: "Canceladas", total: unifiedStatusCards.reprovada },
     ],
     [unifiedStatusCards],
   );
   const unifiedStatusEvolution = useMemo(() => {
     const map = new Map<string, { mes: string; aprovada: number; emAnalise: number; reprovada: number; lancada: number }>();
 
-    dataset.scFiltered.forEach((sc) => {
-      const key = sc.dataCriacao.slice(0, 7);
-      if (!map.has(key)) map.set(key, { mes: key, aprovada: 0, emAnalise: 0, reprovada: 0, lancada: 0 });
-      const bucket = map.get(key)!;
-
-      if (sc.status === "REPROVADA") {
-        bucket.reprovada += 1;
-      } else if (sc.status === "LANCADA") {
-        bucket.lancada += 1;
-      } else if (sc.status === "EM_ANALISE") {
-        bucket.emAnalise += 1;
-      } else {
-        bucket.aprovada += 1;
-      }
-    });
-
     dataset.ocFiltered.forEach((oc) => {
       const key = oc.dataOC.slice(0, 7);
       if (!map.has(key)) map.set(key, { mes: key, aprovada: 0, emAnalise: 0, reprovada: 0, lancada: 0 });
       const bucket = map.get(key)!;
 
-      if (oc.status === "ATRASADA") {
-        return;
-      }
-
-      const phase = ocToPhase(oc.status as OCStatus);
-      if (phase === "REPROVADA") {
-        bucket.reprovada += 1;
-      } else if (phase === "LANCADA") {
-        bucket.lancada += 1;
-      } else if (phase === "EM_ANALISE") {
-        bucket.emAnalise += 1;
-      } else {
-        bucket.aprovada += 1;
-      }
+      if (oc.status === "ABERTO_TOTAL") bucket.emAnalise += 1;
+      else if (oc.status === "ABERTO_PARCIAL" || oc.status === "LIQUIDADO") bucket.aprovada += 1;
+      else if (oc.status === "NAO_FECHADO") bucket.lancada += 1;
+      else bucket.reprovada += 1;
     });
 
     return Array.from(map.values()).sort((a, b) => a.mes.localeCompare(b.mes));
-  }, [dataset.scFiltered, dataset.ocFiltered]);
+  }, [dataset.ocFiltered]);
   const monthlyFinanceSeries = useMemo(() => {
     const map = new Map<string, { mes: string; valor: number }>();
-
-    dataset.scFiltered.forEach((sc) => {
-      const key = sc.dataCriacao.slice(0, 7);
-      const current = map.get(key) ?? { mes: key, valor: 0 };
-      current.valor += sc.valorEstimado;
-      map.set(key, current);
-    });
 
     dataset.ocFiltered.forEach((oc) => {
       const key = oc.dataOC.slice(0, 7);
@@ -1127,12 +1123,12 @@ export function ProcurementControlCenter() {
     });
 
     return Array.from(map.values()).sort((a, b) => a.mes.localeCompare(b.mes));
-  }, [dataset.scFiltered, dataset.ocFiltered]);
+  }, [dataset.ocFiltered]);
 
   const delayedSeries = useMemo(() => {
     const map = new Map<string, number>();
     dataset.ocFiltered.forEach((oc) => {
-      if (oc.status !== "ATRASADA") return;
+      if (oc.status !== "NAO_FECHADO") return;
       const key = oc.dataOC.slice(0, 7);
       map.set(key, (map.get(key) ?? 0) + 1);
     });
@@ -1155,9 +1151,9 @@ export function ProcurementControlCenter() {
 
     return [
       {
-        label: "VALOR TOTAL SC + OC",
-        value: formatCurrency(kpis.valorTotalSC + kpis.valorTotalOC),
-        note: "Carteira financeira consolidada",
+        label: "VALOR TOTAL OCs",
+        value: formatCurrency(kpis.valorTotalOC),
+        note: "Base financeira oficial da OC",
         context: "vs. periodo anterior",
         delta: deltaFrom(valueSeries),
         color: GREEN,
@@ -1165,9 +1161,9 @@ export function ProcurementControlCenter() {
         series: valueSeries.length ? valueSeries : [0],
       },
       {
-        label: "APROVADAS",
+        label: "FINALIZADAS / LIQUIDADAS",
         value: String(unifiedStatusCards.aprovada),
-        note: `${kpis.totalSC + kpis.totalOC ? Math.round((unifiedStatusCards.aprovada / (kpis.totalSC + kpis.totalOC)) * 100) : 0}% do total`,
+        note: `${kpis.totalOC ? Math.round((unifiedStatusCards.aprovada / kpis.totalOC) * 100) : 0}% do total de OCs`,
         context: "vs. periodo anterior",
         delta: deltaFrom(approvedSeries),
         color: GREEN,
@@ -1175,20 +1171,31 @@ export function ProcurementControlCenter() {
         series: approvedSeries.length ? approvedSeries : [0],
       },
       {
-        label: "EM ANALISE",
+        label: "ABERTAS",
         value: String(unifiedStatusCards.emAnalise),
-        note: `Tempo medio: ${kpis.tempoMedioAprovacaoDias} dias`,
+        note: "Status: Aberto Total",
         context: "vs. periodo anterior",
         delta: deltaFrom(analysisSeries),
-        color: AMBER,
+        color: CYAN,
         icon: Activity,
         invertDelta: true,
         series: analysisSeries.length ? analysisSeries : [0],
       },
       {
-        label: "REPROVADAS",
+        label: "NAO FECHADAS",
+        value: String(unifiedStatusCards.lancada),
+        note: `${kpis.totalOC ? Math.round((unifiedStatusCards.lancada / kpis.totalOC) * 100) : 0}% do total de OCs`,
+        context: "vs. periodo anterior",
+        delta: deltaFrom(launchedSeries),
+        color: AMBER,
+        icon: AlertTriangle,
+        invertDelta: true,
+        series: launchedSeries.length ? launchedSeries : [0],
+      },
+      {
+        label: "CANCELADAS",
         value: String(unifiedStatusCards.reprovada),
-        note: `${kpis.totalSC + kpis.totalOC ? Math.round((unifiedStatusCards.reprovada / (kpis.totalSC + kpis.totalOC)) * 100) : 0}% do total`,
+        note: `${kpis.totalOC ? Math.round((unifiedStatusCards.reprovada / kpis.totalOC) * 100) : 0}% do total de OCs`,
         context: "vs. periodo anterior",
         delta: deltaFrom(rejectedSeries),
         color: RED,
@@ -1197,19 +1204,9 @@ export function ProcurementControlCenter() {
         series: rejectedSeries.length ? rejectedSeries : [0],
       },
       {
-        label: "LANCADAS",
-        value: String(unifiedStatusCards.lancada),
-        note: "Processos com liberacao operacional",
-        context: "vs. periodo anterior",
-        delta: deltaFrom(launchedSeries),
-        color: BLUE,
-        icon: ClipboardList,
-        series: launchedSeries.length ? launchedSeries : [0],
-      },
-      {
-        label: "ATRASADAS",
+        label: "NAO FECHADAS (RISCO)",
         value: String(unifiedStatusCards.atrasada),
-        note: "OCs fora da janela de entrega",
+        note: "Indicador de atencao operacional",
         context: "vs. periodo anterior",
         delta: deltaFrom(delayed),
         color: RED,
@@ -1259,9 +1256,9 @@ export function ProcurementControlCenter() {
     ],
     [analyticsScToOcConversion, kpis.leadTimeMedioDias, kpis.taxaEntregaNoPrazo, operationalHealth?.score],
   );
-  const openOcCount = useMemo(() => dataset.ocFiltered.filter((oc) => !["ENTREGUE", "CANCELADA"].includes(oc.status)).length, [dataset.ocFiltered]);
+  const openOcCount = useMemo(() => dataset.ocFiltered.filter((oc) => oc.status === "ABERTO_TOTAL" || oc.status === "NAO_FECHADO").length, [dataset.ocFiltered]);
   const alerts = useMemo(() => buildAlerts(state, filters), [state, filters]);
-  const delayedOcs = useMemo(() => dataset.ocFiltered.filter((oc) => oc.status === "ATRASADA"), [dataset.ocFiltered]);
+  const delayedOcs = useMemo(() => dataset.ocFiltered.filter((oc) => oc.status === "NAO_FECHADO"), [dataset.ocFiltered]);
   const aiContext = useMemo<AiAnswerContext>(() => ({
     delayedCount: delayedOcs.length,
     topSupplier: ranking[0]?.fornecedor ?? "Sem fornecedor dominante",
@@ -1271,11 +1268,11 @@ export function ProcurementControlCenter() {
     openOcCount,
     totalSc: kpis.totalSC,
     totalOc: kpis.totalOC,
-    totalScOcValue: formatCurrency(kpis.valorTotalSC + kpis.valorTotalOC),
+    totalScOcValue: formatCurrency(kpis.valorTotalOC),
     pendingSc: dataset.scFiltered.filter((sc) => sc.status === "EM_ANALISE").length,
     activeSuppliers: dataset.fornecedoresAtivos.length,
     alertsCount: alerts.length,
-  }), [delayedOcs.length, ranking, scOcBySector, ocByPhase, kpis.valorTotalOC, kpis.totalSC, kpis.totalOC, kpis.valorTotalSC, openOcCount, dataset.scFiltered, dataset.fornecedoresAtivos.length, alerts.length]);
+  }), [delayedOcs.length, ranking, scOcBySector, ocByPhase, kpis.valorTotalOC, kpis.totalSC, kpis.totalOC, openOcCount, dataset.scFiltered, dataset.fornecedoresAtivos.length, alerts.length]);
   const anosDisponiveis = useMemo(() => {
     const years = new Set<string>();
     state.scs.forEach((sc) => years.add(sc.dataCriacao.slice(0, 4)));
@@ -1443,6 +1440,7 @@ export function ProcurementControlCenter() {
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(state.scs), "SC");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(state.ocs), "OC");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(state.fornecedores), "FORNECEDORES");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(state.setores), "SETORES");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dataset.ocFiltered), "ENTREGAS");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([kpis]), "KPIS");
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(monthly), "DADOS");
@@ -1457,43 +1455,304 @@ export function ProcurementControlCenter() {
       const wb = XLSX.read(buffer, { type: "array" });
 
       const requiredSheets = ["SC", "OC", "FORNECEDORES", "SETORES"];
-      requiredSheets.forEach((sheetName) => {
-        if (!wb.SheetNames.includes(sheetName)) report.push(`Aba obrigatoria ausente: ${sheetName}`);
-      });
+      const hasStructuredWorkbook = requiredSheets.every((sheetName) => wb.SheetNames.includes(sheetName));
 
-      if (report.length > 0) {
-        setImportReport(report);
+      if (hasStructuredWorkbook) {
+        const ocRowsInput = XLSX.utils.sheet_to_json<PurchaseOrder>(wb.Sheets.OC, { defval: "" });
+        const fornecedoresRowsInput = XLSX.utils.sheet_to_json<AppState["fornecedores"][number]>(wb.Sheets.FORNECEDORES, { defval: "" });
+        const setoresRowsInput = XLSX.utils.sheet_to_json<AppState["setores"][number]>(wb.Sheets.SETORES, { defval: "" });
+
+        if (!ocRowsInput.every((r) => r.id && r.numeroOC && r.status)) report.push("OC: colunas id/numeroOC/status obrigatorias.");
+        const hasDuplicateOc = new Set(ocRowsInput.map((r) => r.numeroOC)).size !== ocRowsInput.length;
+        if (hasDuplicateOc) report.push("Duplicidade detectada em numeroOC.");
+
+        if (report.length) {
+          setImportReport(report);
+          return;
+        }
+
+        const nowIso = new Date().toISOString().slice(0, 10);
+        const setoresMap = new Map<string, AppState["setores"][number]>();
+        const fornecedoresMap = new Map<string, AppState["fornecedores"][number]>();
+        const ocByNumero = new Map<string, PurchaseOrder>();
+
+        state.setores.forEach((item) => {
+          const key = normalizeKey(item.nome);
+          if (!setoresMap.has(key)) setoresMap.set(key, item);
+        });
+        setoresRowsInput.forEach((item, index) => {
+          const nome = String(item.nome ?? "").trim();
+          if (!nome) return;
+          const key = normalizeKey(nome);
+          if (setoresMap.has(key)) return;
+          setoresMap.set(key, {
+            id: item.id || makeSafeId("setor", nome, index + 1),
+            nome,
+            descricao: String(item.descricao ?? "Importado da aba SETORES"),
+            ativo: item.ativo !== false,
+            createdAt: String(item.createdAt ?? nowIso),
+            updatedAt: nowIso,
+            deletedAt: null,
+          });
+        });
+
+        state.fornecedores.forEach((item) => {
+          const key = normalizeKey(`${item.nomeFantasia}|${item.cnpj}`);
+          if (!fornecedoresMap.has(key)) fornecedoresMap.set(key, item);
+        });
+        fornecedoresRowsInput.forEach((item, index) => {
+          const nome = String(item.nomeFantasia ?? item.razaoSocial ?? "").trim();
+          const cnpj = String(item.cnpj ?? "").trim();
+          if (!nome && !cnpj) return;
+          const key = normalizeKey(`${nome}|${cnpj}`);
+          if (fornecedoresMap.has(key)) return;
+          fornecedoresMap.set(key, {
+            id: item.id || makeSafeId("forn", nome || cnpj || `fornecedor-${index + 1}`, index + 1),
+            codigo: String(item.codigo ?? `IMP-${String(index + 1).padStart(4, "0")}`),
+            razaoSocial: String(item.razaoSocial ?? nome ?? "Fornecedor importado"),
+            nomeFantasia: nome || String(item.razaoSocial ?? "Fornecedor importado"),
+            cnpj,
+            contato: String(item.contato ?? ""),
+            telefone: String(item.telefone ?? ""),
+            email: String(item.email ?? ""),
+            cidade: String(item.cidade ?? ""),
+            estado: String(item.estado ?? ""),
+            categoria: String(item.categoria ?? "Importado"),
+            status: item.status || "ATIVO",
+            observacoes: String(item.observacoes ?? "Origem: SETORES/FORNECEDORES"),
+            createdAt: String(item.createdAt ?? nowIso),
+            updatedAt: nowIso,
+            deletedAt: null,
+          });
+        });
+
+        state.ocs.forEach((item) => {
+          const key = normalizeKey(item.numeroOC);
+          if (!ocByNumero.has(key)) ocByNumero.set(key, item);
+        });
+
+        ocRowsInput.forEach((row, index) => {
+          const numeroOC = String(row.numeroOC ?? "").trim();
+          if (!numeroOC) return;
+
+          const key = normalizeKey(numeroOC);
+          const existing = ocByNumero.get(key);
+          const setor = state.setores.find((x) => x.id === row.setorId) ?? Array.from(setoresMap.values())[0];
+
+          ocByNumero.set(key, {
+            id: String(existing?.id ?? row.id ?? makeSafeId("oc", numeroOC, index + 1)),
+            numeroOC,
+            scId: String(existing?.scId ?? row.scId ?? ""),
+            fornecedorId: String(existing?.fornecedorId ?? row.fornecedorId ?? ""),
+            dataOC: String(row.dataOC || existing?.dataOC || nowIso),
+            dataEmissao: String(row.dataEmissao || row.dataOC || existing?.dataEmissao || nowIso),
+            dataPrevistaEntrega: String(row.dataPrevistaEntrega || existing?.dataPrevistaEntrega || row.dataOC || nowIso),
+            dataRealEntrega: row.dataRealEntrega || existing?.dataRealEntrega || null,
+            valorOC: Number(row.valorOC ?? existing?.valorOC ?? 0),
+            setorId: String(row.setorId || existing?.setorId || setor?.id || ""),
+            responsavel: String(row.responsavel || existing?.responsavel || "Nao informado"),
+            status: toOcStatus(row.status),
+            condicaoPagamento: String(row.condicaoPagamento || existing?.condicaoPagamento || "A definir"),
+            observacoes: String(row.observacoes || existing?.observacoes || "Origem: estrutura completa"),
+            anexos: Array.isArray(row.anexos) ? row.anexos : (existing?.anexos ?? []),
+            createdAt: String(existing?.createdAt ?? row.createdAt ?? nowIso),
+            updatedAt: nowIso,
+            deletedAt: existing?.deletedAt ?? null,
+          });
+        });
+
+        const nextState: AppState = {
+          setores: Array.from(setoresMap.values()),
+          fornecedores: Array.from(fornecedoresMap.values()),
+          scs: state.scs,
+          ocs: Array.from(ocByNumero.values()),
+          auditoria: state.auditoria,
+        };
+
+        await importAllData(nextState);
+        setImportReport([
+          "Importacao concluida com sucesso.",
+          "Modo reconhecido: estrutura completa (OC-only).",
+          `Resumo: ${nextState.ocs.length} OCs por upsert, ${nextState.fornecedores.length} fornecedores, ${nextState.setores.length} setores.`,
+          "SCs mantidas sem alteracao.",
+        ]);
         return;
       }
 
-      const scRows = XLSX.utils.sheet_to_json<PurchaseRequest>(wb.Sheets.SC);
-      const ocRows = XLSX.utils.sheet_to_json<PurchaseOrder>(wb.Sheets.OC);
-      const fornecedoresRows = XLSX.utils.sheet_to_json<AppState["fornecedores"][number]>(wb.Sheets.FORNECEDORES);
-      const setoresRows = XLSX.utils.sheet_to_json<AppState["setores"][number]>(wb.Sheets.SETORES);
+      const ignoredSheets = new Set(["DASHBOARD", "KPIS", "DADOS", "ENTREGAS"]);
+      const sourceSheetName = wb.SheetNames.find((name) => !ignoredSheets.has(name)) ?? wb.SheetNames[0];
+      const sourceSheet = wb.Sheets[sourceSheetName];
+      const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sourceSheet, { defval: "" });
 
-      if (!scRows.every((r) => r.id && r.numeroSC && r.status)) report.push("SC: colunas id/numeroSC/status obrigatorias.");
-      if (!ocRows.every((r) => r.id && r.numeroOC && r.status)) report.push("OC: colunas id/numeroOC/status obrigatorias.");
+      if (!rawRows.length) {
+        setImportReport([`A aba ${sourceSheetName} esta vazia. Nada para importar.`]);
+        return;
+      }
 
-      const hasDuplicateSc = new Set(scRows.map((r) => r.numeroSC)).size !== scRows.length;
-      const hasDuplicateOc = new Set(ocRows.map((r) => r.numeroOC)).size !== ocRows.length;
-      if (hasDuplicateSc) report.push("Duplicidade detectada em numeroSC.");
-      if (hasDuplicateOc) report.push("Duplicidade detectada em numeroOC.");
+      const nowIso = new Date().toISOString().slice(0, 10);
+      const setoresMap = new Map<string, AppState["setores"][number]>();
+      const fornecedoresMap = new Map<string, AppState["fornecedores"][number]>();
+      const ocByNumero = new Map<string, PurchaseOrder>();
 
-      if (report.length) {
-        setImportReport(report);
+      state.setores.forEach((item) => {
+        const key = normalizeKey(item.nome);
+        if (!setoresMap.has(key)) setoresMap.set(key, item);
+      });
+      state.fornecedores.forEach((item) => {
+        const key = normalizeKey(`${item.nomeFantasia}|${item.cnpj}`);
+        if (!fornecedoresMap.has(key)) fornecedoresMap.set(key, item);
+      });
+      state.ocs.forEach((item) => {
+        const key = normalizeKey(item.numeroOC);
+        if (!ocByNumero.has(key)) ocByNumero.set(key, item);
+      });
+
+      rawRows.forEach((row, index) => {
+        const numeroOCRaw = getValueByAliases(row, ["n ordem", "n. ordem", "nº ordem", "numero ordem", "numerooc", "n oc", "n.oc", "OC", "pedido", "pedido compra"]);
+        const setorRaw = getValueByAliases(row, ["setor", "area", "área", "unidade", "departamento", "centro de custo"]);
+        const fornecedorCodigoRaw = getValueByAliases(row, ["fornecedor", "codigo fornecedor", "cod fornecedor"]);
+        const fornecedorRaw = getValueByAliases(row, ["nome fornecedor", "fornecedor nome", "razao social", "nome fantasia", "fornecedor"]);
+        const cnpjRaw = getValueByAliases(row, ["cnpj", "cnpj fornecedor"]);
+        const compradorRaw = getValueByAliases(row, ["usuario comprador nome", "comprador", "usuario comprador", "responsavel", "aprovador"]);
+        const statusRaw = getValueByAliases(row, ["situacao o.c.", "situacao oc", "status oc", "status", "situacao"]);
+        const valorRaw = getValueByAliases(row, ["vlr. orig. oc", "vlr orig oc", "valor oc", "valor", "valor total", "total"]);
+        const dataOcRaw = getValueByAliases(row, ["emissao", "emissão", "data oc", "data emissao", "data"]);
+        const dataPrevistaRaw = getValueByAliases(row, ["data prevista entrega", "previsao entrega", "prazo entrega"]);
+        const numeroOCText = String(numeroOCRaw ?? "").trim();
+
+        if (!numeroOCText) return;
+
+        const setorNome = String(setorRaw ?? "").trim() || "Nao informado";
+        const setorKey = normalizeKey(setorNome);
+        let setor = setoresMap.get(setorKey);
+        if (!setor) {
+          setor = {
+            id: makeSafeId("setor", setorNome, index + 1),
+            nome: setorNome,
+            descricao: `Importado da aba ${sourceSheetName}`,
+            ativo: true,
+            createdAt: nowIso,
+            updatedAt: nowIso,
+            deletedAt: null,
+          };
+          setoresMap.set(setorKey, setor);
+        }
+
+        const fornecedorNome = String(fornecedorRaw ?? "").trim();
+        const fornecedorCodigo = String(fornecedorCodigoRaw ?? "").trim();
+        const cnpj = String(cnpjRaw ?? "").trim();
+        let fornecedorId: string | null = null;
+        if (fornecedorNome || cnpj) {
+          const supplierKey = normalizeKey(`${fornecedorNome}|${cnpj}`);
+          let supplier = fornecedoresMap.get(supplierKey);
+          if (!supplier) {
+            supplier = {
+              id: makeSafeId("forn", fornecedorNome || cnpj || `fornecedor-${index + 1}`, index + 1),
+              codigo: fornecedorCodigo || `IMP-${String(index + 1).padStart(4, "0")}`,
+              razaoSocial: fornecedorNome || "Fornecedor importado",
+              nomeFantasia: fornecedorNome || "Fornecedor importado",
+              cnpj,
+              contato: "",
+              telefone: "",
+              email: "",
+              cidade: "",
+              estado: "",
+              categoria: "Importado",
+              status: "ATIVO",
+              observacoes: `Origem: ${sourceSheetName}`,
+              createdAt: nowIso,
+              updatedAt: nowIso,
+              deletedAt: null,
+            };
+            fornecedoresMap.set(supplierKey, supplier);
+          }
+          fornecedorId = supplier.id;
+        }
+
+        if (!fornecedorId) {
+          const fallbackSupplierKey = "fornecedor_nao_informado";
+          let fallbackSupplier = fornecedoresMap.get(fallbackSupplierKey);
+          if (!fallbackSupplier) {
+            fallbackSupplier = {
+              id: "forn-nao-informado",
+              codigo: "IMP-0000",
+              razaoSocial: "Fornecedor nao informado",
+              nomeFantasia: "Fornecedor nao informado",
+              cnpj: "",
+              contato: "",
+              telefone: "",
+              email: "",
+              cidade: "",
+              estado: "",
+              categoria: "Importado",
+              status: "ATIVO",
+              observacoes: `Origem: ${sourceSheetName}`,
+              createdAt: nowIso,
+              updatedAt: nowIso,
+              deletedAt: null,
+            };
+            fornecedoresMap.set(fallbackSupplierKey, fallbackSupplier);
+          }
+          fornecedorId = fallbackSupplier.id;
+        }
+
+        const valor = parseMoneyValue(valorRaw);
+        const responsavel = String(compradorRaw ?? "").trim() || "Nao informado";
+        const ocDate = parseDateValue(dataOcRaw, nowIso);
+        const entregaPrevista = parseDateValue(dataPrevistaRaw, ocDate);
+
+        const ocKey = normalizeKey(numeroOCText);
+        const existingOc = ocByNumero.get(ocKey);
+
+        ocByNumero.set(ocKey, {
+          id: existingOc?.id ?? makeSafeId("oc", numeroOCText, index + 1),
+          numeroOC: numeroOCText,
+          scId: existingOc?.scId ?? "",
+          fornecedorId: fornecedorId ?? existingOc?.fornecedorId ?? "",
+          dataOC: ocDate,
+          dataEmissao: ocDate,
+          dataPrevistaEntrega: entregaPrevista,
+          dataRealEntrega: existingOc?.dataRealEntrega ?? null,
+          valorOC: valor,
+          setorId: existingOc?.setorId ?? setor.id,
+          responsavel,
+          status: toOcStatus(statusRaw),
+          condicaoPagamento: existingOc?.condicaoPagamento ?? "A definir",
+          observacoes: existingOc?.observacoes || `Origem: ${sourceSheetName}`,
+          anexos: existingOc?.anexos ?? [],
+          createdAt: existingOc?.createdAt ?? nowIso,
+          updatedAt: nowIso,
+          deletedAt: existingOc?.deletedAt ?? null,
+        });
+      });
+
+      const ocRows = Array.from(ocByNumero.values());
+      const fornecedoresRows = Array.from(fornecedoresMap.values());
+      const setoresRows = Array.from(setoresMap.values());
+
+      if (!ocRows.length) {
+        setImportReport([
+          "Nao foi possivel identificar dados de OC na planilha.",
+          "Colunas esperadas: Nº Ordem, Emissao, Situacao O.C., Vlr. Orig. OC, Fornecedor, Nome Fornecedor, Usuario Comprador (Nome).",
+        ]);
         return;
       }
 
       const nextState: AppState = {
         setores: setoresRows,
         fornecedores: fornecedoresRows,
-        scs: scRows,
+        scs: state.scs,
         ocs: ocRows,
         auditoria: state.auditoria,
       };
 
       await importAllData(nextState);
-      setImportReport(["Importacao concluida com sucesso."]);
+      setImportReport([
+        "Importacao concluida com sucesso.",
+        `Modo reconhecido: importacao inteligente de OC (aba ${sourceSheetName}).`,
+        `Resumo: ${ocRows.length} OCs atualizadas por upsert, ${fornecedoresRows.length} fornecedores e ${setoresRows.length} setores.`,
+        "SCs mantidas sem alteracao.",
+      ]);
     } catch (error) {
       setImportReport([`Falha na importacao: ${(error as Error).message}`]);
     }
@@ -1814,12 +2073,15 @@ export function ProcurementControlCenter() {
                 onChange={(value) => setFilterDraft({ ...filterDraft, status: value })}
                 options={[
                   { label: "Todos", value: "" },
+                  { label: "OC - Aberto Total", value: "ABERTO_TOTAL" },
+                  { label: "OC - Aberto Parcial", value: "ABERTO_PARCIAL" },
+                  { label: "OC - Liquidado", value: "LIQUIDADO" },
+                  { label: "OC - Nao Fechado", value: "NAO_FECHADO" },
+                  { label: "OC - Cancelado", value: "CANCELADA" },
                   { label: "Em Analise", value: "EM_ANALISE" },
                   { label: "Aprovada", value: "APROVADA" },
                   { label: "Reprovada", value: "REPROVADA" },
                   { label: "Lancada", value: "LANCADA" },
-                  { label: "Entregue", value: "ENTREGUE" },
-                  { label: "Atrasada", value: "ATRASADA" },
                 ]}
               />
               <FilterInput label="Responsavel" value={filterDraft.responsavel} onChange={(value) => setFilterDraft({ ...filterDraft, responsavel: value })} placeholder="buscar" inputRef={responsibleFilterInputRef} />
@@ -1856,11 +2118,11 @@ export function ProcurementControlCenter() {
 
           <div className="mb-4 grid grid-cols-2 gap-2 md:hidden">
             <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-2">
-              <p className="text-[10px] uppercase tracking-[0.16em] text-emerald-200/90">SC + OC</p>
-              <p className="text-lg font-bold text-emerald-200">{formatCurrency(kpis.valorTotalSC + kpis.valorTotalOC)}</p>
+              <p className="text-[10px] uppercase tracking-[0.16em] text-emerald-200/90">Valor Total OCs</p>
+              <p className="text-lg font-bold text-emerald-200">{formatCurrency(kpis.valorTotalOC)}</p>
             </div>
             <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-2">
-              <p className="text-[10px] uppercase tracking-[0.16em] text-rose-200/90">Atrasadas</p>
+              <p className="text-[10px] uppercase tracking-[0.16em] text-rose-200/90">Nao Fechadas</p>
               <p className="text-lg font-bold text-rose-200">{unifiedStatusCards.atrasada}</p>
             </div>
           </div>
@@ -1918,7 +2180,7 @@ export function ProcurementControlCenter() {
               </div>
 
               <div className="dashboard-rise mt-4 grid gap-4 lg:grid-cols-2" style={{ animationDelay: "160ms" }}>
-                <Panel title="Status do Pipeline">
+                <Panel title="Status das Ordens de Compra">
                   {pipelineTotals.totalProcessos === 0 ? (
                     <p className="rounded-lg border border-slate-800 bg-slate-900/60 px-3 py-5 text-center text-sm text-slate-400">SEM HISTORICO SUFICIENTE</p>
                   ) : (
@@ -2302,7 +2564,7 @@ export function ProcurementControlCenter() {
                                 {solicitante}
                               </button>
                             </td>
-                            <td className="hidden truncate px-2 md:table-cell">{supplierName}</td>
+                            <td className="hidden truncate px-2 md:table-cell" title={supplierName}>{truncateSupplierName(supplierName)}</td>
                             <td className="hidden truncate px-2 md:table-cell">{unidadeValue}</td>
                             <td className="hidden truncate px-2 lg:table-cell">{cnpj}</td>
                             <td className="px-2">
@@ -2333,13 +2595,14 @@ export function ProcurementControlCenter() {
                                   value={ocToPhase(ocRecord.status as OCStatus)}
                                   onChange={async (e) => {
                                     const phase = e.target.value as OcPhase;
-                                    await updateOC(ocRecord.id, { status: phaseToOcStatus(phase, ocRecord.status as OCStatus) });
+                                    await updateOC(ocRecord.id, { status: phaseToOcStatus(phase) });
                                   }}
                                 >
-                                  <option value="EM_ANALISE">Em Analise</option>
-                                  <option value="APROVADA">Aprovado</option>
-                                  <option value="REPROVADA">Reprovado</option>
-                                  <option value="LANCADA">Lancado</option>
+                                  <option value="ABERTO_TOTAL">Aberto Total</option>
+                                  <option value="ABERTO_PARCIAL">Aberto Parcial</option>
+                                  <option value="LIQUIDADO">Liquidado</option>
+                                  <option value="NAO_FECHADO">Nao Fechado</option>
+                                  <option value="CANCELADA">Cancelado</option>
                                 </select>
                               ) : null}
 
@@ -2510,32 +2773,58 @@ export function ProcurementControlCenter() {
                 <MetricCell label="Backlog aberto" value={String(kpisGlobal.entregasPendentes)} />
                 <MetricCell label="Conversao SC->OC" value={`${analyticsScToOcConversion}%`} />
               </div>
-              <div className="mt-4 grid gap-4 lg:grid-cols-2">
-                <Panel title="Ranking de Fornecedores">
+              <div className="mt-4 grid gap-4 lg:grid-cols-3">
+                <Panel title="Top Fornecedores">
+                  <div className="mb-2 flex gap-2">
+                    <button className={`rounded-md border px-2 py-1 text-xs ${supplierRankMode === "valor" ? "border-cyan-500/50 bg-cyan-500/10 text-cyan-100" : "border-slate-700 text-slate-300"}`} onClick={() => setSupplierRankMode("valor")}>Maior valor</button>
+                    <button className={`rounded-md border px-2 py-1 text-xs ${supplierRankMode === "quantidade" ? "border-cyan-500/50 bg-cyan-500/10 text-cyan-100" : "border-slate-700 text-slate-300"}`} onClick={() => setSupplierRankMode("quantidade")}>Maior quantidade</button>
+                  </div>
                   <table className="w-full text-sm">
                     <thead className="text-left text-slate-400">
                       <tr>
                         <th>Fornecedor</th>
                         <th>OC</th>
                         <th>Valor</th>
-                        <th>Atrasos</th>
-                        <th>Prazo %</th>
-                        <th>Indice</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {rankingPerformance.length === 0 ? (
+                      {supplierExecutiveRanking.length === 0 ? (
                         <tr className="border-t border-slate-800">
-                          <td colSpan={6} className="py-3 text-center text-slate-500">Sem dados de OCs para calcular performance.</td>
+                          <td colSpan={3} className="py-3 text-center text-slate-500">Sem dados de OCs para ranking.</td>
                         </tr>
-                      ) : rankingPerformance.map((r) => (
+                      ) : supplierExecutiveRanking.map((r) => (
                         <tr key={r.fornecedorId} className="border-t border-slate-800">
-                          <td className="py-2">{r.fornecedor}</td>
+                          <td className="py-2" title={r.fornecedor}>{truncateSupplierName(r.fornecedor)}</td>
                           <td>{r.totalOC}</td>
                           <td>{formatCurrency(r.valorTotal)}</td>
-                          <td className={r.atrasos > 0 ? "text-rose-300" : "text-emerald-300"}>{r.atrasos}</td>
-                          <td>{r.taxaPrazo}%</td>
-                          <td className="font-semibold text-cyan-200">{r.indicePerformance}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </Panel>
+                <Panel title="OCs por Comprador">
+                  <div className="mb-2 flex gap-2">
+                    <button className={`rounded-md border px-2 py-1 text-xs ${buyerRankMode === "quantidade" ? "border-cyan-500/50 bg-cyan-500/10 text-cyan-100" : "border-slate-700 text-slate-300"}`} onClick={() => setBuyerRankMode("quantidade")}>Maior quantidade</button>
+                    <button className={`rounded-md border px-2 py-1 text-xs ${buyerRankMode === "valor" ? "border-cyan-500/50 bg-cyan-500/10 text-cyan-100" : "border-slate-700 text-slate-300"}`} onClick={() => setBuyerRankMode("valor")}>Maior valor</button>
+                  </div>
+                  <table className="w-full text-sm">
+                    <thead className="text-left text-slate-400">
+                      <tr>
+                        <th>Comprador</th>
+                        <th>OC</th>
+                        <th>Valor</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {buyerExecutiveRanking.length === 0 ? (
+                        <tr className="border-t border-slate-800">
+                          <td colSpan={3} className="py-3 text-center text-slate-500">Sem dados para ranking de compradores.</td>
+                        </tr>
+                      ) : buyerExecutiveRanking.map((r) => (
+                        <tr key={r.comprador} className="border-t border-slate-800">
+                          <td className="py-2">{r.comprador}</td>
+                          <td>{r.totalOC}</td>
+                          <td>{formatCurrency(r.valorTotal)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -2554,7 +2843,7 @@ export function ProcurementControlCenter() {
                 </Panel>
               </div>
               <div className="mt-4">
-                <Panel title="Evolucao Financeira (SC + OC)">
+                <Panel title="Evolucao Financeira de OCs">
                   <ResponsiveContainer width="100%" height={280}>
                     <LineChart data={monthlyGlobal}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
@@ -2589,13 +2878,13 @@ export function ProcurementControlCenter() {
               <ModuleTitle title="Integracao Excel" subtitle="Exportacao completa e importacao validada" />
               <div className="grid gap-4 lg:grid-cols-2">
                 <Panel title="Exportar Dados">
-                  <p className="mb-3 text-sm text-slate-300">Gera arquivo com abas: DASHBOARD, SC, OC, FORNECEDORES, ENTREGAS, KPIS e DADOS.</p>
+                  <p className="mb-3 text-sm text-slate-300">Gera arquivo com abas: DASHBOARD, SC, OC, FORNECEDORES, SETORES, ENTREGAS, KPIS e DADOS.</p>
                   <button onClick={exportExcel} className="rounded-lg border border-emerald-500/50 bg-emerald-500/10 px-4 py-2 text-emerald-200">
                     Exportar para Excel
                   </button>
                 </Panel>
                 <Panel title="Importar Planilha">
-                  <p className="mb-3 text-sm text-slate-300">Validacao de abas, colunas obrigatorias e duplicidades antes da carga.</p>
+                  <p className="mb-3 text-sm text-slate-300">Importacao oficial de OC por planilha (upsert por Nº Ordem). SCs existentes sao preservadas.</p>
                   <input
                     type="file"
                     accept=".xlsx,.xls"
@@ -2883,7 +3172,7 @@ function UnifiedScOcModule({
   const [message, setMessage] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState<string[]>([]);
-  const [bulkStatus, setBulkStatus] = useState<OcPhase | "">("");
+  const [bulkStatus, setBulkStatus] = useState<SCStatus | OCStatus | "">("");
   const [isBulkRunning, setIsBulkRunning] = useState(false);
   const [editingRowKey, setEditingRowKey] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState({
@@ -2985,8 +3274,13 @@ function UnifiedScOcModule({
               continue;
             }
 
+            if (!["EM_ANALISE", "APROVADA", "REPROVADA", "LANCADA"].includes(bulkStatus)) {
+              failures += 1;
+              continue;
+            }
+
             await onUpdateSC(scRecord.id, {
-              status: bulkStatus,
+              status: bulkStatus as SCStatus,
               dataAprovacao: bulkStatus === "APROVADA" ? new Date().toISOString().slice(0, 10) : scRecord.dataAprovacao,
               dataReprovacao: bulkStatus === "REPROVADA" ? new Date().toISOString().slice(0, 10) : scRecord.dataReprovacao,
               dataLancamento: bulkStatus === "LANCADA" ? new Date().toISOString().slice(0, 10) : scRecord.dataLancamento,
@@ -3001,7 +3295,12 @@ function UnifiedScOcModule({
             continue;
           }
 
-          await onUpdateOC(ocRecord.id, { status: phaseToOcStatus(bulkStatus, ocRecord.status as OCStatus) });
+          if (!["ABERTO_TOTAL", "ABERTO_PARCIAL", "LIQUIDADO", "NAO_FECHADO", "CANCELADA"].includes(bulkStatus)) {
+            failures += 1;
+            continue;
+          }
+
+          await onUpdateOC(ocRecord.id, { status: bulkStatus as OCStatus });
           success += 1;
         } catch {
           failures += 1;
@@ -3260,7 +3559,7 @@ function UnifiedScOcModule({
                     valorOC: formEntry.valor,
                     setorId,
                     responsavel: formEntry.solicitante,
-                    status: "CRIADA",
+                    status: "ABERTO_TOTAL",
                     condicaoPagamento: formEntry.contrato ? "Contrato" : "Avulso",
                     observacoes: observacoesOc,
                     anexos: [],
@@ -3307,14 +3606,19 @@ function UnifiedScOcModule({
               <select
                 className="field max-w-[170px] text-xs"
                 value={bulkStatus}
-                onChange={(e) => setBulkStatus(e.target.value as OcPhase | "")}
+                onChange={(e) => setBulkStatus(e.target.value as SCStatus | OCStatus | "")}
                 disabled={isBulkRunning}
               >
                 <option value="">Status em lote</option>
-                <option value="EM_ANALISE">Em Analise</option>
-                <option value="APROVADA">Aprovada</option>
-                <option value="REPROVADA">Reprovada</option>
-                <option value="LANCADA">Lancada</option>
+                <option value="EM_ANALISE">SC - Em Analise</option>
+                <option value="APROVADA">SC - Aprovada</option>
+                <option value="REPROVADA">SC - Reprovada</option>
+                <option value="LANCADA">SC - Lancada</option>
+                <option value="ABERTO_TOTAL">OC - Aberto Total</option>
+                <option value="ABERTO_PARCIAL">OC - Aberto Parcial</option>
+                <option value="LIQUIDADO">OC - Liquidado</option>
+                <option value="NAO_FECHADO">OC - Nao Fechado</option>
+                <option value="CANCELADA">OC - Cancelado</option>
               </select>
               <button
                 className="rounded border border-emerald-700 px-2 py-1 text-emerald-200 transition hover:bg-emerald-500/10 disabled:opacity-50"
@@ -3426,10 +3730,10 @@ function UnifiedScOcModule({
                         <input className="field w-full text-xs" value={editDraft.solicitante} onChange={(e) => setEditDraft((prev) => ({ ...prev, solicitante: e.target.value }))} />
                       ) : solicitante}
                     </td>
-                    <td className="hidden truncate px-2 md:table-cell">
+                    <td className="hidden truncate px-2 md:table-cell" title={supplierName}>
                       {isEditing ? (
                         <input className="field w-full text-xs" value={editDraft.fornecedorNome} onChange={(e) => setEditDraft((prev) => ({ ...prev, fornecedorNome: e.target.value }))} />
-                      ) : supplierName}
+                      ) : truncateSupplierName(supplierName)}
                     </td>
                     <td className="hidden truncate px-2 md:table-cell">
                       {isEditing ? (
@@ -3478,13 +3782,14 @@ function UnifiedScOcModule({
                           value={ocToPhase(ocRecord.status as OCStatus)}
                           onChange={async (e) => {
                             const phase = e.target.value as OcPhase;
-                            await onUpdateOC(ocRecord.id, { status: phaseToOcStatus(phase, ocRecord.status as OCStatus) });
+                            await onUpdateOC(ocRecord.id, { status: phaseToOcStatus(phase) });
                           }}
                         >
-                          <option value="EM_ANALISE">Em Analise</option>
-                          <option value="APROVADA">Aprovada</option>
-                          <option value="REPROVADA">Reprovada</option>
-                          <option value="LANCADA">Lancada</option>
+                          <option value="ABERTO_TOTAL">Aberto Total</option>
+                          <option value="ABERTO_PARCIAL">Aberto Parcial</option>
+                          <option value="LIQUIDADO">Liquidado</option>
+                          <option value="NAO_FECHADO">Nao Fechado</option>
+                          <option value="CANCELADA">Cancelado</option>
                         </select>
                       ) : null}
 
@@ -3821,7 +4126,7 @@ function OcModule({
                 valorOC: newOc.valorOC,
                 setorId: newOc.setorId,
                 responsavel: newOc.responsavel,
-                status: "CRIADA",
+                status: "ABERTO_TOTAL",
                 condicaoPagamento: newOc.condicaoPagamento,
                 observacoes: newOc.observacoes,
                 anexos: [],
@@ -3858,8 +4163,8 @@ function OcModule({
                 <tr key={oc.id} className="border-t border-slate-800">
                   <td className="py-2">{oc.numeroOC}</td>
                   <td>{scs.find((s) => s.id === oc.scId)?.numeroSC ?? oc.scId}</td>
-                  <td>{fornecedores.find((f) => f.id === oc.fornecedorId)?.nomeFantasia ?? oc.fornecedorId}</td>
-                  <td className={oc.status === "ATRASADA" ? "text-rose-300" : ""}>{OC_STATUS_LABEL[oc.status as OCStatus]}</td>
+                  <td title={fornecedores.find((f) => f.id === oc.fornecedorId)?.nomeFantasia ?? oc.fornecedorId}>{truncateSupplierName(fornecedores.find((f) => f.id === oc.fornecedorId)?.nomeFantasia ?? oc.fornecedorId)}</td>
+                  <td className={oc.status === "NAO_FECHADO" ? "text-rose-300" : ""}>{OC_STATUS_LABEL[oc.status as OCStatus]}</td>
                   <td>{oc.dataPrevistaEntrega}</td>
                   <td>{formatCurrency(oc.valorOC)}</td>
                   <td>
@@ -3870,19 +4175,20 @@ function OcModule({
                           value={ocToPhase(oc.status as OCStatus)}
                           onChange={async (e) => {
                             const phase = e.target.value as OcPhase;
-                            const nextStatus = phaseToOcStatus(phase, oc.status as OCStatus);
+                            const nextStatus = phaseToOcStatus(phase);
                             const payload: Partial<PurchaseOrder> = { status: nextStatus };
-                            if (nextStatus === "ENTREGUE") payload.dataRealEntrega = new Date().toISOString().slice(0, 10);
+                            if (nextStatus === "LIQUIDADO" || nextStatus === "ABERTO_PARCIAL") payload.dataRealEntrega = new Date().toISOString().slice(0, 10);
                             await onUpdate(oc.id, payload);
                           }}
                         >
-                          <option value="EM_ANALISE">Em Analise</option>
-                          <option value="APROVADA">Aprovada</option>
-                          <option value="REPROVADA">Reprovada</option>
-                          <option value="LANCADA">Lancada</option>
+                          <option value="ABERTO_TOTAL">Aberto Total</option>
+                          <option value="ABERTO_PARCIAL">Aberto Parcial</option>
+                          <option value="LIQUIDADO">Liquidado</option>
+                          <option value="NAO_FECHADO">Nao Fechado</option>
+                          <option value="CANCELADA">Cancelado</option>
                         </select>
-                        <button className="rounded border border-emerald-700 px-2 py-1 text-xs" onClick={async () => await onUpdate(oc.id, { status: "ENTREGUE", dataRealEntrega: new Date().toISOString().slice(0, 10) })}>
-                          Entregar
+                        <button className="rounded border border-emerald-700 px-2 py-1 text-xs" onClick={async () => await onUpdate(oc.id, { status: "LIQUIDADO", dataRealEntrega: new Date().toISOString().slice(0, 10) })}>
+                          Liquidar
                         </button>
                         <button className="rounded border border-rose-700 px-2 py-1 text-xs" onClick={async () => await onDelete(oc.id)}>
                           Excluir
@@ -4131,11 +4437,11 @@ function KanbanBoard({
     { key: "EM_ANALISE", label: "EM ANALISE", kind: "SC" as const },
     { key: "APROVADA", label: "APROVADA", kind: "SC" as const },
     { key: "LANCADA", label: "LANCADA", kind: "SC" as const },
-    { key: "CRIADA", label: "OC EMITIDA", kind: "OC" as const },
-    { key: "CONFIRMADA", label: "CONFIRMADA", kind: "OC" as const },
-    { key: "EM_TRANSPORTE", label: "EM TRANSPORTE", kind: "OC" as const },
-    { key: "ENTREGUE", label: "ENTREGUE", kind: "OC" as const },
-    { key: "ATRASADA", label: "ATRASADA", kind: "OC" as const },
+    { key: "ABERTO_TOTAL", label: "OC ABERTO TOTAL", kind: "OC" as const },
+    { key: "ABERTO_PARCIAL", label: "OC ABERTO PARCIAL", kind: "OC" as const },
+    { key: "LIQUIDADO", label: "OC LIQUIDADO", kind: "OC" as const },
+    { key: "NAO_FECHADO", label: "OC NAO FECHADO", kind: "OC" as const },
+    { key: "CANCELADA", label: "OC CANCELADO", kind: "OC" as const },
   ];
 
   return (

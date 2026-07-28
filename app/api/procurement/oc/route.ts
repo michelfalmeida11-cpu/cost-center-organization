@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
     page: Number(params.get("page") ?? 1),
     pageSize: Number(params.get("pageSize") ?? 20),
     search: params.get("search") ?? "",
-    status: (params.get("status") as "CRIADA" | "ENVIADA_FORNECEDOR" | "CONFIRMADA" | "EM_PRODUCAO" | "EM_TRANSPORTE" | "ENTREGUE" | "ATRASADA" | "CANCELADA" | null) ?? undefined,
+    status: (params.get("status") as "ABERTO_TOTAL" | "ABERTO_PARCIAL" | "LIQUIDADO" | "NAO_FECHADO" | "CANCELADA" | null) ?? undefined,
     setorId: params.get("setorId") ?? "",
     fornecedorId: params.get("fornecedorId") ?? "",
     responsavel: params.get("responsavel") ?? "",
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest) {
     valorOC?: number;
     setorId?: string;
     responsavel?: string;
-    status?: "CRIADA" | "ENVIADA_FORNECEDOR" | "CONFIRMADA" | "EM_PRODUCAO" | "EM_TRANSPORTE" | "ENTREGUE" | "ATRASADA" | "CANCELADA";
+    status?: "ABERTO_TOTAL" | "ABERTO_PARCIAL" | "LIQUIDADO" | "NAO_FECHADO" | "CANCELADA";
     condicaoPagamento?: string;
     observacoes?: string;
     anexos?: string[];
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
       valorOC: body.valorOC ?? 0,
       setorId: body.setorId,
       responsavel: body.responsavel ?? "",
-      status: body.status ?? "CRIADA",
+      status: body.status ?? "ABERTO_TOTAL",
       condicaoPagamento: body.condicaoPagamento ?? "",
       observacoes: body.observacoes ?? "",
       anexos: body.anexos ?? [],
