@@ -596,7 +596,7 @@ function LoginCard() {
       <div className="mb-5 h-14 w-56">
         <Image src="/avg-logo.svg" alt="Grupo AVG Emesa" width={224} height={56} className="h-full w-full object-contain object-left" priority />
       </div>
-      <h1 className="font-orbitron text-2xl text-slate-100">SC / OC ENTERPRISE COMMAND</h1>
+      <h1 className="font-orbitron text-2xl text-slate-100">SC / OC Desenvolvido por Michel Almeida</h1>
       <p className="mt-2 text-sm text-slate-400">Acesso corporativo para gestao de procurement, aprovacoes e inteligencia operacional.</p>
       <div className="mt-6 space-y-3">
         <input value={email} onChange={(e) => setEmail(e.target.value)} className="w-full rounded-xl border border-slate-700 bg-slate-900 p-3 text-slate-200" placeholder="Email corporativo" />
@@ -1463,7 +1463,8 @@ export function ProcurementControlCenter() {
   const currentTime = nowStamp.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
 
   const exportExcel = () => {
-    const wb = XLSX.utils.book_new();
+    try {
+      const wb = XLSX.utils.book_new();
 
     const dashboardRows = [
       { indicador: "Total SC", valor: kpis.totalSC },
@@ -1474,16 +1475,21 @@ export function ProcurementControlCenter() {
       { indicador: "Taxa no Prazo", valor: `${kpis.taxaEntregaNoPrazo}%` },
     ];
 
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dashboardRows), "DASHBOARD");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(state.scs), "SC");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(state.ocs), "OC");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(state.fornecedores), "FORNECEDORES");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(state.setores), "SETORES");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dataset.ocFiltered), "ENTREGAS");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([kpis]), "KPIS");
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(monthly), "DADOS");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dashboardRows), "DASHBOARD");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(state.scs), "SC");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(state.ocs), "OC");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(state.fornecedores), "FORNECEDORES");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(state.setores), "SETORES");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(dataset.ocFiltered), "ENTREGAS");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([kpis]), "KPIS");
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(monthly), "DADOS");
 
-    XLSX.writeFile(wb, `procurement-control-center-${new Date().toISOString().slice(0, 10)}.xlsx`);
+      const fileName = `procurement-control-center-${new Date().toISOString().slice(0, 10)}.xlsx`;
+      XLSX.writeFile(wb, fileName);
+      setQuickActionFeedback(`Exportacao concluida: ${fileName}`);
+    } catch {
+      setQuickActionFeedback("Falha ao exportar Excel. Tente novamente.");
+    }
   };
 
   const handleImportExcel = async (file: File) => {
@@ -1618,7 +1624,7 @@ export function ProcurementControlCenter() {
         setFilterDraft(EMPTY_FILTERS);
         setCentralPreset("");
         setAgingDrilldown("");
-        setModule("DASHBOARD");
+        setQuickActionFeedback(`Importacao aplicada: ${nextState.ocs.length} OCs, ${nextState.fornecedores.length} fornecedores, ${nextState.setores.length} setores.`);
         setImportReport([
           "Importacao concluida com sucesso.",
           "Modo reconhecido: estrutura completa (OC-only).",
@@ -1802,7 +1808,7 @@ export function ProcurementControlCenter() {
       setFilterDraft(EMPTY_FILTERS);
       setCentralPreset("");
       setAgingDrilldown("");
-      setModule("DASHBOARD");
+      setQuickActionFeedback(`Importacao aplicada: ${ocRows.length} OCs, ${fornecedoresRows.length} fornecedores, ${setoresRows.length} setores.`);
       setImportReport([
         "Importacao concluida com sucesso.",
         `Modo reconhecido: importacao inteligente de OC (aba ${sourceSheetName}).`,
@@ -1851,7 +1857,7 @@ export function ProcurementControlCenter() {
                 {collapsedSidebar ? <ChevronRight size={15} /> : <ChevronLeft size={15} />}
               </button>
             </div>
-            {!collapsedSidebar ? <p className="mt-2 text-[11px] uppercase tracking-[0.24em] text-slate-400">Enterprise Command</p> : null}
+            {!collapsedSidebar ? <p className="mt-2 text-[11px] uppercase tracking-[0.24em] text-slate-400">Desenvolvido por Michel Almeida</p> : null}
           </div>
 
           <nav className="space-y-4">
@@ -1938,7 +1944,7 @@ export function ProcurementControlCenter() {
                 <X size={16} />
               </button>
             </div>
-            <p className="mt-2 text-[11px] uppercase tracking-[0.24em] text-slate-500">Enterprise Command</p>
+            <p className="mt-2 text-[11px] uppercase tracking-[0.24em] text-slate-500">Desenvolvido por Michel Almeida</p>
           </div>
 
           <nav className="space-y-4">
@@ -2050,7 +2056,7 @@ export function ProcurementControlCenter() {
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div>
                 <p className="text-xs uppercase tracking-[0.32em] text-cyan-300">GRUPO AVG EMESA</p>
-                <h1 className="font-orbitron text-2xl text-white md:text-3xl">SC / OC Enterprise Command</h1>
+                <h1 className="font-orbitron text-2xl text-white md:text-3xl">SC / OC Desenvolvido por Michel Almeida</h1>
                 <p className="mt-1 text-xs uppercase tracking-[0.18em] text-slate-400">Enterprise Procurement Intelligence • {currentDate} • {currentTime}</p>
               </div>
               <div className="flex items-center gap-2 text-xs">
