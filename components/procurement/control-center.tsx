@@ -474,6 +474,44 @@ function toOcStatus(value: unknown): OCStatus {
   return "ABERTO_TOTAL";
 }
 
+const OC_IMPORT_ALIASES = {
+  numeroOC: ["n ordem", "n. ordem", "nº ordem", "numero ordem", "numerooc", "n oc", "n.oc", "oc", "pedido", "pedido compra"],
+  dataOC: ["emissao", "emissão", "data oc", "data emissao", "data"],
+  status: ["situacao o.c.", "situacao oc", "status oc", "status", "situacao"],
+  valor: ["vlr. orig. oc", "vlr orig oc", "valor oc", "valor", "valor total", "total"],
+  fornecedorNome: ["nome fornecedor", "fornecedor nome", "razao social", "nome fantasia", "fornecedor"],
+  comprador: ["usuario comprador nome", "comprador", "usuario comprador", "responsavel", "aprovador"],
+  setor: ["setor", "area", "área", "unidade", "departamento", "centro de custo"],
+};
+
+function detectBestOcSheet(workbook: XLSX.WorkBook) {
+  let bestName = workbook.SheetNames[0] ?? "";
+  let bestRows: Record<string, unknown>[] = [];
+  let bestScore = -1;
+
+  workbook.SheetNames.forEach((sheetName) => {
+    const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets[sheetName], { defval: "" });
+    if (!rows.length) return;
+
+    const headerKeys = Object.keys(rows[0] ?? {}).map((key) => normalizeKey(key));
+    const hasNumero = OC_IMPORT_ALIASES.numeroOC.some((alias) => headerKeys.includes(normalizeKey(alias)));
+    const hasStatus = OC_IMPORT_ALIASES.status.some((alias) => headerKeys.includes(normalizeKey(alias)));
+    const hasValor = OC_IMPORT_ALIASES.valor.some((alias) => headerKeys.includes(normalizeKey(alias)));
+    const hasData = OC_IMPORT_ALIASES.dataOC.some((alias) => headerKeys.includes(normalizeKey(alias)));
+    const hasFornecedor = OC_IMPORT_ALIASES.fornecedorNome.some((alias) => headerKeys.includes(normalizeKey(alias)));
+    const hasComprador = OC_IMPORT_ALIASES.comprador.some((alias) => headerKeys.includes(normalizeKey(alias)));
+
+    const score = [hasNumero, hasStatus, hasValor, hasData, hasFornecedor, hasComprador].filter(Boolean).length;
+    if (score > bestScore) {
+      bestScore = score;
+      bestName = sheetName;
+      bestRows = rows;
+    }
+  });
+
+  return { sheetName: bestName, rows: bestRows, score: bestScore };
+}
+
 function answerProcurementQuestion(rawQuestion: string, facts: AssistantFacts) {
   const q = normalizeName(rawQuestion);
   if (!q) {
@@ -1456,9 +1494,13 @@ export function ProcurementControlCenter() {
 
       const requiredSheets = ["SC", "OC", "FORNECEDORES", "SETORES"];
       const hasStructuredWorkbook = requiredSheets.every((sheetName) => wb.SheetNames.includes(sheetName));
+      const bestOcSheet = detectBestOcSheet(wb);
 
       if (hasStructuredWorkbook) {
-        const ocRowsInput = XLSX.utils.sheet_to_json<PurchaseOrder>(wb.Sheets.OC, { defval: "" });
+        const ocRowsFromOcSheet = XLSX.utils.sheet_to_json<PurchaseOrder>(wb.Sheets.OC, { defval: "" });
+        const ocRowsInput = ocRowsFromOcSheet.length > 0
+          ? ocRowsFromOcSheet
+          : (bestOcSheet.score >= 2 ? (bestOcSheet.rows as unknown as PurchaseOrder[]) : []);
         const fornecedoresRowsInput = XLSX.utils.sheet_to_json<AppState["fornecedores"][number]>(wb.Sheets.FORNECEDORES, { defval: "" });
         const setoresRowsInput = XLSX.utils.sheet_to_json<AppState["setores"][number]>(wb.Sheets.SETORES, { defval: "" });
 
@@ -1570,19 +1612,19 @@ export function ProcurementControlCenter() {
         };
 
         await importAllData(nextState);
+        await refreshState();
         setImportReport([
           "Importacao concluida com sucesso.",
           "Modo reconhecido: estrutura completa (OC-only).",
+          ocRowsFromOcSheet.length === 0 && bestOcSheet.score >= 2 ? `Aba OC vazia: dados de OC lidos automaticamente da aba ${bestOcSheet.sheetName}.` : "Dados de OC lidos da aba OC.",
           `Resumo: ${nextState.ocs.length} OCs por upsert, ${nextState.fornecedores.length} fornecedores, ${nextState.setores.length} setores.`,
           "SCs mantidas sem alteracao.",
         ]);
         return;
       }
 
-      const ignoredSheets = new Set(["DASHBOARD", "KPIS", "DADOS", "ENTREGAS"]);
-      const sourceSheetName = wb.SheetNames.find((name) => !ignoredSheets.has(name)) ?? wb.SheetNames[0];
-      const sourceSheet = wb.Sheets[sourceSheetName];
-      const rawRows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sourceSheet, { defval: "" });
+      const sourceSheetName = bestOcSheet.sheetName;
+      const rawRows = bestOcSheet.rows;
 
       if (!rawRows.length) {
         setImportReport([`A aba ${sourceSheetName} esta vazia. Nada para importar.`]);
@@ -1608,15 +1650,15 @@ export function ProcurementControlCenter() {
       });
 
       rawRows.forEach((row, index) => {
-        const numeroOCRaw = getValueByAliases(row, ["n ordem", "n. ordem", "nº ordem", "numero ordem", "numerooc", "n oc", "n.oc", "OC", "pedido", "pedido compra"]);
-        const setorRaw = getValueByAliases(row, ["setor", "area", "área", "unidade", "departamento", "centro de custo"]);
+        const numeroOCRaw = getValueByAliases(row, OC_IMPORT_ALIASES.numeroOC);
+        const setorRaw = getValueByAliases(row, OC_IMPORT_ALIASES.setor);
         const fornecedorCodigoRaw = getValueByAliases(row, ["fornecedor", "codigo fornecedor", "cod fornecedor"]);
-        const fornecedorRaw = getValueByAliases(row, ["nome fornecedor", "fornecedor nome", "razao social", "nome fantasia", "fornecedor"]);
+        const fornecedorRaw = getValueByAliases(row, OC_IMPORT_ALIASES.fornecedorNome);
         const cnpjRaw = getValueByAliases(row, ["cnpj", "cnpj fornecedor"]);
-        const compradorRaw = getValueByAliases(row, ["usuario comprador nome", "comprador", "usuario comprador", "responsavel", "aprovador"]);
-        const statusRaw = getValueByAliases(row, ["situacao o.c.", "situacao oc", "status oc", "status", "situacao"]);
-        const valorRaw = getValueByAliases(row, ["vlr. orig. oc", "vlr orig oc", "valor oc", "valor", "valor total", "total"]);
-        const dataOcRaw = getValueByAliases(row, ["emissao", "emissão", "data oc", "data emissao", "data"]);
+        const compradorRaw = getValueByAliases(row, OC_IMPORT_ALIASES.comprador);
+        const statusRaw = getValueByAliases(row, OC_IMPORT_ALIASES.status);
+        const valorRaw = getValueByAliases(row, OC_IMPORT_ALIASES.valor);
+        const dataOcRaw = getValueByAliases(row, OC_IMPORT_ALIASES.dataOC);
         const dataPrevistaRaw = getValueByAliases(row, ["data prevista entrega", "previsao entrega", "prazo entrega"]);
         const numeroOCText = String(numeroOCRaw ?? "").trim();
 
@@ -1747,6 +1789,7 @@ export function ProcurementControlCenter() {
       };
 
       await importAllData(nextState);
+      await refreshState();
       setImportReport([
         "Importacao concluida com sucesso.",
         `Modo reconhecido: importacao inteligente de OC (aba ${sourceSheetName}).`,
