@@ -1614,6 +1614,11 @@ export function ProcurementControlCenter() {
 
         await importAllData(nextState);
         await refreshState();
+        setFilters(EMPTY_FILTERS);
+        setFilterDraft(EMPTY_FILTERS);
+        setCentralPreset("");
+        setAgingDrilldown("");
+        setModule("DASHBOARD");
         setImportReport([
           "Importacao concluida com sucesso.",
           "Modo reconhecido: estrutura completa (OC-only).",
@@ -1757,7 +1762,8 @@ export function ProcurementControlCenter() {
           dataPrevistaEntrega: entregaPrevista,
           dataRealEntrega: existingOc?.dataRealEntrega ?? null,
           valorOC: valor,
-          setorId: existingOc?.setorId ?? setor.id,
+          // No upsert inteligente, o setor vindo da planilha deve prevalecer.
+          setorId: setor.id || existingOc?.setorId || "",
           responsavel,
           status: toOcStatus(statusRaw),
           condicaoPagamento: existingOc?.condicaoPagamento ?? "A definir",
@@ -1792,6 +1798,11 @@ export function ProcurementControlCenter() {
 
       await importAllData(nextState);
       await refreshState();
+      setFilters(EMPTY_FILTERS);
+      setFilterDraft(EMPTY_FILTERS);
+      setCentralPreset("");
+      setAgingDrilldown("");
+      setModule("DASHBOARD");
       setImportReport([
         "Importacao concluida com sucesso.",
         `Modo reconhecido: importacao inteligente de OC (aba ${sourceSheetName}).`,
