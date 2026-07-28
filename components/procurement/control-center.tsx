@@ -1608,7 +1608,8 @@ export function ProcurementControlCenter() {
           fornecedores: Array.from(fornecedoresMap.values()),
           scs: state.scs,
           ocs: Array.from(ocByNumero.values()),
-          auditoria: state.auditoria,
+          // Evita payload gigante na importacao (auditoria pode crescer muito).
+          auditoria: [],
         };
 
         await importAllData(nextState);
@@ -1785,7 +1786,8 @@ export function ProcurementControlCenter() {
         fornecedores: fornecedoresRows,
         scs: state.scs,
         ocs: ocRows,
-        auditoria: state.auditoria,
+        // Evita payload gigante na importacao (auditoria pode crescer muito).
+        auditoria: [],
       };
 
       await importAllData(nextState);

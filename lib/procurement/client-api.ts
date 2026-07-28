@@ -11,7 +11,20 @@ async function request<T>(url: string, init?: RequestInit): Promise<T> {
     },
   });
 
-  const data = (await res.json()) as T & { error?: string };
+  const raw = await res.text();
+  let data = {} as T & { error?: string };
+  try {
+    data = raw ? (JSON.parse(raw) as T & { error?: string }) : ({} as T & { error?: string });
+  } catch {
+    if (!res.ok) {
+      if (res.status === 413 || raw.toLowerCase().includes("request entity too large")) {
+        throw new Error("Arquivo muito grande para importacao em uma unica requisicao. Divida a planilha ou reduza o volume do payload.");
+      }
+      throw new Error(raw || "Erro de requisicao");
+    }
+    throw new Error("Resposta invalida da API.");
+  }
+
   if (!res.ok) {
     throw new Error((data as { error?: string }).error ?? "Erro de requisicao");
   }
